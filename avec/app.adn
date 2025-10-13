@@ -1,0 +1,24 @@
+nom    : AVEC
+langue : fr
+
+routes : [
+    {
+        voie : /
+        page : accueil
+    }
+
+    {
+        voie : /avec
+        page : avec
+    }
+
+    {
+        voie : /@<identifiant>
+        page : utilisateur
+    }
+
+    {
+        voie : /<id>
+        page : anicroche
+    }
+]

@@ -1,0 +1,9 @@
+{
+    "name": "avec",
+    "version": "1.0.0",
+    "main": "avec/coeur/avec.js",
+    "type": "module",
+    "scripts": {
+        "start": "node avec/coeur/avec.js"
+    }
+}

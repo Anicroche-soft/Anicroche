@@ -1,0 +1,11 @@
+services:
+  avec:
+    build: .
+    container_name: avec
+    ports:
+      - "4035:4035"
+    environment:
+      - PORT=4035
+    volumes:
+      - ./avec:/app/avec
+    command: node avec/coeur/avec.js
