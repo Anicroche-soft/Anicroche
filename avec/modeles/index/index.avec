@@ -25,21 +25,21 @@
 
 <footer>
 
-# -@style
-# -@script
+# @style
+# @script
 
-# -@if <condition>
-# -@else-if <condition>
-# -@else
-# -@unless <condition>
+# @if <condition>
+# @else-if <condition>
+# @else
+# @unless <condition>
 
-# -@repeat
-# -@while <condition>
-# -@until <condition>
-# -@for-each <key> in <structure>
-# -@for-each <value> of <structure>
+# @repeat
+# @while <condition>
+# @until <condition>
+# @for-each <key> in <structure>
+# @for-each <value> of <structure>
 
-# -@break
-# -@continue
+# @break
+# @continue
 
-# -@stud
+# @stud

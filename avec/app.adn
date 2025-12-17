@@ -4,21 +4,21 @@ langue : fr
 routes : [
     {
         voie : /
-        page : accueil
+        modele : accueil
     }
 
     {
         voie : /avec
-        page : avec
+        modele : avec
     }
 
     {
         voie : /@<identifiant>
-        page : utilisateur
+        modele : utilisateur
     }
 
     {
         voie : /<id>
-        page : anicroche
+        modele : anicroche
     }
 ]

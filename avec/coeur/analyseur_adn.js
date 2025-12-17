@@ -232,7 +232,7 @@ export const generer_adn = () =>
     console.log(adn)
 
     if (!("port" in adn))
-        adn["port"] = process.env.PORT || 4025;
+        adn["port"] = process.env.PORT || 4035;
 
     return adn
 }

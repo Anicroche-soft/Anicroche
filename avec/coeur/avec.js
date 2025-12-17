@@ -16,14 +16,8 @@ const publics = {
     "/actifs/systeme": {
         chemin: "coeur/scripts",
     },
-    "/actifs/pages": {
-        chemin: "pages",
-        recursif: true,
-        script: analyser_avec,
-        ext: ".json"
-    },
-    "/actifs/blocs": {
-        chemin: "blocs",
+    "/actifs/modeles": {
+        chemin: "modeles",
         recursif: true,
         script: analyser_avec,
         ext: ".json"

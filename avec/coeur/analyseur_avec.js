@@ -45,7 +45,7 @@ const debug = (message, str, deb, fin, json) =>
     for (let i = 0; i < json; i++) {
         ind += '    '
     }
-    console.log(`DEBUG: Analyseur .avec :${ind} ${message} : ${ligne_deb}:${colonne_deb} - ${ligne_fin}:${colonne_fin}`)
+    // console.log(`DEBUG: Analyseur .avec :${ind} ${message} : ${ligne_deb}:${colonne_deb} - ${ligne_fin}:${colonne_fin}`)
 }
 
 const valider_bloc_avec = (bloc, str, pos) =>
@@ -350,22 +350,22 @@ const analyser_enfants_avec = (str, deb, fin, json) =>
 
 const analyser_fichier_avec = (str, deb, fin, json) =>
 {
-    let bloc = {
+    let modele = {
         type: 'fichier',
         args: [],
         enfants: []
     }
-    bloc.enfants = analyser_enfants_avec(str, deb, fin, 0)
-    return bloc
+    modele.enfants = analyser_enfants_avec(str, deb, fin, 0)
+    return modele
 }
 
 export const analyser_avec = (str) =>
 {
     let json = {
-        page: undefined,
-        blocs: {}
+        modele: undefined,
+        dependances: {}
     }
     let page = analyser_fichier_avec(str, 0, str.length - 1, json)
-    json.page = page
+    json.modele = page
     return JSON.stringify(json)
 }
