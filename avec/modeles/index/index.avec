@@ -15,8 +15,11 @@
     image
     <nav>
         <a>
+            `Publications`
         <a>
+            `Recommandations`
         <a>
+            `Nouveautés`
         <button onclick="inscription()" class="bouton-inscription">
             "Inscription"
 

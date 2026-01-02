@@ -120,7 +120,7 @@ const valider_bloc_avec = (bloc, str, pos) =>
         if (bloc.enfants.length > 0)
             erreur(`un texte ne peut pas avoir d'enfants`, str, pos)
     }
-    else if (bloc.type == 'bloc')
+    else if (bloc.type == 'modele')
     {
         return
     }
@@ -210,7 +210,7 @@ const analyser_bloc_avec = (str, deb, fin, json) =>
     }
     else if (/^[a-zA-Z]$/.test(bloc.args[0][0]))
     {
-        bloc.type = 'bloc'
+        bloc.type = 'modele'
     }
     if (pos < fin)
         bloc.enfants = analyser_enfants_avec(str, pos + 1, fin, json + 1)
