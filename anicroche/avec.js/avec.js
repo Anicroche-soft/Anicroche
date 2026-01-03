@@ -14,16 +14,13 @@ const adn = generer_adn()
 
 const publics = {
     "/actifs/systeme": {
-        chemin: "coeur/scripts",
+        chemin: "avec.js/scripts",
     },
     "/actifs/modeles": {
-        chemin: "modeles",
+        chemin: "adn/modeles",
         recursif: true,
         script: analyser_avec,
         ext: ".json"
-    },
-    "/passifs": {
-        chemin: "medias"
     }
 }
 
@@ -69,7 +66,7 @@ const rechercher_fichier = (dossier, nom, recursif) =>
 
 const serveur = http.createServer((req, rep) =>
     {
-        let chemin = "coeur/index.html"
+        let chemin = "avec.js/index.html"
         let infos = null
         for (const prefixe in publics)
         {
@@ -80,7 +77,7 @@ const serveur = http.createServer((req, rep) =>
                 break
             }
         }
-        const chemin_complet = path.join("./avec", chemin)
+        const chemin_complet = path.join("./", chemin)
         const dossier = path.dirname(chemin_complet)
         const fichier = path.basename(chemin_complet)
         const chemin_reel = rechercher_fichier(dossier, fichier, infos?.recursif)

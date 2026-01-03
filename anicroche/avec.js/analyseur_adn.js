@@ -216,7 +216,7 @@ export const generer_adn = () =>
     let adn = {}
     try
     {
-        const app_adn = fs.readFileSync("avec/app.adn", "utf8")
+        const app_adn = fs.readFileSync("adn/app.adn", "utf8")
         adn = analyser_adn(app_adn)
         if (adn == "invalide")
         {

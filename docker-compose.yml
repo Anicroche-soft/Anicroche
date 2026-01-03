@@ -1,10 +1,11 @@
 services:
-  avec:
-    build: .
-    container_name: avec
+  anicroche:
+    build: ./anicroche
+    container_name: anicroche
     ports:
       - "4035:4035"
     environment:
       - PORT=4035
     volumes:
-      - ./avec:/app/avec
+      - ./anicroche/avec.js:/app/avec
+      - ./anicroche/adn:/app/adn
