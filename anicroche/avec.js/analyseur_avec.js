@@ -158,23 +158,23 @@ const analyser_bloc_avec = (str, deb, fin, json) =>
             // console.log('(4)')
             if (str[pos] == blocs.slice(-1))
                 blocs = blocs.slice(0, -1)
-            else if (str[pos] == '(' && !/^["'`]$/.test(blocs.slice(-1)))
+            else if (str[pos] == '(' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                 blocs += ')'
-            else if (str[pos] == '[' && !/^["'`]$/.test(blocs.slice(-1)))
+            else if (str[pos] == '[' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                 blocs += ']'
-            else if (str[pos] == '{' && !/^["'`]$/.test(blocs.slice(-1)))
+            else if (str[pos] == '{' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                 blocs += '}'
-            else if (str[pos] == '<' && !/^["'`]$/.test(blocs.slice(-1)))
+            else if (str[pos] == '<' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                 blocs += '>'
-            else if (str[pos] == '\"' && !/^["'`]$/.test(blocs.slice(-1)))
+            else if (str[pos] == '\"' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                 blocs += '\"'
-            else if (str[pos] == '\'' && !/^["'`]$/.test(blocs.slice(-1)))
+            else if (str[pos] == '\'' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                 blocs += '\''
-            else if (str[pos] == '\`' && !/^["'`]$/.test(blocs.slice(-1)))
+            else if (str[pos] == '\`' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                 blocs += '\`'
             else if (str[pos] == ')' || str[pos] == ']' || str[pos] == '}' || str[pos] == '>')
             {
-                if (!/^["'`]$/.test(blocs.slice(-1)))
+                if (!/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                     return erreur("Fermeture de bloc inattendue", str, pos)
             }
             if (pos >= fin)
@@ -277,23 +277,23 @@ const analyser_enfants_avec = (str, deb, fin, json) =>
                 // console.log('(2)')
                 if (str[pos] == blocs.slice(-1))
                     blocs = blocs.slice(0, -1)
-                else if (str[pos] == '(' && !/^["'`]$/.test(blocs.slice(-1)))
+                else if (str[pos] == '(' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                     blocs += ')'
-                else if (str[pos] == '[' && !/^["'`]$/.test(blocs.slice(-1)))
+                else if (str[pos] == '[' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                     blocs += ']'
-                else if (str[pos] == '{' && !/^["'`]$/.test(blocs.slice(-1)))
+                else if (str[pos] == '{' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                     blocs += '}'
-                else if (str[pos] == '<' && !/^["'`]$/.test(blocs.slice(-1)))
+                else if (str[pos] == '<' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                     blocs += '>'
-                else if (str[pos] == '\"' && !/^["'`]$/.test(blocs.slice(-1)))
+                else if (str[pos] == '\"' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                     blocs += '\"'
-                else if (str[pos] == '\'' && !/^["'`]$/.test(blocs.slice(-1)))
+                else if (str[pos] == '\'' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                     blocs += '\''
-                else if (str[pos] == '\`' && !/^["'`]$/.test(blocs.slice(-1)))
+                else if (str[pos] == '\`' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                     blocs += '\`'
                 else if (str[pos] == ')' || str[pos] == ']' || str[pos] == '}' || str[pos] == '>')
                 {
-                    if (!/^["'`]$/.test(blocs.slice(-1)))
+                    if (!/^[)\]}>"'`]$/.test(blocs.slice(-1)))
                         return erreur("Fermeture de bloc inattendue", str, pos)
                 }
                 if (pos >= fin)

@@ -1,15 +1,15 @@
-@style `
+@style [
     .bouton-inscription {
         color: red;
     }
-`
+]
 
-@script `
+@script [
     const inscription = () =>
     {
         alert("Vous êtes maintenant inscrit")
     }
-`
+]
 
 <header>
     image
@@ -20,8 +20,12 @@
             `Recommandations`
         <a>
             `Nouveautés`
-        <button onclick="inscription()" class="bouton-inscription">
-            "Inscription"
+        @if [! $connected > 3]
+            <button onclick="inscription()" class="bouton-inscription">
+                "Inscription"
+        @else
+            <a href="/compte">
+                "Compte"
 
 <main>
     "Lorem ipsum dolor sit, amet consectetur adipisicing elit. At eaque assumenda inventore saepe nostrum nulla quibusdam laudantium necessitatibus, ut quod fuga, velit illum veniam eius, amet aliquid commodi repellat distinctio esse. Ad qui perferendis omnis nostrum voluptatibus praesentium accusantium tempore quaerat eum distinctio inventore accusamus, expedita iste quod. Laboriosam commodi suscipit blanditiis, facere optio distinctio earum tempora in delectus culpa perferendis deleniti velit dolorem consequuntur, beatae corrupti vero neque aspernatur molestias quasi! Eligendi dignissimos cumque omnis aut quia labore possimus vel repellendus expedita, excepturi, ex accusantium. Fugit, quibusdam incidunt delectus assumenda accusamus voluptas. Eligendi nihil dolores repudiandae neque odit consectetur illum sed dicta harum voluptatibus, quibusdam possimus! Laudantium quis in, velit temporibus dolore quaerat soluta esse odio, harum impedit officia. Tenetur harum fugit laudantium culpa eveniet vitae reprehenderit cum, rem qui, explicabo aliquam necessitatibus a id nesciunt sapiente sunt quisquam esse facilis asperiores. Repudiandae error dicta, fugit sit eum architecto sequi. Expedita aperiam omnis suscipit dolorum. Perspiciatis assumenda tempore quidem similique! Assumenda dignissimos explicabo, distinctio est temporibus minus iste pariatur labore facere eaque amet consectetur magnam possimus sunt libero maiores modi mollitia alias impedit. Veniam aperiam a perspiciatis! Quibusdam commodi non accusantium culpa fuga veniam eos excepturi nulla. Corporis vitae ratione repellat laboriosam placeat porro iure soluta doloremque quisquam, facere quos aliquid minus eos veniam? Quisquam modi placeat architecto corrupti rem! Vitae aperiam excepturi eligendi laboriosam omnis dicta iure cum! Et saepe unde cupiditate omnis sunt quibusdam maxime maiores inventore dolorem ullam ea, iusto labore tenetur ad quos magnam sed. Similique modi reprehenderit alias voluptatum? Saepe ipsa nemo rem reiciendis perferendis ipsam doloribus fugit repudiandae ut mollitia labore tenetur, quod corporis sint. Voluptate ipsum illum commodi vero maiores nulla error impedit, magnam ratione animi! Totam, tempora? Error commodi sed perspiciatis quam laudantium natus. Expedita obcaecati hic modi facere blanditiis dolore sed sit velit eveniet veritatis quos dolorem, saepe vel sapiente quis non ut animi a voluptate? Totam maxime adipisci sit necessitatibus temporibus ad, quaerat cum possimus enim nulla recusandae debitis beatae consequatur neque! Quos laborum reiciendis, numquam repellat totam quis beatae qui incidunt earum maxime ad at et architecto consectetur."
@@ -42,7 +46,7 @@
 # @for-each <key> in <structure>
 # @for-each <value> of <structure>
 
-# @break
-# @continue
+## @break
+## @continue
 
 # @stud

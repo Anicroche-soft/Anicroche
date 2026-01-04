@@ -11,11 +11,18 @@ const initialiser = async () =>
     if (index)
     {
         const enfants = construire_bloc(index.modele)
-        for (const enfant of enfants)
-        {
-            corps.appendChild(enfant)
-        }
+        corps.append(...enfants)
     }
+}
+
+const evaluer = (condition) =>
+{
+    return true
+}
+
+const valoriser = (valeur) =>
+{
+    return valeur
 }
 
 const construire_bloc = (bloc) =>
@@ -23,39 +30,128 @@ const construire_bloc = (bloc) =>
     switch (bloc.type)
     {
     case `fichier`:
-        return construire_fichier(bloc)
     case `instruction`:
-        return null
+        return construire_enfants(bloc)
     case `balise`:
         return construire_balise(bloc)
     case `texte`:
         return construire_texte(bloc)
     case `modele`:
         return construire_modele(bloc)
+    default:
+        return []
     }
 }
 
-const construire_fichier = (bloc) =>
+const construire_enfants = (bloc) =>
 {
-    let noeuds = []
-
-    for (const enfant of bloc.enfants)
+    let enfants = []
+    let elsable = false
+    for (const i in bloc.enfants)
     {
-        const resultat = construire_bloc(enfant)
-
-        if (Array.isArray(resultat))
+        const enfant = bloc.enfants[i]
+        if (enfant.type === `instruction`)
         {
-            for (const partie of resultat)
+            switch (enfant.args[0])
             {
-                noeuds.push(partie)
+            case `@style`:
+                // Gérer `@style`
+                break
+            case `@script`:
+                // Gérer `@script`
+                break
+            case `@if`:
+                if (evaluer(enfant.args[1]))
+                {
+                    enfants.push(...construire_bloc(enfant))
+                    elsable = false
+                }
+                else
+                {
+                    elsable = true
+                }
+                break
+            case `@else-if`:
+                if (elsable && evaluer(enfant.args[1]))
+                {
+                    enfants.push(...construire_bloc(enfant))
+                    elsable = false
+                }
+                break
+            case `@else`:
+                if (elsable)
+                {
+                    enfants.push(...construire_bloc(enfant))
+                }
+                elsable = false
+                break
+            case `@unless`:
+                if (!evaluer(enfant.args[1]))
+                {
+                    enfants.push(...construire_bloc(enfant))
+                }
+                elsable = false
+                break
+            case `@repeat`:
+                if (enfant.args.length > 1)
+                {
+                    const limite = +valoriser(enfants.args[1])
+                    for (let i = 0; i < limite; i++)
+                    {
+                        enfants.push(...construire_bloc(enfant))
+                    }
+                }
+                else if (bloc.enfants.length > +i + 1 && bloc.enfants[+i + 1].args[0] === `@while`)
+                {
+                    do
+                    {
+                        enfants.push(...construire_bloc(enfant))
+                    }
+                    while (evaluer(bloc.enfants[+i + 1].args[1]))
+                }
+                else if (bloc.enfants.length > +i + 1 && bloc.enfants[+i + 1].args[0] === `@until`)
+                {
+                    do
+                    {
+                        enfants.push(...construire_bloc(enfant))
+                    }
+                    while (!evaluer(bloc.enfants[+i + 1].args[1]))
+                }
+                elsable = false
+            case `@while`:
+                if (i == 0 || bloc.enfants[+i - 1] !== `@repeat`)
+                {
+                    while (evaluer(enfant.args[1]))
+                    {
+                        enfants.push(...construire_bloc(enfant))
+                    }
+                }
+                elsable = false
+                break
+            case `@until`:
+                if (i == 0 || bloc.enfants[+i - 1] !== `@repeat`)
+                {
+                    while (!evaluer(enfant.args[1]))
+                    {
+                        enfants.push(...construire_bloc(enfant))
+                    }
+                }
+                elsable = false
+                break
+            case `@for-each`:
+                // Gérer `@for-each`
+                break
+            case `@stud`:
+                // Gérer `@stud`
+                break
             }
         }
-        else if (resultat instanceof Node)
+        else
         {
-            noeuds.push(resultat)
+            enfants.push(...construire_bloc(enfant))
         }
     }
-    return noeuds
+    return enfants
 }
 
 const construire_balise = (bloc) =>
@@ -69,9 +165,10 @@ const construire_balise = (bloc) =>
 
     // Ajouter les arguments HTML
 
-    construire_enfants(noeud, bloc.enfants)
+    const enfants = construire_enfants(bloc)
+    noeud.append(...enfants)
 
-    return noeud
+    return [noeud]
 }
 
 const construire_texte = (bloc) =>
@@ -80,7 +177,7 @@ const construire_texte = (bloc) =>
 
     // Modifier ceci pour retirer les ["'`] de manière correcte
 
-    return noeud
+    return [noeud]
 }
 
 const construire_modele = (bloc) =>
@@ -88,29 +185,10 @@ const construire_modele = (bloc) =>
     const noeud = document.createElement(`p`)
     noeud.textContent = `Modele "${bloc.args[0]} ici."`
 
-    construire_enfants(noeud, bloc.enfants)
+    const enfants = construire_enfants(bloc)
+    noeud.append(...enfants)
 
-    return noeud
-}
-
-const construire_enfants = (parent, enfants) =>
-{
-    for (const enfant of enfants)
-    {
-        const resultat = construire_bloc(enfant)
-
-        if (Array.isArray(resultat))
-        {
-            for (const partie of resultat)
-            {
-                parent.appendChild(partie)
-            }
-        }
-        else if (resultat instanceof Node)
-        {
-            parent.appendChild(resultat)
-        }
-    }
+    return [noeud]
 }
 
 const charger_modele = async (nom) =>
