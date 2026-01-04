@@ -117,7 +117,9 @@ const charger_modele = async (nom) =>
 {
     try
     {
-        const reponse = await fetch(`/actifs/modeles/${nom}.avec`)
+        const reponse = await fetch(`/composants/modeles/${nom}.avec`, {
+            headers: {'X-AC-Composant': `true`}
+        })
         if (!reponse.ok)
         {
             throw new Error(`Echec du chargement du modèle « ${nom} » (statut : ${reponse.status})`)

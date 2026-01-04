@@ -12,13 +12,14 @@ console.log(`\
 
 const adn = generer_adn()
 
-const publics = {
-    "/actifs/systeme": {
+const composants = {
+    "/systeme": {
         chemin: "avec.js/scripts",
     },
-    "/actifs/modeles": {
+    "/composants/modeles": {
         chemin: "adn/modeles",
         recursif: true,
+        composant: true,
         script: analyser_avec,
         ext: ".json"
     }
@@ -68,12 +69,14 @@ const serveur = http.createServer((req, rep) =>
     {
         let chemin = "avec.js/index.html"
         let infos = null
-        for (const prefixe in publics)
+        for (const prefixe in composants)
         {
-            if (req.url.startsWith(`${prefixe}/`))
+            if (req.url.startsWith(`${prefixe}/`)
+             && (!composants[prefixe].composant
+              || req.headers['x-ac-composant'] === `true`))
             {
-                chemin = `${publics[prefixe].chemin}${req.url.slice(prefixe.length)}`
-                infos = publics[prefixe]
+                chemin = `${composants[prefixe].chemin}${req.url.slice(prefixe.length)}`
+                infos = composants[prefixe]
                 break
             }
         }
