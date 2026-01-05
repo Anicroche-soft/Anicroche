@@ -46,7 +46,7 @@ const types_utf8 = [
     ".json"
 ]
 
-const rechercher_fichier = (dossier, nom, recursif) =>
+export const rechercher_fichier = (dossier, nom, recursif) =>
 {
     const fichiers = fs.readdirSync(dossier, {withFileTypes: true})
 
@@ -90,9 +90,12 @@ const serveur = http.createServer((req, rep) =>
             let contenu = fs.readFileSync(chemin_reel, "utf-8")
             if (typeof infos?.script === "function")
             {
-                try {
-                    contenu = infos.script(contenu)
-                } catch (erreur) {
+                try
+                {
+                    contenu = infos.script(contenu, fichier)
+                }
+                catch (erreur)
+                {
                     console.error(erreur)
                     rep.writeHead(500)
                     rep.end("Erreur serveur")
