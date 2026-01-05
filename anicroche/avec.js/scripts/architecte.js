@@ -10,8 +10,11 @@ const initialiser = async () =>
     index = await charger_modele(`index`)
     if (index)
     {
-        console.dir(index)
-        const enfants = construire_bloc(index.modele, index.dependances)
+        const donnees = {
+            dependances: index.dependances,
+            tenons: []
+        }
+        const enfants = construire_bloc(index.modele, donnees)
         corps.append(...enfants)
     }
 }
@@ -26,29 +29,29 @@ const valoriser = (valeur) =>
     return valeur
 }
 
-const construire_bloc = (bloc, dependances) =>
+const construire_bloc = (bloc, donnees) =>
 {
     switch (bloc.type)
     {
     case `fichier`:
     case `instruction`:
-        return construire_enfants(bloc, dependances)
+        return construire_enfants(bloc, donnees)
     case `balise`:
-        return construire_balise(bloc, dependances)
+        return construire_balise(bloc, donnees)
     case `texte`:
-        return construire_texte(bloc, dependances)
+        return construire_texte(bloc, donnees)
     case `modele`:
-        return construire_modele(bloc, dependances)
+        return construire_modele(bloc, donnees)
     default:
         return []
     }
 }
 
-const construire_enfants = (bloc, dependances) =>
+const construire_enfants = (bloc, donnees) =>
 {
     let enfants = []
     let elsable = false
-    for (const i in bloc.enfants)
+    for (let i = 0; i < bloc.enfants.length; i++)
     {
         const enfant = bloc.enfants[i]
         if (enfant.type === `instruction`)
@@ -57,14 +60,16 @@ const construire_enfants = (bloc, dependances) =>
             {
             case `@style`:
                 // Gérer `@style`
+                elsable = false
                 break
             case `@script`:
                 // Gérer `@script`
+                elsable = false
                 break
             case `@if`:
                 if (evaluer(enfant.args[1]))
                 {
-                    enfants.push(...construire_bloc(enfant, dependances))
+                    enfants.push(...construire_bloc(enfant, donnees))
                     elsable = false
                 }
                 else
@@ -75,87 +80,104 @@ const construire_enfants = (bloc, dependances) =>
             case `@else-if`:
                 if (elsable && evaluer(enfant.args[1]))
                 {
-                    enfants.push(...construire_bloc(enfant, dependances))
+                    enfants.push(...construire_bloc(enfant, donnees))
                     elsable = false
                 }
                 break
             case `@else`:
                 if (elsable)
                 {
-                    enfants.push(...construire_bloc(enfant, dependances))
+                    enfants.push(...construire_bloc(enfant, donnees))
                 }
                 elsable = false
                 break
             case `@unless`:
                 if (!evaluer(enfant.args[1]))
                 {
-                    enfants.push(...construire_bloc(enfant, dependances))
+                    enfants.push(...construire_bloc(enfant, donnees))
                 }
                 elsable = false
                 break
             case `@repeat`:
                 if (enfant.args.length > 1)
                 {
-                    const limite = +valoriser(enfants.args[1])
+                    const limite = +valoriser(enfant.args[1])
                     for (let i = 0; i < limite; i++)
                     {
-                        enfants.push(...construire_bloc(enfant, dependances))
+                        enfants.push(...construire_bloc(enfant, donnees))
                     }
                 }
-                else if (bloc.enfants.length > +i + 1 && bloc.enfants[+i + 1].args[0] === `@while`)
+                else if (bloc.enfants.length > i + 1 && bloc.enfants[i + 1].args[0] === `@while`)
                 {
                     do
                     {
-                        enfants.push(...construire_bloc(enfant, dependances))
+                        enfants.push(...construire_bloc(enfant, donnees))
                     }
-                    while (evaluer(bloc.enfants[+i + 1].args[1]))
+                    while (evaluer(bloc.enfants[i + 1].args[1]))
                 }
-                else if (bloc.enfants.length > +i + 1 && bloc.enfants[+i + 1].args[0] === `@until`)
+                else if (bloc.enfants.length > i + 1 && bloc.enfants[i + 1].args[0] === `@until`)
                 {
                     do
                     {
-                        enfants.push(...construire_bloc(enfant, dependances))
+                        enfants.push(...construire_bloc(enfant, donnees))
                     }
-                    while (!evaluer(bloc.enfants[+i + 1].args[1]))
+                    while (!evaluer(bloc.enfants[i + 1].args[1]))
                 }
                 elsable = false
+                break
             case `@while`:
-                if (i == 0 || bloc.enfants[+i - 1] !== `@repeat`)
+                if (i == 0 || bloc.enfants[i - 1].args[0] !== `@repeat`)
                 {
                     while (evaluer(enfant.args[1]))
                     {
-                        enfants.push(...construire_bloc(enfant, dependances))
+                        enfants.push(...construire_bloc(enfant, donnees))
                     }
                 }
                 elsable = false
                 break
             case `@until`:
-                if (i == 0 || bloc.enfants[+i - 1] !== `@repeat`)
+                if (i == 0 || bloc.enfants[i - 1].args[0] !== `@repeat`)
                 {
                     while (!evaluer(enfant.args[1]))
                     {
-                        enfants.push(...construire_bloc(enfant, dependances))
+                        enfants.push(...construire_bloc(enfant, donnees))
                     }
                 }
                 elsable = false
                 break
             case `@for-each`:
                 // Gérer `@for-each`
+                elsable = false
                 break
             case `@stud`:
-                // Gérer `@stud`
+                if (donnees.tenons.length > 0)
+                {
+                    const bloc_tenon = {
+                        type: `instruction`,
+                        args: [`@stud`],
+                        enfants: donnees.tenons.at(-1)
+                    }
+                    const donnees_tenon = {
+                        ...donnees,
+                        tenons: donnees.tenons.slice(0, -1)
+                    }
+
+                    enfants.push(...construire_enfants(bloc_tenon, donnees_tenon))
+                }
+                elsable = false
                 break
             }
         }
         else
         {
-            enfants.push(...construire_bloc(enfant, dependances))
+            enfants.push(...construire_bloc(enfant, donnees))
+            elsable = false
         }
     }
     return enfants
 }
 
-const construire_balise = (bloc, dependances) =>
+const construire_balise = (bloc, donnees) =>
 {
     const etiquette = bloc.args[0]
                           .replace(`<`, ``)
@@ -166,13 +188,13 @@ const construire_balise = (bloc, dependances) =>
 
     // Ajouter les arguments HTML
 
-    const enfants = construire_enfants(bloc, dependances)
+    const enfants = construire_enfants(bloc, donnees)
     noeud.append(...enfants)
 
     return [noeud]
 }
 
-const construire_texte = (bloc, dependances) =>
+const construire_texte = (bloc, donnees) =>
 {
     const noeud = document.createTextNode(bloc.args[0].slice(1, -1))
 
@@ -181,9 +203,13 @@ const construire_texte = (bloc, dependances) =>
     return [noeud]
 }
 
-const construire_modele = (bloc, dependances) =>
+const construire_modele = (bloc, donnees) =>
 {
-    return construire_bloc(dependances[bloc.args[0]], dependances)
+    const donnees_modele = {
+        ...donnees,
+        tenons: [...donnees.tenons, bloc.enfants]
+    }
+    return construire_bloc(donnees.dependances[bloc.args[0]], donnees_modele)
 }
 
 const charger_modele = async (nom) =>
