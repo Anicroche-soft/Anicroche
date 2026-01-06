@@ -1,4 +1,5 @@
 @style [
+    button,
     .bouton-inscription {
         color: red;
     }

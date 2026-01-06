@@ -3,6 +3,8 @@ console.log(`\
 ║ AVEC ║
 ╚══════╝`)
 
+const styles_actifs = new Map()
+
 const initialiser = async () =>
 {
     const corps = document.querySelector(`#avec`)
@@ -19,14 +21,52 @@ const initialiser = async () =>
     }
 }
 
-const evaluer = (condition) =>
+const evaluer = (str) =>
 {
     return true
 }
 
-const valoriser = (valeur) =>
+const valoriser = (str) =>
 {
+    let valeur = str
     return valeur
+}
+
+const decapsuler = (str) =>
+{
+    const ouvrants = { '(':')', '[':']', '{':'}', '<':'>', '"':'"', "'":"'", '`':'`' }
+    let texte = ``
+    let blocs = ``
+    let pos = 0
+
+    while (pos < str.length)
+    {
+        const c = str[pos]
+        if (c == blocs.slice(-1))
+        {
+            blocs = blocs.slice(0, -1)
+            if (blocs.length > 0)
+                texte += c
+        }
+        else if (c == '<' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
+        {
+            blocs += '>'
+            if (blocs.length > 1)
+                texte+= c
+        }
+        else if (c in ouvrants && !/^["'`]$/.test(blocs.slice(-1)))
+        {
+            blocs += ouvrants[c]
+            if (blocs.length > 1)
+                texte += c
+        }
+        else
+        {
+            texte += c
+        }
+        pos++
+    }
+    return texte
 }
 
 const construire_bloc = (bloc, donnees) =>
@@ -34,6 +74,7 @@ const construire_bloc = (bloc, donnees) =>
     switch (bloc.type)
     {
     case `fichier`:
+        return construire_fichier(bloc, donnees)
     case `instruction`:
         return construire_enfants(bloc, donnees)
     case `balise`:
@@ -47,6 +88,12 @@ const construire_bloc = (bloc, donnees) =>
     }
 }
 
+const construire_fichier = (bloc, donnees) =>
+{
+    // Faire en sorte que le style fonctionne pour l'index
+    return construire_enfants(bloc, donnees)
+}
+
 const construire_enfants = (bloc, donnees) =>
 {
     let enfants = []
@@ -58,14 +105,6 @@ const construire_enfants = (bloc, donnees) =>
         {
             switch (enfant.args[0])
             {
-            case `@style`:
-                // Gérer `@style`
-                elsable = false
-                break
-            case `@script`:
-                // Gérer `@script`
-                elsable = false
-                break
             case `@if`:
                 if (evaluer(enfant.args[1]))
                 {
@@ -166,6 +205,8 @@ const construire_enfants = (bloc, donnees) =>
                 }
                 elsable = false
                 break
+            default:
+                elsable = false
             }
         }
         else
@@ -196,20 +237,70 @@ const construire_balise = (bloc, donnees) =>
 
 const construire_texte = (bloc, donnees) =>
 {
-    const noeud = document.createTextNode(bloc.args[0].slice(1, -1))
-
-    // Modifier ceci pour retirer les ["'`] de manière correcte
+    const noeud = document.createTextNode(decapsuler(bloc.args[0]))
 
     return [noeud]
 }
 
 const construire_modele = (bloc, donnees) =>
 {
+    const modele = donnees.dependances[bloc.args[0]]
+
+    for (const enfant of modele.enfants)
+    {
+        if (enfant.type === `instruction` && enfant.args[0] === `@style`)
+        {
+            const css = decapsuler(enfant.args[1])
+            console.log(css)
+            activer_style(bloc.args[0], css)
+        }
+    }
+
     const donnees_modele = {
         ...donnees,
         tenons: [...donnees.tenons, bloc.enfants]
     }
-    return construire_bloc(donnees.dependances[bloc.args[0]], donnees_modele)
+
+    const noeuds = construire_bloc(modele, donnees_modele)
+    noeuds.forEach(noeud => noeud._avec_modele = bloc.args[0])
+
+    return noeuds
+}
+
+const activer_style = (modele, css) =>
+{
+    if (styles_actifs.has(modele))
+    {
+        styles_actifs.get(modele).compte++
+    }
+    else
+    {
+        const style = document.createElement(`style`)
+        style.dataset.avec = modele
+        style.textContent = css
+
+        document.head.appendChild(style)
+
+        styles_actifs.set(modele, {
+            element: style,
+            compte: 1
+        })
+    }
+}
+
+const desactiver_style = (modele) =>
+{
+    const entree = styles_actifs.get(modele)
+    if (!entree)
+    {
+        return
+    }
+    entree.compte--
+    if (entree.count <= 0)
+    {
+        entree.element.remove()
+        styles_actifs.delete(id)
+    }
 }
 
 const charger_modele = async (nom) =>
