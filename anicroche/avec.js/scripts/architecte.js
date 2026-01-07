@@ -220,14 +220,39 @@ const construire_enfants = (bloc, donnees) =>
 
 const construire_balise = (bloc, donnees) =>
 {
-    const etiquette = bloc.args[0]
-                          .replace(`<`, ``)
-                          .replace(`>`, ``)
-                          .split(` `)[0]
+    const [
+        etiquette,
+        ...attributs
+    ] = decapsuler(bloc.args[0]).trim().split(/\s+/)
     
     const noeud = document.createElement(etiquette)
 
-    // Ajouter les arguments HTML
+    for (const attribut of attributs)
+    {
+        if (!attribut.includes(`=`))
+        {
+            noeud.setAttribute(attribut, ``)
+        }
+        else
+        {
+            const [clef, ...reste] = attribut.split(`=`)
+            let valeur = reste.join(`=`)
+
+            valeur = decapsuler(valeur)
+
+            switch (clef)
+            {
+            case `class`:
+                valeur.split(/\s+/).forEach(c => c && noeud.classList.add(c))
+                break
+            case `id`:
+                noeud.id = valeur
+                break
+            default:
+                noeud.setAttribute(clef, valeur)
+            }
+        }
+    }
 
     const enfants = construire_enfants(bloc, donnees)
     noeud.append(...enfants)
