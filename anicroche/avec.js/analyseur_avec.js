@@ -382,12 +382,17 @@ const analyser_fichier_avec = (str, deb, fin, fichier, json) =>
 
 export const analyser_avec = (str, fichier) =>
 {
+    const nom = fichier.replace(/\.avec$/, '')
     let json = {
-        modele: undefined,
+        modele: {
+            type: 'modele',
+            args: [nom],
+            enfants: []
+        },
         dependances: {}
     }
-    let page = analyser_fichier_avec(str, 0, str.length - 1, fichier, json)
-    json.modele = page
+    let modele = analyser_fichier_avec(str, 0, str.length - 1, fichier, json)
+    json.dependances[nom] = modele
     return JSON.stringify(json)
 }
 
