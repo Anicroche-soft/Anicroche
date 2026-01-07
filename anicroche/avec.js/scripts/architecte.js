@@ -220,10 +220,50 @@ const construire_enfants = (bloc, donnees) =>
 
 const construire_balise = (bloc, donnees) =>
 {
-    const [
-        etiquette,
-        ...attributs
-    ] = decapsuler(bloc.args[0]).trim().split(/\s+/)
+    const str = decapsuler(bloc.args[0]).trim()
+    let etiquette = ``
+    let attributs = []
+    let pos = 0
+    let blocs = ``
+    let mot = ``
+
+    while (pos < str.length)
+    {
+        const c = str[pos]
+        if (/\s/.test(c) && blocs == ``)
+        {
+            if (mot.length > 0)
+            {
+                if (etiquette == ``)
+                    etiquette = mot
+                else
+                    attributs.push(mot)
+                mot = ``
+            }
+        }
+        else if (c == blocs.slice(-1))
+        {
+            blocs = blocs.slice(0, -1)
+            mot += c
+        }
+        else if (/^["'`]$/.test(c) && !/^["'`]$/.test(blocs.slice(-1)))
+        {
+            blocs += c
+            mot += c
+        }
+        else
+        {
+            mot += c
+        }
+        pos++
+    }
+    if (mot.length > 0)
+    {
+        if (etiquette == ``)
+            etiquette = mot
+        else
+            attributs.push(mot)
+    }
     
     const noeud = document.createElement(etiquette)
 
