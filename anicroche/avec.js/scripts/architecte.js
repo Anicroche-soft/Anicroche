@@ -269,9 +269,17 @@ const construire_balise = (bloc, donnees) =>
 
     for (const attribut of attributs)
     {
-        if (!attribut.includes(`=`))
+        if (!attribut.includes(`=`) && !`#.`.includes(attribut[0]))
         {
             noeud.setAttribute(attribut, ``)
+        }
+        else if (attribut[0] == `#`)
+        {
+            noeud.id = attribut.slice(1)
+        }
+        else if (attribut[0] == `.`)
+        {
+            noeud.classList.add(attribut.slice(1))
         }
         else
         {
@@ -282,11 +290,11 @@ const construire_balise = (bloc, donnees) =>
 
             switch (clef)
             {
-            case `class`:
-                valeur.split(/\s+/).forEach(c => c && noeud.classList.add(c))
-                break
             case `id`:
                 noeud.id = valeur
+                break
+            case `class`:
+                valeur.split(/\s+/).forEach(c => c && noeud.classList.add(c))
                 break
             default:
                 noeud.setAttribute(clef, valeur)
