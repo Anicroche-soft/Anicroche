@@ -1,0 +1,12 @@
+@style [
+    #menu {
+        grid-area: 2 / 1 / 3 / 2;
+
+        padding: 1rem;
+
+        --c-fond: var(--c-analogue);
+    }
+]
+
+<nav #menu>
+    "nav"

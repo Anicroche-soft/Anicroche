@@ -1,0 +1,20 @@
+@style [
+    #corps {
+        grid-area: 1 / 2 / 3 / 3;
+        gap: 0;
+    }
+
+    .petit.portrait #corps {
+        grid-area: 1 / 1 / 2 / 2;
+    }
+
+    #corps > nav {
+        padding: var(--d-marge);
+        background: var(--b-degrade-vif);
+    }
+]
+
+<main #corps>
+    <nav>
+    <section>
+        "corps"

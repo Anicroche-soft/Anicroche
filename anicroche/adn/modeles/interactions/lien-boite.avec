@@ -1,0 +1,12 @@
+@style [
+    .lien-boite {
+        display: flex;
+        flex-flow: row nowrap;
+        align-items: center;
+
+        --d-ecart: 0.5rem;
+    }
+]
+
+<a .lien-boite href="/">
+    @stud

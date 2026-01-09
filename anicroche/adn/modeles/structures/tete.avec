@@ -1,0 +1,25 @@
+@style [
+    #tete {
+        grid-area: 1 / 1 / 2 / 2;
+
+        padding: 1rem;
+
+        --c-fond: var(--c-analogue);
+        --c-flux: var(--c-vif);
+    }
+
+    .petit.portrait #tete {
+        display: none;
+    }
+
+    .petit #tete span,
+    .portrait #tete span {
+        display: none;
+    }
+]
+
+<header #tete>
+    lien-boite /
+        icone-anicroche
+        <span>
+            "Anicroche"

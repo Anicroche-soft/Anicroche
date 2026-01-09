@@ -1,0 +1,129 @@
+@style [
+    * {
+        gap: var(--d-ecart);
+
+        background-color: var(--c-fond);
+        color: var(--c-flux);
+
+        --c-fond: transparent;
+    }
+
+    html {
+        --d-ecart: 1rem;
+        --d-marge: 1rem;
+
+        --t-theme: 35;
+
+        --c-noir:  oklch(0.00 0.00 0);
+        --c-blanc: oklch(1.00 0.00 0);
+
+        --c-boue:  oklch(0.25 0.01 var(--t-theme));
+        --c-creme: oklch(0.95 0.01 var(--t-theme));
+
+        --c-sombre: oklch(0.45 0.20 var(--t-theme));
+        --c-vif:    oklch(0.65 0.20 var(--t-theme));
+        --c-clair:  oklch(0.85 0.20 var(--t-theme));
+    }
+
+    html.clair {
+        color-scheme: light;
+
+        --c-theme:    var(--c-blanc);
+        --c-analogue: var(--c-creme);
+        --c-inverse:  var(--c-boue);
+
+        --c-plus:     var(--c-clair);
+        --c-moins:    var(--c-sombre);
+
+        --b-degrade-vif: linear-gradient(90deg, var(--c-vif), var(--c-clair));
+    }
+
+    html.sombre {
+        color-scheme: dark;
+
+        --c-theme:    var(--c-noir);
+        --c-analogue: var(--c-boue);
+        --c-inverse:  var(--c-creme);
+
+        --c-plus:     var(--c-sombre);
+        --c-moins:    var(--c-clair);
+
+        --b-degrade-vif: linear-gradient(90deg, var(--c-sombre), var(--c-vif));
+    }
+
+    body {
+        display: grid;
+        grid-template: auto 1fr / auto 1fr;
+
+        width: 100vw;
+        height: 100vh;
+
+        gap: 0;
+
+        --c-fond: var(--c-theme);
+        --c-flux: var(--c-inverse);
+    }
+
+    .petit.portrait body {
+        grid-template: 1fr auto / 1fr;
+    }
+]
+
+@script [
+    $theme = `clair`
+    $format = `petit`
+    $orientation = `paysage`
+
+    const actualiser_theme = (media_query) =>
+    {
+        $theme = media_query.matches ? `sombre` : `clair`
+
+        document.documentElement.classList.remove(`clair`, `sombre`)
+        document.documentElement.classList.add($theme)
+    }
+
+    const actualiser_format = () =>
+    {
+        const w = window.innerWidth
+        const h = window.innerHeight
+
+        $format = w > 1024 ? `grand` : `petit`
+        $orientation = w > h ? `paysage` : `portrait`
+
+        document.documentElement.classList.remove(`grand`,   `petit`, `paysage`, `portrait`)
+        document.documentElement.classList.add($format, $orientation)
+    }
+
+    const media_query = window.matchMedia(`(prefers-color-scheme: dark)`)
+
+    actualiser_theme(media_query)
+    actualiser_format()
+
+    media_query.addEventListener(`change`, actualiser_theme)
+    window.addEventListener(`resize`, actualiser_format)
+]
+
+tete
+
+menu
+
+corps
+
+# @style
+# @script
+
+# @if <condition>
+# @else-if <condition>
+# @else
+# @unless <condition>
+
+# @repeat
+# @while <condition>
+# @until <condition>
+# @for-each <key> in <structure>
+# @for-each <value> of <structure>
+
+## @break
+## @continue
+
+# @stud

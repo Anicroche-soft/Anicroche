@@ -1,0 +1,10 @@
+@style [
+    .icone {
+        width: 1.5rem;
+        height: 1.5rem;
+
+        background: var(--c-flux);
+    }
+]
+
+<div .icone>
