@@ -7,5 +7,5 @@ services:
     environment:
       - PORT=4035
     volumes:
-      - ./anicroche/avec.js:/app/avec
+      - ./anicroche/avec.js:/app/avec.js
       - ./anicroche/adn:/app/adn

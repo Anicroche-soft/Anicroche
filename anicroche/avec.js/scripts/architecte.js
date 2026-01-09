@@ -4,6 +4,15 @@ console.log(`\
 ╚══════╝`)
 
 const styles_actifs = new Map()
+const scripts_actifs = new Map()
+let runtime_script = null
+
+const initialiser_runtime_script = () =>
+{
+    if (runtime_script) return
+
+    runtime_script = {}
+}
 
 const initialiser = async () =>
 {
@@ -281,6 +290,17 @@ const construire_balise = (bloc, donnees) =>
         {
             noeud.classList.add(attribut.slice(1))
         }
+        else if (attribut.startsWith('on'))
+        {
+            initialiser_runtime_script()
+
+            const [evenement, reste] = attribut.split('=')
+            const script = decapsuler(reste)
+
+            noeud.addEventListener(evenement.slice(2), (e) => {
+                executer_script(script, e)
+            })
+        }
         else
         {
             const [clef, ...reste] = attribut.split(`=`)
@@ -324,8 +344,12 @@ const construire_modele = (bloc, donnees) =>
         if (enfant.type === `instruction` && enfant.args[0] === `@style`)
         {
             const css = decapsuler(enfant.args[1])
-            console.log(css)
             activer_style(bloc.args[0], css)
+        }
+        if (enfant.type === `instruction` && enfant.args[0] === `@script`)
+        {
+            const js = decapsuler(enfant.args[1])
+            activer_script(bloc.args[0], js)
         }
     }
 
@@ -364,15 +388,79 @@ const activer_style = (modele, css) =>
 const desactiver_style = (modele) =>
 {
     const entree = styles_actifs.get(modele)
-    if (!entree)
+    if (entree)
     {
-        return
+        entree.compte--
+        if (entree.compte <= 0)
+        {
+            entree.element.remove()
+            styles_actifs.delete(modele)
+        }
     }
-    entree.compte--
-    if (entree.count <= 0)
+}
+
+const activer_script = (modele, js) =>
+{
+    initialiser_runtime_script()
+
+    if (scripts_actifs.has(modele))
     {
-        entree.element.remove()
-        styles_actifs.delete(id)
+        scripts_actifs.get(modele).compte++
+    }
+    else
+    {
+        const fonction = new Function(
+            `runtime`,
+            `
+            with (runtime)
+            {
+                ${js}
+            }
+            `
+        )
+
+        fonction(runtime_script)
+
+        scripts_actifs.set(modele, {
+            code: js,
+            compte: 1
+        })
+    }
+}
+
+const desactiver_script = (modele) =>
+{
+    const entree = scripts_actifs.get(modele)
+    if (entree)
+    {
+        entree.compte--
+        if (entree.compte <= 0)
+        {
+            scripts_actifs.delete(modele)
+        }
+    }
+}
+
+const executer_script = (script, evenement) =>
+{
+    if (runtime_script)
+    {
+        try
+        {
+            new Function(
+                `runtime`,
+                `event`,
+                `
+                with (runtime) {
+                    ${script}
+                }
+                `
+            )(runtime_script, evenement)
+        }
+        catch (erreur)
+        {
+            console.error(`Erreur handler AVEC :`, erreur)
+        }
     }
 }
 

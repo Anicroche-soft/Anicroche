@@ -1,9 +1,33 @@
 @style [
-    
+    body {
+        display: grid;
+        grid-template: auto 1fr / auto 1fr;
+    }
+
+    .petit.portrait body {
+        grid-template: 1fr auto / 1fr;
+    }
 ]
 
 @script [
-    
+    $format = `petit`
+    $orientation = `paysage`
+
+    const actualiser_format = () =>
+    {
+        const w = window.innerWidth
+        const h = window.innerHeight
+
+        $format = w > 1024 ? `grand` : `petit`
+        $orientation = w > h ? `paysage` : `portrait`
+
+        document.documentElement.classList.remove(`grand`, `petit`, `paysage`, `portrait`)
+        document.documentElement.classList.add($format, $orientation)
+    }
+
+    actualiser_format()
+
+    window.addEventListener(`resize`, actualiser_format)
 ]
 
 tete
