@@ -13,15 +13,19 @@ console.log(`\
 const adn = generer_adn()
 
 const composants = {
-    "/systeme": {
+    "/systeme/scripts": {
         chemin: "avec.js/scripts",
     },
-    "/composants/modeles": {
+    "/systeme/modeles": {
         chemin: "adn/modeles",
         recursif: true,
         composant: true,
         script: analyser_avec,
         ext: ".json"
+    },
+    "/systeme/images": {
+        chemin: "adn/images",
+        recursif: true
     }
 }
 

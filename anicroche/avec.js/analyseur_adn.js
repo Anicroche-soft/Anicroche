@@ -206,7 +206,7 @@ const analyser_bloc_adn = (str, type) =>
     return (adn);
 }
 
-export const analyser_adn = (str) =>
+const analyser_adn = (str) =>
 {
     return (analyser_bloc_adn(str, "dict"))
 }

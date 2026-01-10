@@ -486,7 +486,7 @@ const charger_modele = async (nom) =>
 {
     try
     {
-        const reponse = await fetch(`/composants/modeles/${nom}.avec`, {
+        const reponse = await fetch(`/systeme/modeles/${nom}.avec`, {
             headers: {'X-AC-Composant': `true`}
         })
         if (!reponse.ok)
