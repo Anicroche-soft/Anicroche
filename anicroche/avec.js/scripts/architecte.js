@@ -30,14 +30,19 @@ const initialiser = async () =>
     }
 }
 
-const evaluer = (str) =>
+const evaluer = (str, donnees) =>
 {
     return true
 }
 
-const valoriser = (str) =>
+const valoriser = (str, donnees) =>
 {
-    let valeur = str
+    let valeur = str.replace(/(?<!\\)\$[a-zA-Z_][\w]*/g, (nom) => {
+        if (nom in (donnees.args || {}))
+            return donnees.args[nom].replace(/\\/g, "\\\\");
+        else
+            return nom
+    }).replace(/\\(.)/g, "$1")
     return valeur
 }
 
@@ -115,7 +120,7 @@ const construire_enfants = (bloc, donnees) =>
             switch (enfant.args[0])
             {
             case `@if`:
-                if (evaluer(enfant.args[1]))
+                if (evaluer(enfant.args[1], donnees))
                 {
                     enfants.push(...construire_bloc(enfant, donnees))
                     elsable = false
@@ -126,7 +131,7 @@ const construire_enfants = (bloc, donnees) =>
                 }
                 break
             case `@else-if`:
-                if (elsable && evaluer(enfant.args[1]))
+                if (elsable && evaluer(enfant.args[1], donnees))
                 {
                     enfants.push(...construire_bloc(enfant, donnees))
                     elsable = false
@@ -140,7 +145,7 @@ const construire_enfants = (bloc, donnees) =>
                 elsable = false
                 break
             case `@unless`:
-                if (!evaluer(enfant.args[1]))
+                if (!evaluer(enfant.args[1], donnees))
                 {
                     enfants.push(...construire_bloc(enfant, donnees))
                 }
@@ -149,7 +154,7 @@ const construire_enfants = (bloc, donnees) =>
             case `@repeat`:
                 if (enfant.args.length > 1)
                 {
-                    const limite = +valoriser(enfant.args[1])
+                    const limite = +evaluer(enfant.args[1], donnees)
                     for (let i = 0; i < limite; i++)
                     {
                         enfants.push(...construire_bloc(enfant, donnees))
@@ -161,7 +166,7 @@ const construire_enfants = (bloc, donnees) =>
                     {
                         enfants.push(...construire_bloc(enfant, donnees))
                     }
-                    while (evaluer(bloc.enfants[i + 1].args[1]))
+                    while (evaluer(bloc.enfants[i + 1].args[1], donnees))
                 }
                 else if (bloc.enfants.length > i + 1 && bloc.enfants[i + 1].args[0] === `@until`)
                 {
@@ -169,14 +174,14 @@ const construire_enfants = (bloc, donnees) =>
                     {
                         enfants.push(...construire_bloc(enfant, donnees))
                     }
-                    while (!evaluer(bloc.enfants[i + 1].args[1]))
+                    while (!evaluer(bloc.enfants[i + 1].args[1], donnees))
                 }
                 elsable = false
                 break
             case `@while`:
                 if (i == 0 || bloc.enfants[i - 1].args[0] !== `@repeat`)
                 {
-                    while (evaluer(enfant.args[1]))
+                    while (evaluer(enfant.args[1], donnees))
                     {
                         enfants.push(...construire_bloc(enfant, donnees))
                     }
@@ -186,7 +191,7 @@ const construire_enfants = (bloc, donnees) =>
             case `@until`:
                 if (i == 0 || bloc.enfants[i - 1].args[0] !== `@repeat`)
                 {
-                    while (!evaluer(enfant.args[1]))
+                    while (!evaluer(enfant.args[1], donnees))
                     {
                         enfants.push(...construire_bloc(enfant, donnees))
                     }
@@ -278,11 +283,7 @@ const construire_balise = (bloc, donnees) =>
 
     for (const attribut of attributs)
     {
-        if (!attribut.includes(`=`) && !`#.`.includes(attribut[0]))
-        {
-            noeud.setAttribute(attribut, ``)
-        }
-        else if (attribut[0] == `#`)
+        if (attribut[0] == `#`)
         {
             noeud.id = attribut.slice(1)
         }
@@ -290,15 +291,20 @@ const construire_balise = (bloc, donnees) =>
         {
             noeud.classList.add(attribut.slice(1))
         }
-        else if (attribut.startsWith('on'))
+        else if (!attribut.includes(`=`))
+        {
+            noeud.setAttribute(attribut, ``)
+        }
+        else if (attribut.startsWith('on') || attribut[0] == '@')
         {
             initialiser_runtime_script()
 
-            const [evenement, reste] = attribut.split('=')
-            const script = decapsuler(reste)
+            let [evenement, script] = attribut.split('=')
+            evenement = evenement[0] == `@` ? evenement.slice(1) : evenement.slice(2)
+            script = decapsuler(script)
 
-            noeud.addEventListener(evenement.slice(2), (e) => {
-                executer_script(script, e)
+            noeud.addEventListener(evenement, (e) => {
+                executer_script(script, e, noeud)
             })
         }
         else
@@ -306,7 +312,7 @@ const construire_balise = (bloc, donnees) =>
             const [clef, ...reste] = attribut.split(`=`)
             let valeur = reste.join(`=`)
 
-            valeur = decapsuler(valeur)
+            valeur = valoriser(decapsuler(valeur), donnees)
 
             switch (clef)
             {
@@ -330,7 +336,7 @@ const construire_balise = (bloc, donnees) =>
 
 const construire_texte = (bloc, donnees) =>
 {
-    const noeud = document.createTextNode(decapsuler(bloc.args[0]))
+    const noeud = document.createTextNode(valoriser(decapsuler(bloc.args[0]), donnees))
 
     return [noeud]
 }
@@ -338,6 +344,7 @@ const construire_texte = (bloc, donnees) =>
 const construire_modele = (bloc, donnees) =>
 {
     const modele = donnees.dependances[bloc.args[0]]
+    const args = {}
 
     for (const enfant of modele.enfants)
     {
@@ -351,10 +358,20 @@ const construire_modele = (bloc, donnees) =>
             const js = decapsuler(enfant.args[1])
             activer_script(bloc.args[0], js)
         }
+        if (enfant.type === `instruction` && enfant.args[0] === `@args`)
+        {
+            const noms = decapsuler(enfant.args[1]).split(/\s+/)
+            const valeurs = bloc.args.slice(1)
+            for (let i = 0; i < noms.length; i++)
+            {
+                args[noms[i]] = valeurs[i]
+            }
+        }
     }
 
     const donnees_modele = {
         ...donnees,
+        args: args,
         tenons: [...donnees.tenons, bloc.enfants]
     }
 
@@ -441,7 +458,7 @@ const desactiver_script = (modele) =>
     }
 }
 
-const executer_script = (script, evenement) =>
+const executer_script = (script, evenement, noeud) =>
 {
     if (runtime_script)
     {
@@ -449,13 +466,14 @@ const executer_script = (script, evenement) =>
         {
             new Function(
                 `runtime`,
-                `event`,
+                `$event`,
+                `$node`,
                 `
                 with (runtime) {
                     ${script}
                 }
                 `
-            )(runtime_script, evenement)
+            )(runtime_script, evenement, noeud)
         }
         catch (erreur)
         {

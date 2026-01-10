@@ -56,45 +56,45 @@ const valider_bloc_avec = (bloc, str, pos, fichier) =>
 {
     if (bloc.type == 'instruction')
     {
-        if (bloc.args[0] == `@style` || bloc.args[0] == `@script`)
+        if (bloc.args[0] == `@style` || bloc.args[0] == `@script` || bloc.args[0] == `@args`)
         {
             if (bloc.args.length != 2)
-                erreur(`${bloc.args[0]} doit avoir un argument (${bloc.args[0]} <texte>)`, fichier, str, pos)
+                erreur(`${bloc.args[0]} doit avoir un argument : ${bloc.args[0]} [${bloc.args[0].slice(1)}]`, fichier, str, pos)
             if (bloc.enfants.length > 0)
                 erreur(`${bloc.args[0]} ne doit pas avoir d'enfant`, fichier, str, pos)
         }
         else if (bloc.args[0] == `@if` || bloc.args[0] == `@else-if` || bloc.args[0] == `@unless` || bloc.args[0] == `@while` || bloc.args[0] == `@until`)
         {
             if (bloc.args.length != 2)
-                erreur(`${bloc.args[0]} doit avoir un argument (${bloc.args[0]} <condition>)`, fichier, str, pos)
+                erreur(`${bloc.args[0]} doit avoir un argument : ${bloc.args[0]} [condition]`, fichier, str, pos)
             if (bloc.enfants.length <= 0)
                 erreur(`${bloc.args[0]} doit avoir au moins un enfant`, fichier, str, pos)
         }
         else if (bloc.args[0] == `@else`)
         {
             if (bloc.args.length != 1)
-                erreur(`${bloc.args[0]} ne doit pas avoir d'argument (${bloc.args[0]})`, fichier, str, pos)
+                erreur(`${bloc.args[0]} ne doit pas avoir d'argument : ${bloc.args[0]}`, fichier, str, pos)
             if (bloc.enfants.length <= 0)
                 erreur(`${bloc.args[0]} doit avoir au moins un enfant`, fichier, str, pos)
         }
         else if (bloc.args[0] == `@repeat`)
         {
             if (bloc.args.length > 2)
-                erreur(`${bloc.args[0]} peut avoir un argument (${bloc.args[0]} [<nombre>])`, fichier, str, pos)
+                erreur(`${bloc.args[0]} peut avoir un argument : ${bloc.args[0]} ([nombre])`, fichier, str, pos)
             if (bloc.enfants.length <= 0)
                 erreur(`${bloc.args[0]} doit avoir au moins un enfant`, fichier, str, pos)
         }
         else if (bloc.args[0] == `@for`)
         {
             if (bloc.args.length != 4 || (bloc.args[2] != 'in' && bloc.args[0] != 'of'))
-                erreur(`${bloc.args[0]} doit avoir trois arguments (${bloc.args[0]} <variable> (in | of) <variable>)`, fichier, str, pos)
+                erreur(`${bloc.args[0]} doit avoir trois arguments : ${bloc.args[0]} [variable] in|of [variable]`, fichier, str, pos)
             if (bloc.enfants.length <= 0)
                 erreur(`${bloc.args[0]} doit avoir au moins un enfant`, fichier, str, pos)
         }
-        else if (bloc.args[0] == `@break` || bloc.args[0] == `@continue` || bloc.args[0] == `@stud`)
+        else if (bloc.args[0] == `@stud`)
         {
             if (bloc.args.length != 1)
-                erreur(`${bloc.args[0]} ne doit pas avoir d'argument (${bloc.args[0]})`, fichier, str, pos)
+                erreur(`${bloc.args[0]} ne doit pas avoir d'argument : ${bloc.args[0]}`, fichier, str, pos)
             if (bloc.enfants.length > 0)
                 erreur(`${bloc.args[0]} ne doit pas avoir d'enfant`, fichier, str, pos)
         }

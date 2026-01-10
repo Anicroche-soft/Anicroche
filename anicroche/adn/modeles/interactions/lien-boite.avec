@@ -8,5 +8,7 @@
     }
 ]
 
-<a .lien-boite href="/">
+@args [$adresse]
+
+<a .lien-boite href="$adresse">
     @stud
