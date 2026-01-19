@@ -3,12 +3,22 @@
         gap: var(--d-ecart);
 
         background-color: var(--c-fond);
+        font-size: var(--d-fonte);
+        line-height: var(--d-fonte);
         color: var(--c-flux);
 
         --c-fond: transparent;
     }
 
+    path {
+        stroke: var(--c-flux);
+        stroke-width: 0.125rem;
+        stroke-linejoin: round;
+        fill: none;
+    }
+
     html {
+        --d-fonte: 1rem;
         --d-ecart: 1rem;
         --d-marge: 1rem;
 

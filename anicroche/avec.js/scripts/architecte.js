@@ -3,6 +3,27 @@ console.log(`\
 ║ AVEC ║
 ╚══════╝`)
 
+const BALISES_SVG = new Set([
+  'svg',
+  'path',
+  'circle',
+  'rect',
+  'line',
+  'polyline',
+  'polygon',
+  'ellipse',
+  'g',
+  'defs',
+  'clipPath',
+  'mask',
+  'use',
+  'linearGradient',
+  'radialGradient',
+  'stop',
+  'symbol',
+  'text'
+])
+
 const styles_actifs = new Map()
 const scripts_actifs = new Map()
 let runtime_script = null
@@ -279,7 +300,10 @@ const construire_balise = (bloc, donnees) =>
             attributs.push(mot)
     }
     
-    const noeud = document.createElement(etiquette)
+    const ESPACE_SVG = 'http://www.w3.org/2000/svg'
+    const noeud = BALISES_SVG.has(etiquette)
+        ? document.createElementNS(ESPACE_SVG, etiquette)
+        : document.createElement(etiquette)
 
     for (const attribut of attributs)
     {

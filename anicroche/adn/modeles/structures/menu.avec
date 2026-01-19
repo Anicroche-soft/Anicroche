@@ -2,11 +2,46 @@
     #menu {
         grid-area: 2 / 1 / 3 / 2;
 
-        padding: 1rem;
+        padding: var(--d-marge);
 
+        --d-ecart: 2rem;
         --c-fond: var(--c-analogue);
+    }
+
+    .petit #menu span {
+        display: none;
+    }
+
+    .petit #menu {
+        justify-content: space-evenly;
+
+        --d-ecart: 1rem;
+    }
+
+    .petit.portrait #menu {
+        justify-content: space-around;
+        flex-direction: row;
     }
 ]
 
 <nav #menu>
-    "nav"
+    lien-boite /
+        icone-maison
+        <span>
+            "Accueil"
+    lien-boite /
+        icone-arc
+        <span>
+            "Explorer"
+    lien-boite /
+        icone-sucette
+        <span>
+            "Créer"
+    lien-boite /
+        icone-bonbon
+        <span>
+            "Autre"
+    lien-boite /
+        icone-masque
+        <span>
+            "Profil"

@@ -4,7 +4,7 @@
         flex-flow: row nowrap;
         align-items: center;
 
-        --d-ecart: 0.5rem;
+        --d-ecart: 1rem;
     }
 ]
 
