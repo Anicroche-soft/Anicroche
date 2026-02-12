@@ -1,6 +1,7 @@
 @style [
     #corps {
         grid-area: 1 / 2 / 3 / 3;
+        overflow: hidden;
         gap: 0;
     }
 
@@ -9,12 +10,53 @@
     }
 
     #corps > nav {
-        padding: var(--d-marge);
         background: var(--b-degrade-vif);
+    }
+
+    #corps > section {
+        overflow: hidden;
+        flex: 1;
+    }
+
+    .grand #corps {
+        padding-left: 11rem;
+    }
+
+    .petit.paysage #corps {
+        padding-left: 3.5rem;
+    }
+
+    .navigation {
+        height: 3.5rem;
+    }
+
+    .page {
+        overflow-y: auto;
+        height: 100%;
+
+    }
+
+    .page > div {
+        --c-fond: var(--c-theme);
+        padding: 1rem;
+    }
+
+    .petit.portrait .page {
+        padding-bottom: 3.5rem;
+    }
+
+    .page img {
+        border-radius: 1rem;
     }
 ]
 
 <main #corps>
     <nav>
+        <div .navigation>
     <section>
-        "corps"
+        <div .page>
+            <div>
+                <img src="https://static.vecteezy.com/system/resources/previews/023/711/454/non_2x/flat-minimalistic-design-panorama-of-a-mountain-landscape-easy-to-change-colors-vector.jpg">
+                <img src="https://static.vecteezy.com/system/resources/previews/014/763/069/original/flat-design-mountains-landscape-background-illustration-free-vector.jpg">
+                <img src="https://img.freepik.com/premium-photo/rural-view-field-minimalistic-flat-design-landscape-poster-beautiful-illustration-picture_146671-87846.jpg">
+                <img src="https://i.pinimg.com/originals/f2/5e/9b/f25e9bdf8ffda3906ec023f771d28ea4.jpg">

@@ -9,7 +9,7 @@ down:
 build:
 	@docker compose build
 
-rebuild:
+re:
 	@docker compose up --build -d
 
 logs:

@@ -3,9 +3,9 @@ services:
     build: ./anicroche
     container_name: anicroche
     ports:
-      - "4035:4035"
+      - "4025:4025"
     environment:
-      - PORT=4035
+      - PORT=4025
     volumes:
       - ./anicroche/avec.js:/app/avec.js
       - ./anicroche/adn:/app/adn

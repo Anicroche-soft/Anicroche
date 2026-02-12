@@ -26,21 +26,32 @@ const composants = {
     "/systeme/images": {
         chemin: "adn/images",
         recursif: true
+    },
+    "/systeme/fontes": {
+        chemin: "adn/fontes",
+        recursif: true
     }
 }
 
 const types_mime = {
-    ".html": "text/html",
-    ".css": "text/css",
-    ".js": "application/javascript",
-    ".json": "application/json",
-    ".ico": "image/x-icon",
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".svg": "image/svg+xml",
-    ".mp3": "audio/mpeg",
-    ".mp4": "video/mp4"
+    ".html":  "text/html",
+    ".css":   "text/css",
+    ".js":    "application/javascript",
+    ".json":  "application/json",
+
+    ".ico":   "image/x-icon",
+    ".png":   "image/png",
+    ".jpg":   "image/jpeg",
+    ".jpeg":  "image/jpeg",
+    ".svg":   "image/svg+xml",
+
+    ".mp3":   "audio/mpeg",
+    ".mp4":   "video/mp4",
+
+    ".ttf":   "font/ttf",
+    ".otf":   "font/otf",
+    ".woff":  "font/woff",
+    ".woff2": "font/woff2"
 }
 
 const types_utf8 = [
@@ -91,7 +102,16 @@ const serveur = http.createServer((req, rep) =>
 
         if (chemin_reel)
         {
-            let contenu = fs.readFileSync(chemin_reel, "utf-8")
+            let contenu
+            const ext = infos?.ext || path.extname(chemin).toLowerCase()
+            if (types_utf8.includes(ext))
+            {
+                contenu = fs.readFileSync(chemin_reel, "utf-8")
+            }
+            else
+            {
+                contenu = fs.readFileSync(chemin_reel)
+            }
             if (typeof infos?.script === "function")
             {
                 try
@@ -106,7 +126,6 @@ const serveur = http.createServer((req, rep) =>
                     return
                 }
             }
-            const ext = infos?.ext || path.extname(chemin).toLowerCase()
             let type = types_mime[ext] || "application/octet-stream"
             if (types_utf8.includes(ext))
             {

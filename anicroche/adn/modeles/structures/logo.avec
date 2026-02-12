@@ -1,0 +1,23 @@
+@style [
+
+    #logo {
+        --c-flux: var(--c-vif);
+    }
+
+    #logo h1 {
+        font-family: 'Eczar', serif;
+
+        --d-fonte: 1.5rem;
+    }
+
+    .petit #logo h1,
+    .petit.portrait #logo {
+        display: none;
+    }
+]
+
+<div #logo>
+    lien-boite /
+        icone-anicroche
+        <h1>
+            "Anicroche"

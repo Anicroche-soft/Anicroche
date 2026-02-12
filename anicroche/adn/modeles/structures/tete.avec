@@ -1,28 +1,28 @@
 @style [
     #tete {
-        grid-area: 1 / 1 / 2 / 2;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
 
         padding: 1rem;
 
-        --c-fond: var(--c-analogue);
-        --c-flux: var(--c-vif);
+        background: var(--c-analogue-trans);
+        backdrop-filter: blur(var(--d-blur));
+
+        --d-ecart: 2rem;
     }
 
-    #tete h1 {
-        --d-fonte: 1.5rem;
+    .grand #tete {
+        width: 11rem;
     }
 
     .petit.portrait #tete {
-        display: none;
-    }
-
-    .petit #tete h1 {
-        display: none;
+        top: auto;
+        right: 0;
     }
 ]
 
 <header #tete>
-    lien-boite /
-        icone-anicroche
-        <h1>
-            "Anicroche"
+    logo
+    menu

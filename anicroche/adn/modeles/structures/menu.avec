@@ -1,11 +1,13 @@
 @style [
     #menu {
-        grid-area: 2 / 1 / 3 / 2;
-
-        padding: var(--d-marge);
+        flex: 1;
 
         --d-ecart: 2rem;
-        --c-fond: var(--c-analogue);
+    }
+
+    #menu span {
+        font-family: 'Eczar', serif;
+        font-weight: 500;
     }
 
     .petit #menu span {
@@ -13,7 +15,7 @@
     }
 
     .petit #menu {
-        justify-content: space-evenly;
+        justify-content: flex-end;
 
         --d-ecart: 1rem;
     }

@@ -3,6 +3,7 @@
         display: flex;
         flex-flow: row nowrap;
         align-items: center;
+        border-radius: 0.1875rem;
 
         --d-ecart: 1rem;
     }
