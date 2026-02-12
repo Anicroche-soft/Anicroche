@@ -44,7 +44,7 @@
     * {
         gap: var(--d-ecart);
 
-        background-color: var(--c-fond);
+        background: var(--b-fond);
         font-size: var(--d-fonte);
         line-height: var(--d-fonte);
         color: var(--c-flux);
@@ -56,11 +56,16 @@
 
         transition: outline-color 512ms;
 
-        --c-fond: transparent;
+        --b-fond: transparent;
     }
 
     *:focus-visible {
         outline-color: var(--c-flux);
+    }
+
+    *::selection {
+        color: var(--c-fond);
+        background: var(--c-flux);
     }
 
     path {
@@ -99,6 +104,7 @@
         --c-vif:    oklch(0.65 0.20 var(--t-theme));
         --c-clair:  oklch(0.85 0.20 var(--t-theme));
 
+        --b-fond: var(--c-analogue);
         --c-fond: var(--c-analogue);
         --c-flux: var(--c-inverse);
     }

@@ -10,7 +10,9 @@
     }
 
     #corps > nav {
-        background: var(--b-degrade-vif);
+        --b-fond: var(--b-degrade-vif);
+        --c-fond: var(--c-vif);
+        --c-flux: var(--c-analogue);
     }
 
     #corps > section {
@@ -37,6 +39,7 @@
     }
 
     .page > div {
+        --b-fond: var(--c-theme);
         --c-fond: var(--c-theme);
         padding: 1rem;
     }

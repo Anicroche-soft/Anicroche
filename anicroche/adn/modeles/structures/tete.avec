@@ -7,9 +7,10 @@
 
         padding: 1rem;
 
-        background: var(--c-analogue-trans);
         backdrop-filter: blur(var(--d-blur));
 
+        --b-fond: var(--c-analogue-trans);
+        --c-fond: var(--c-analogue);
         --d-ecart: 2rem;
     }
 
