@@ -52,16 +52,15 @@
         outline-style: solid;
         outline-color: transparent;
         outline-width: 0.125rem;
-        outline-offset: 0rem;
+        outline-offset: 0.125rem;
 
-        transition: outline-color 512ms, outline-offset 512ms;
+        transition: outline-color 512ms;
 
         --c-fond: transparent;
     }
 
     *:focus-visible {
-        outline-color: var(--c-complementaire);
-        outline-offset: 0.125rem;
+        outline-color: var(--c-flux);
     }
 
     path {
@@ -99,8 +98,6 @@
         --c-sombre: oklch(0.45 0.20 var(--t-theme));
         --c-vif:    oklch(0.65 0.20 var(--t-theme));
         --c-clair:  oklch(0.85 0.20 var(--t-theme));
-
-        --c-complementaire: oklch(0.65 0.20 calc(var(--t-theme) + 180));
 
         --c-fond: var(--c-analogue);
         --c-flux: var(--c-inverse);
