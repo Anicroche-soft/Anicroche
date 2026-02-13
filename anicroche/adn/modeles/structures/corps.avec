@@ -21,7 +21,7 @@
     }
 
     .grand #corps {
-        padding-left: 11rem;
+        padding-left: var(--d-tete);
     }
 
     .petit.paysage #corps {

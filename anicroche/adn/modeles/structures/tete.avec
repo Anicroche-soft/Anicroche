@@ -15,7 +15,7 @@
     }
 
     .grand #tete {
-        width: 11rem;
+        width: var(--d-tete);
     }
 
     .petit.portrait #tete {

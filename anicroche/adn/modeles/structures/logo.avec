@@ -4,20 +4,25 @@
         --c-flux: var(--c-vif);
     }
 
-    #logo h1 {
-        font-family: 'Eczar', serif;
+    #logo > a {
+        --d-ecart: 0.5rem;
+    }
+
+    #logo .logotype-anicroche {
+        height: 1.5rem;
 
         --d-fonte: 1.5rem;
     }
 
-    .petit #logo h1,
+    .petit #logo .logotype-anicroche,
     .petit.portrait #logo {
         display: none;
     }
 ]
 
 <div #logo>
-    lien-boite /
-        icone-anicroche
-        <h1>
+    ancre-boite /
+        alt
             "Anicroche"
+        icone-anicroche
+        logotype-anicroche

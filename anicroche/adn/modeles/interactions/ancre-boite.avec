@@ -1,5 +1,5 @@
 @style [
-    .lien-boite {
+    .ancre-boite {
         display: flex;
         flex-flow: row nowrap;
         align-items: center;
@@ -11,5 +11,5 @@
 
 @args [$adresse]
 
-<a .lien-boite href="$adresse">
+<a .ancre-boite href="$adresse">
     @stud

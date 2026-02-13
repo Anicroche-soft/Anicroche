@@ -72,6 +72,7 @@
         stroke: var(--c-flux);
         stroke-width: 0.125rem;
         stroke-linejoin: round;
+        stroke-linecap: round;
         fill: none;
     }
 
@@ -83,6 +84,7 @@
         --d-ecart: 1rem;
         --d-marge: 1rem;
         --d-blur: 4rem;
+        --d-tete: 10.625rem;
 
         --t-theme: 25;
 

@@ -10,7 +10,8 @@
         font-weight: 500;
     }
 
-    .petit #menu span {
+    .grand #menu .alt,
+    .petit #menu span:not(.alt) {
         display: none;
     }
 
@@ -27,23 +28,33 @@
 ]
 
 <nav #menu>
-    lien-boite /
+    ancre-boite /
+        alt
+            "Accueil"
         icone-maison
         <span>
             "Accueil"
-    lien-boite /
+    ancre-boite /
+        alt
+            "Explorer"
         icone-arc
         <span>
             "Explorer"
-    lien-boite /
+    ancre-boite /
+        alt
+            "Créer"
         icone-sucette
         <span>
             "Créer"
-    lien-boite /
+    ancre-boite /
+        alt
+            "Autre"
         icone-bonbon
         <span>
             "Autre"
-    lien-boite /
+    ancre-boite /
+        alt
+            "Profil"
         icone-masque
         <span>
             "Profil"
