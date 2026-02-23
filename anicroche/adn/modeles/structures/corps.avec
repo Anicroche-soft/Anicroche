@@ -10,6 +10,8 @@
     }
 
     #corps > nav {
+        padding: var(--l-marge);
+
         --b-fond: var(--b-degrade-vif);
         --c-fond: var(--c-vif);
         --c-flux: var(--c-analogue);
@@ -21,7 +23,7 @@
     }
 
     .grand #corps {
-        padding-left: var(--d-tete);
+        padding-left: var(--l-tete);
     }
 
     .petit.paysage #corps {
@@ -29,7 +31,7 @@
     }
 
     .navigation {
-        height: 3.5rem;
+        height: 1.5rem;
     }
 
     .page {
@@ -56,10 +58,13 @@
 <main #corps>
     <nav>
         <div .navigation>
+            icone-horloge
     <section>
         <div .page>
             <div>
+                <a href="#test">
+                    "TEST"
                 <img src="https://static.vecteezy.com/system/resources/previews/023/711/454/non_2x/flat-minimalistic-design-panorama-of-a-mountain-landscape-easy-to-change-colors-vector.jpg">
                 <img src="https://static.vecteezy.com/system/resources/previews/014/763/069/original/flat-design-mountains-landscape-background-illustration-free-vector.jpg">
-                <img src="https://img.freepik.com/premium-photo/rural-view-field-minimalistic-flat-design-landscape-poster-beautiful-illustration-picture_146671-87846.jpg">
+                <img id="test" src="https://img.freepik.com/premium-photo/rural-view-field-minimalistic-flat-design-landscape-poster-beautiful-illustration-picture_146671-87846.jpg">
                 <img src="https://i.pinimg.com/originals/f2/5e/9b/f25e9bdf8ffda3906ec023f771d28ea4.jpg">

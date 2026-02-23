@@ -7,15 +7,15 @@
 
         padding: 1rem;
 
-        backdrop-filter: blur(var(--d-blur));
+        backdrop-filter: blur(var(--l-blur));
 
         --b-fond: var(--c-analogue-trans);
         --c-fond: var(--c-analogue);
-        --d-ecart: 2rem;
+        --l-ecart: 2rem;
     }
 
     .grand #tete {
-        width: var(--d-tete);
+        width: var(--l-tete);
     }
 
     .petit.portrait #tete {

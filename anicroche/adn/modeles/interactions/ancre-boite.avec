@@ -5,7 +5,7 @@
         align-items: center;
         border-radius: 0.1875rem;
 
-        --d-ecart: 1rem;
+        --l-ecart: 1rem;
     }
 ]
 

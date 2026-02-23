@@ -1,0 +1,111 @@
+@script [
+    $monter_icone_horloge = ($node) =>
+    {
+        const horloge = {
+            aiguille_heures: $node.querySelector('.aiguille.heures'),
+            aiguille_minutes: $node.querySelector('.aiguille.minutes'),
+            nombre_xii: $node.querySelector('.nombre.xii'),
+            nombre_iii: $node.querySelector('.nombre.iii'),
+            nombre_vi: $node.querySelector('.nombre.vi'),
+            nombre_ix: $node.querySelector('.nombre.ix')
+        }
+
+        actualiser(horloge)
+
+        const maintenant = new Date()
+        const temps_restant = (60 - maintenant.getSeconds()) * 1000 - maintenant.getMilliseconds()
+
+        const chrono_timeout = setTimeout(() => {
+            actualiser(horloge)
+
+            const chrono_interval = setInterval(() => {
+                actualiser(horloge)
+            }, 3000)
+
+            $node._avec_vars.chronometre = chrono_interval
+        }, temps_restant)
+
+        $node._avec_vars.chronometre = chrono_timeout
+    }
+
+    $demonter_icone_horloge = ($node) =>
+    {
+        if ($node._avec_vars.chronometre)
+        {
+            clearInterval($node._avec_vars.chronometre)
+            $node._avec_vars.chronometre = null
+        }
+    }
+
+    const actualiser = (horloge) =>
+    {
+        const maintenant = new Date()
+
+        const heures = maintenant.getHours()
+        const minutes = maintenant.getMinutes()
+
+        const angle_heures = (heures % 12) * 30 + minutes * 0.5
+        const angle_minutes = minutes * 6
+
+        horloge.aiguille_heures.style.transform = `rotate(${angle_heures}deg)`
+        horloge.aiguille_minutes.style.transform = `rotate(${angle_minutes}deg)`
+
+        horloge.nombre_xii.classList.toggle(
+            'masque',
+            difference_angle(angle_heures, 0) < 15
+         || difference_angle(angle_minutes, 0) < 30
+        )
+        horloge.nombre_iii.classList.toggle(
+            'masque',
+            difference_angle(angle_heures, 90) < 15
+         || difference_angle(angle_minutes, 90) < 30
+        )
+        horloge.nombre_vi.classList.toggle(
+            'masque',
+            difference_angle(angle_heures, 180) < 15
+         || difference_angle(angle_minutes, 180) < 30
+        )
+        horloge.nombre_ix.classList.toggle(
+            'masque',
+            difference_angle(angle_heures, 270) < 15
+         || difference_angle(angle_minutes, 270) < 30
+        )
+    }
+
+    const difference_angle = (a, b) => {
+        const diff = Math.abs(a - b) % 360
+        return diff > 180 ? 360 - diff : diff
+    }
+]
+
+@style [
+    .icone-horloge {
+        width: calc(var(--l-fonte) * 1.5);
+        height: calc(var(--l-fonte) * 1.5);
+    }
+
+    .icone-horloge .aiguille {
+        transform-origin: 50% 50%;
+    }
+
+    .icone-horloge .nombre {
+        transition: opacity var(--d-animation);
+    }
+
+    .icone-horloge .nombre.masque {
+        opacity: 0;
+    }
+]
+
+<svg .icone-horloge
+     @mount="$monter_icone_horloge($node)"
+     @unmount="$demonter_icone_horloge($node)"
+     viewBox="0 0 24 24">
+    <path                    d="M12 23C18.0751 23 23 18.0751 23 12C23 5.92487 18.0751 1 12 1C5.92487 1 1 5.92487 1 12C1 18.0751 5.92487 23 12 23Z">
+    <path                    d="M12 14C13.1046 14 14 13.1046 14 12C14 10.8954 13.1046 10 12 10C10.8954 10 10 10.8954 10 12C10 13.1046 10.8954 14 12 14Z">
+    <path .aiguille .heures  d="M12 10V7">
+    <path .aiguille .minutes d="M12 10V5">
+    <path .nombre   .xii     d="M12 1V3">
+    <path .nombre   .iii     d="M23 12H21">
+    <path .nombre   .vi      d="M12 23V21">
+    <path .nombre   .ix      d="M1 12H3">

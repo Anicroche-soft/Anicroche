@@ -2,7 +2,7 @@
     #menu {
         flex: 1;
 
-        --d-ecart: 2rem;
+        --l-ecart: 2rem;
     }
 
     #menu span {
@@ -18,7 +18,7 @@
     .petit #menu {
         justify-content: flex-end;
 
-        --d-ecart: 1rem;
+        --l-ecart: 1rem;
     }
 
     .petit.portrait #menu {
@@ -34,25 +34,25 @@
         icone-maison
         <span>
             "Accueil"
-    ancre-boite /
+    ancre-boite /explorer
         alt
             "Explorer"
         icone-arc
         <span>
             "Explorer"
-    ancre-boite /
+    ancre-boite /creer
         alt
             "Créer"
         icone-sucette
         <span>
             "Créer"
-    ancre-boite /
+    ancre-boite /autre
         alt
             "Autre"
         icone-bonbon
         <span>
             "Autre"
-    ancre-boite /
+    ancre-boite /profil
         alt
             "Profil"
         icone-masque

@@ -1,7 +1,7 @@
 @style [
     .logotype-anicroche {
-        // width: calc(var(--d-fonte) * 1.5);
-        height: var(--d-fonte);
+        // width: calc(var(--l-fonte) * 1.5);
+        height: var(--l-fonte);
     }
 ]
 

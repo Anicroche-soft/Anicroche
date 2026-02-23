@@ -5,13 +5,13 @@
     }
 
     #logo > a {
-        --d-ecart: 0.5rem;
+        --l-ecart: 0.5rem;
     }
 
     #logo .logotype-anicroche {
         height: 1.5rem;
 
-        --d-fonte: 1.5rem;
+        --l-fonte: 1.5rem;
     }
 
     .petit #logo .logotype-anicroche,
