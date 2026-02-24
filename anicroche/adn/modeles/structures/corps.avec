@@ -63,9 +63,12 @@
     <section>
         <div .page>
             <div>
+                @if [$path ~= '/<$chose :- f>']
+                    "BONJOUR $chose"
                 @if [:) & [/explorer, /creer] }- $path]
                     <a href="#test">
                         "TEST"
+                "TROIS : $chose"
                 <img src="https://static.vecteezy.com/system/resources/previews/023/711/454/non_2x/flat-minimalistic-design-panorama-of-a-mountain-landscape-easy-to-change-colors-vector.jpg">
                 <img src="https://static.vecteezy.com/system/resources/previews/014/763/069/original/flat-design-mountains-landscape-background-illustration-free-vector.jpg">
 

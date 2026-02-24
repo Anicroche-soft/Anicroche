@@ -1,4 +1,5 @@
 import {valoriser} from './scribe.js'
+import {etat_sculpteur} from './sculpteur.js'
 
 // ============================================================
 // Types de résultat
@@ -41,7 +42,8 @@ const SMILEYS = [':)', ':(', ':x']
 
 const OPERATEURS_COMPOSITES = [
     '!-{', '!}-', '-{', '}-',
-    '>=', '<=', '!=',
+    '>=', '<=', '!=', '~=',
+    ':+', ':-',
     '&', '|', '!',
     '+', '-', '*', '/', '%', '^',
     '=', '>', '<',
@@ -253,6 +255,35 @@ const tokeniser = (str) =>
 }
 
 // ============================================================
+// Lecture de chaîne avec échappement
+// ============================================================
+
+const lire_chaine_caracteres = (str, donnees) =>
+{
+    // Entre guillemets
+    if (str.length >= 2)
+    {
+        const g = str[0]
+        if ((g === '"' || g === "'" || g === '`') && str.at(-1) === g)
+        {
+            str = str.slice(1, -1)
+        }
+    }
+
+    // Échappement et interpolation
+    let result = ''
+    let pos = 0
+    while (pos < str.length)
+    {
+        if (str[pos] === '\\') { pos++; result += str[pos] }
+        else result += str[pos]
+        pos++
+    }
+
+    return valoriser(result, donnees)
+}
+
+// ============================================================
 // Opérateurs — une fonction par opérateur
 // ============================================================
 
@@ -373,6 +404,22 @@ const op_ne_contient_pas = (a, b) =>
     return r === VRAI ? FAUX : VRAI
 }
 
+const op_inclure = (a, b, donnees) =>
+{
+    if (!est_texte(a)) return ERREUR
+    const chars = lire_chaine_caracteres(b, donnees)
+    if (est_erreur(chars)) return ERREUR
+    return [...a].filter(c => chars.includes(c)).join('')
+}
+
+const op_exclure = (a, b, donnees) =>
+{
+    if (!est_texte(a)) return ERREUR
+    const chars = lire_chaine_caracteres(b, donnees)
+    if (est_erreur(chars)) return ERREUR
+    return [...a].filter(c => !chars.includes(c)).join('')
+}
+
 const op_et = (a, b_fn) =>
 {
     const ba = coercer_booleen(a)
@@ -450,7 +497,7 @@ const parser_et = (etat) =>
     return gauche
 }
 
-const OPS_COMPARAISON = new Set(['=', '!=', '>', '>=', '<', '<=', '-{', '!-{', '}-', '!}-'])
+const OPS_COMPARAISON = new Set(['=', '!=', '>', '>=', '<', '<=', '-{', '!-{', '}-', '!}-', '~='])
 
 const parser_comparaison = (etat) =>
 {
@@ -480,7 +527,7 @@ const parser_comparaison = (etat) =>
 const parser_addition = (etat) =>
 {
     let gauche = parser_multiplication(etat)
-    while (etat.pos < etat.tokens.length && (etat.tokens[etat.pos].valeur === '+' || etat.tokens[etat.pos].valeur === '-'))
+    while (etat.pos < etat.tokens.length && ['+', '-', ':+', ':-'].includes(etat.tokens[etat.pos].valeur))
     {
         const op = etat.tokens[etat.pos].valeur
         etat.pos++
@@ -573,6 +620,135 @@ const parser_primaire = (etat) =>
 }
 
 // ============================================================
+// Correspondance de motif
+// ============================================================
+
+const op_correspondance = (chaine, motif_brut, donnees) =>
+{
+    if (!est_texte(chaine)) return ERREUR
+
+    // Décomposer le motif en segments fixes et captures
+    const segments = []
+    let pos = 0
+
+    while (pos < motif_brut.length)
+    {
+        if (motif_brut[pos] === '<' && motif_brut[pos + 1] === '$')
+        {
+            // Début d'une capture
+            pos += 2 // Saute <$
+            let nom = ''
+            while (pos < motif_brut.length && motif_brut[pos] !== '>' && motif_brut[pos] !== ' ') { nom += motif_brut[pos]; pos++ }
+
+            let mode     = null // null, ':+', ':-'
+            let filtrage = null
+
+            if (motif_brut[pos] === ' ')
+            {
+                pos++ // Saute l'espace
+                if (motif_brut.startsWith(':+', pos))      { mode = ':+'; pos += 2 }
+                else if (motif_brut.startsWith(':-', pos)) { mode = ':-'; pos += 2 }
+
+                if (mode)
+                {
+                    pos++ // Saute l'espace après l'opérateur
+                    let chars_brut = ''
+                    if (motif_brut[pos] === '"' || motif_brut[pos] === "'" || motif_brut[pos] === '`')
+                    {
+                        const g = motif_brut[pos++]
+                        while (pos < motif_brut.length && motif_brut[pos] !== g)
+                        {
+                            if (motif_brut[pos] === '\\') { pos++; chars_brut += motif_brut[pos] }
+                            else chars_brut += motif_brut[pos]
+                            pos++
+                        }
+                        pos++ // Ferme guillemet
+                    }
+                    else
+                    {
+                        while (pos < motif_brut.length && motif_brut[pos] !== '>') { chars_brut += motif_brut[pos]; pos++ }
+                    }
+                    filtrage = valoriser(chars_brut, donnees)
+                }
+            }
+
+            pos++ // Saute >
+            const delimiteur = pos < motif_brut.length ? motif_brut[pos] : null
+            segments.push({ type: 'capture', nom, mode, filtrage, delimiteur })
+        }
+        else
+        {
+            // Segment fixe
+            let texte = ''
+            while (pos < motif_brut.length && !(motif_brut[pos] === '<' && motif_brut[pos + 1] === '$'))
+            {
+                texte += motif_brut[pos]; pos++
+            }
+            segments.push({ type: 'fixe', texte })
+        }
+    }
+
+    // Faire correspondre la chaîne avec les segments
+    const captures = {}
+    let pos_chaine = 0
+
+    for (let i = 0; i < segments.length; i++)
+    {
+        const seg = segments[i]
+
+        if (seg.type === 'fixe')
+        {
+            if (!chaine.startsWith(seg.texte, pos_chaine)) return FAUX
+            pos_chaine += seg.texte.length
+        }
+        else if (seg.type === 'capture')
+        {
+            const prochain_fixe = segments[i + 1]?.type === 'fixe' ? segments[i + 1].texte : null
+            let valeur_capturee = ''
+
+            while (pos_chaine < chaine.length)
+            {
+                const c = chaine[pos_chaine]
+
+                // Arrêt sur le délimiteur suivant
+                if (prochain_fixe && chaine.startsWith(prochain_fixe, pos_chaine)) break
+                if (seg.delimiteur && c === seg.delimiteur && !prochain_fixe) break
+
+                // Filtrage
+                if (seg.mode === ':+' && seg.filtrage && !seg.filtrage.includes(c)) break
+                if (seg.mode === ':-' && seg.filtrage &&  seg.filtrage.includes(c)) break
+
+                valeur_capturee += c
+                pos_chaine++
+            }
+
+            // Stocker la capture — liste si doublon
+            if (seg.nom in captures)
+            {
+                if (!est_liste(captures[seg.nom]))
+                    captures[seg.nom] = [captures[seg.nom]]
+                captures[seg.nom].push(valeur_capturee)
+            }
+            else
+            {
+                captures[seg.nom] = valeur_capturee
+            }
+        }
+    }
+
+    // Vérifier que toute la chaîne a été consommée
+    if (pos_chaine !== chaine.length) return FAUX
+
+    // Écrire les variables capturées dans le runtime
+    for (const [nom, valeur] of Object.entries(captures))
+    {
+        etat_sculpteur.instance[`$${nom}`] = valeur
+    }
+
+    return VRAI
+}
+
+// ============================================================
 // Évaluateur
 // ============================================================
 
@@ -614,7 +790,30 @@ const evaluer_noeud = (noeud, donnees) =>
 
     case 'op_binaire':
     {
+        if (noeud.op === '~=')
+        {
+            const gauche = evaluer_noeud(noeud.gauche, donnees)
+            const brut   = noeud.droite.type === 'valeur' ? noeud.droite.valeur : ERREUR
+            if (est_erreur(brut)) return ERREUR
+            return op_correspondance(gauche, brut, donnees)
+        }
+
         const gauche = evaluer_noeud(noeud.gauche, donnees)
+
+        if (noeud.op === ':+' || noeud.op === ':-')
+        {
+            const extraire_brut = (n) =>
+            {
+                if (n.type === 'valeur')   return n.valeur
+                if (n.type === 'variable') return n.valeur
+                return ERREUR
+            }
+            const brut = extraire_brut(noeud.droite)
+            if (est_erreur(brut)) return ERREUR
+            if (noeud.op === ':+') return op_inclure(gauche, brut, donnees)
+            if (noeud.op === ':-') return op_exclure(gauche, brut, donnees)
+        }
+
         const droite = evaluer_noeud(noeud.droite, donnees)
         const fn = OPERATEURS_BINAIRES[noeud.op]
         if (!fn) return ERREUR

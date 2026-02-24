@@ -21,4 +21,4 @@ routes : [
         voie : /<id>
         modele : anicroche
     }
-]
+] <$id :+ />
