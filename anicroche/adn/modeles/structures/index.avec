@@ -88,7 +88,7 @@
 
         --d-animation: 500ms;
 
-        --t-theme: 25;
+        --t-theme: 30;
 
         --p-trans: 50%;
 
