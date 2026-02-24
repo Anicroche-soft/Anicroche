@@ -52,6 +52,68 @@ const debug = (message, str, deb, fin, json) =>
     // console.log(`DEBUG: Analyseur .avec :${ind} ${message} : ${ligne_deb}:${colonne_deb} - ${ligne_fin}:${colonne_fin}`)
 }
 
+// Fonction utilitaire : détecte et saute un smiley, retourne la nouvelle position
+const sauter_smileys = (str, pos) =>
+{
+    if (str[pos] === ':')
+    {
+        if (str[pos + 1] === ')' || str[pos + 1] === '(' || str[pos + 1] === 'x')
+            return pos + 2
+    }
+    return pos
+}
+
+// Fonction utilitaire : détecte et saute un opérateur composé avec accolades
+const sauter_operateurs_appartenance = (str, pos) =>
+{
+    if (str[pos] === '!' && str[pos + 1] === '-' && str[pos + 2] === '{') return pos + 3
+    if (str[pos] === '!' && str[pos + 1] === '}' && str[pos + 2] === '-') return pos + 3
+    if (str[pos] === '-' && str[pos + 1] === '{')                         return pos + 2
+    if (str[pos] === '}' && str[pos + 1] === '-')                         return pos + 2
+    return pos
+}
+
+const avancer_avec_blocs = (str, pos, fin, blocs, arret) =>
+{
+    while (pos <= fin && !arret(str, pos, blocs))
+    {
+        // Sauter les tokens spéciaux en priorité, hors contexte de chaîne
+        if (!/^["'`]$/.test(blocs.slice(-1)))
+        {
+            let apres = sauter_smileys(str, pos)
+            if (apres !== pos) { pos = apres; continue }
+
+            apres = sauter_operateurs_appartenance(str, pos)
+            if (apres !== pos) { pos = apres; continue }
+        }
+
+        const c = str[pos]
+        if (c === blocs.slice(-1))
+            blocs = blocs.slice(0, -1)
+        else if (c === '(' && !/^["'`]$/.test(blocs.slice(-1)))
+            blocs += ')'
+        else if (c === '[' && !/^["'`]$/.test(blocs.slice(-1)))
+            blocs += ']'
+        else if (c === '{' && !/^["'`]$/.test(blocs.slice(-1)))
+            blocs += '}'
+        else if (c === '<' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
+            blocs += '>'
+        else if (c === '"' && !/^["'`]$/.test(blocs.slice(-1)))
+            blocs += '"'
+        else if (c === "'" && !/^["'`]$/.test(blocs.slice(-1)))
+            blocs += "'"
+        else if (c === '`' && !/^["'`]$/.test(blocs.slice(-1)))
+            blocs += '`'
+        else if ((c === ')' || c === ']' || c === '}') && !/^["'`]$/.test(blocs.slice(-1)))
+            return { pos, blocs, erreur: "Fermeture de bloc inattendue" }
+        else if (c === '>' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
+            return { pos, blocs, erreur: "Fermeture de bloc inattendue" }
+
+        pos++
+    }
+    return { pos, blocs, erreur: null }
+}
+
 const valider_bloc_avec = (bloc, str, pos, fichier) =>
 {
     if (bloc.type == 'instruction')
@@ -135,11 +197,7 @@ const valider_bloc_avec = (bloc, str, pos, fichier) =>
 const analyser_bloc_avec = (str, deb, fin, fichier, json) =>
 {
     debug("Bloc", str, deb, fin, json)
-    let bloc = {
-        type: undefined,
-        args: [],
-        enfants: []
-    }
+    let bloc = { type: undefined, args: [], enfants: [] }
 
     let indentation = 0
     while (str[deb + indentation] == ' ')
@@ -156,53 +214,22 @@ const analyser_bloc_avec = (str, deb, fin, fichier, json) =>
     let deb_mot = pos
     while (!fini)
     {
-        // console.log('(3)')
-        while (!/^[ \n]$/.test(str[pos]) || blocs != '')
-        {
-            // console.log('(4)')
-            if (str[pos] == blocs.slice(-1))
-                blocs = blocs.slice(0, -1)
-            else if (str[pos] == '(' && !/^["'`]$/.test(blocs.slice(-1)))
-                blocs += ')'
-            else if (str[pos] == '[' && !/^["'`]$/.test(blocs.slice(-1)))
-                blocs += ']'
-            else if (str[pos] == '{' && !/^["'`]$/.test(blocs.slice(-1)))
-                blocs += '}'
-            else if (str[pos] == '<' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
-                blocs += '>'
-            else if (str[pos] == '\"' && !/^["'`]$/.test(blocs.slice(-1)))
-                blocs += '\"'
-            else if (str[pos] == '\'' && !/^["'`]$/.test(blocs.slice(-1)))
-                blocs += '\''
-            else if (str[pos] == '\`' && !/^["'`]$/.test(blocs.slice(-1)))
-                blocs += '\`'
-            else if (str[pos] == ')' || str[pos] == ']' || str[pos] == '}')
-            {
-                if (!/^["'`]$/.test(blocs.slice(-1)))
-                    return erreur("Fermeture de bloc inattendue", fichier, str, pos)
-            }
-            else if (str[pos] == '>')
-            {
-                if (!/^[)\]}>"'`]$/.test(blocs.slice(-1)))
-                    return erreur("Fermeture de bloc inattendue", fichier, str, pos)
-            }
-            if (pos >= fin)
-            {
-                if (blocs != '')
-                    return erreur("Fermeture de bloc manquante", str, fichier, fin + 1)
-                fini = true
-                break
-            }
-            pos++
-        }
+        const res = avancer_avec_blocs(str, pos, fin,  blocs,
+            (str, pos, blocs) => /^[ \n]$/.test(str[pos]) && blocs === '')
+        if (res.erreur)
+            return erreur(res.erreur, fichier, str, res.pos)
+        pos = res.pos
+        blocs = res.blocs
+
         let mot = str.substring(deb_mot, pos + 1).trim()
         if (mot.length > 0)
             bloc.args.push(mot)
-        if (str[pos] == '\n')
+        if (str[pos] == '\n' || pos >= fin)
             fini = true
         else
-            deb_mot = ++pos;
+            deb_mot = ++pos
     }
+
     if (!bloc.args[0])
         return null
     else if (bloc.args[0][0] == '@')
@@ -247,124 +274,84 @@ const analyser_enfants_avec = (str, deb, fin, fichier, json) =>
     let fini = deb >= fin ? true : false
     while (!fini)
     {
-        // console.log('(0)')
-        for (let i = 0; i < indentation && pos + i < fin; i++)
+        // Sauter les lignes vides et commentaires AVANT la vérification d'indentation
+        while (pos <= fin && (str[pos] === '\n' || str[pos] === '#'))
         {
-            if (/^[\n#]$/.test(str[pos + i]))
-            {
-                pos += i
-                break
-            }
-            if (str[pos + i] == '\t')
-                return erreur("Indentation par tabulations interdite", str, fichier, pos + i)
-            if (str[pos + i] != ' ')
-                return erreur("Erreur d'indentation", str, fichier, pos + i)
-        }
-        if (/^[\n#]$/.test(str[pos]))
-        {
-            while(str[pos] != '\n' && pos < fin)
+            if (str[pos] === '#')
+                while (pos <= fin && str[pos] !== '\n')
+                    pos++
+            if (pos <= fin)
                 pos++
-            if (pos < fin)
-                pos++
-            else
-                fini = true
-            continue
+            if (pos > fin) { fini = true; break }
         }
-        pos += indentation
-        if (pos >= fin)
-        {
-            fini = true
-            continue
-        }
-        if (str[pos] == '\t')
-            return erreur("Indentation par tabulations interdite", fichier, str, pos)
-        if (str[pos] == ' ')
-            return erreur("Erreur d'indentation", fichier, str, pos)
+        if (fini) break
 
-        let enf_pret = false
-        let deb_enf = pos;
-        let fin_enf = pos;
+        // Vérifier l'indentation
+        for (let i = 0; i < indentation; i++)
+        {
+            if (pos + i > fin)               { fini = true; break }
+            if (str[pos + i] == '\t')
+                return erreur("Indentation par tabulations interdite", fichier, str, pos + i)
+            if (str[pos + i] != ' ')
+                return erreur("Erreur d'indentation", fichier, str, pos + i)
+        }
+        if (fini) break
+        pos += indentation
+
+        if (pos > fin)   { fini = true; continue }
+        if (str[pos] == ' ') return erreur("Erreur d'indentation", fichier, str, pos)
+
+        let deb_enf = pos
+        let fin_enf = pos
         let blocs = ''
+        let enf_pret = false
+
         while (!fini && !enf_pret)
         {
-            // console.log('(1)')
-            while (str[pos] != '\n' || blocs != '')
-            {
-                // console.log('(2)')
-                if (str[pos] == blocs.slice(-1))
-                    blocs = blocs.slice(0, -1)
-                else if (str[pos] == '(' && !/^["'`]$/.test(blocs.slice(-1)))
-                    blocs += ')'
-                else if (str[pos] == '[' && !/^["'`]$/.test(blocs.slice(-1)))
-                    blocs += ']'
-                else if (str[pos] == '{' && !/^["'`]$/.test(blocs.slice(-1)))
-                    blocs += '}'
-                else if (str[pos] == '<' && !/^[)\]}>"'`]$/.test(blocs.slice(-1)))
-                    blocs += '>'
-                else if (str[pos] == '\"' && !/^["'`]$/.test(blocs.slice(-1)))
-                    blocs += '\"'
-                else if (str[pos] == '\'' && !/^["'`]$/.test(blocs.slice(-1)))
-                    blocs += '\''
-                else if (str[pos] == '\`' && !/^["'`]$/.test(blocs.slice(-1)))
-                    blocs += '\`'
-                else if (str[pos] == ')' || str[pos] == ']' || str[pos] == '}')
-                {
-                    if (!/^["'`]$/.test(blocs.slice(-1)))
-                        return erreur("Fermeture de bloc inattendue", fichier, str, pos)
-                }
-                else if (str[pos] == '>')
-                {
-                    if (!/^[)\]}>"'`]$/.test(blocs.slice(-1)))
-                        return erreur("Fermeture de bloc inattendue", fichier, str, pos)
-                }
-                if (pos >= fin)
-                {
-                    if (blocs != '')
-                        return erreur("Fermeture de bloc manquante", str, fichier, fin + 1)
-                    fini = true
-                    break
-                }
-                pos++
-            }
+            // Avancer jusqu'à la fin de la ligne courante
+            const res = avancer_avec_blocs(str, pos, fin, blocs,
+                (str, pos, blocs) => str[pos] === '\n' && blocs === '')
+            if (res.erreur)
+                return erreur(res.erreur, fichier, str, res.pos)
+            pos   = res.pos
+            blocs = res.blocs
             fin_enf = pos
-            if (pos >= fin)
+
+            if (pos >= fin) { fini = true; continue }
+
+            // Regarder la ligne suivante
+            let peek = pos + 1 // pos est sur '\n', peek est le début de la ligne suivante
+
+            // Sauter les lignes vides et commentaires
+            while (peek <= fin && (str[peek] === '\n' || str[peek] === '#'))
             {
-                fini = true
-                continue
+                if (str[peek] === '#')
+                    while (peek <= fin && str[peek] !== '\n')
+                        peek++
+                if (peek <= fin) peek++
             }
-            for (let i = 0; i < indentation && pos + i < fin; i++)
+            if (peek > fin) { fini = true; continue }
+
+            // Vérifier si la ligne suivante est encore un enfant (indentation > indentation courante)
+            let espaces = 0
+            while (str[peek + espaces] === ' ') espaces++
+
+            if (espaces > indentation && str[peek + espaces] !== '\n')
             {
-                if (/^[\n#]$/.test(str[pos + i]))
-                {
-                    pos += i
-                    break
-                }
-                if (str[pos + i] == '\t')
-                    return erreur("Indentation par tabulations interdite", str, fichier, pos + i)
-                if (str[pos + i] != ' ')
-                {
-                    enf_pret = true
-                    break
-                }
+                // Ligne suivante = enfant du bloc courant → continuer
+                pos = peek
             }
-            if (/^[\n#]$/.test(str[pos]))
+            else
             {
-                while(str[pos] != '\n' && pos < fin)
-                    pos++
-                if (pos < fin)
-                    pos++
-                else
-                    fini = true
-            }
-            pos += indentation
-            if (str[pos] != ' ')
+                // Ligne suivante = même niveau ou supérieur → fin du bloc courant
                 enf_pret = true
+                pos = peek
+            }
         }
 
         let bloc = analyser_bloc_avec(str, deb_enf, fin_enf, fichier, json)
         if (bloc)
             enfants.push(bloc)
-        pos = fin_enf + 1
     }
     return enfants
 }

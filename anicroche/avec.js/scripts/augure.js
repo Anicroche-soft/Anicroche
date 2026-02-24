@@ -649,18 +649,13 @@ export const evaluer = (str, donnees) =>
 {
     try
     {
-        console.log(str)
         const tokens = tokeniser(str)
-        console.log(tokens)
         const ast    = parser(tokens)
-        console.log(ast)
         const result = evaluer_noeud(ast, donnees)
-        console.log(result)
         return est_booleen(result) ? result === VRAI : !est_erreur(result)
     }
     catch (e)
     {
-        console.log('catch', e)
         return false
     }
 }
