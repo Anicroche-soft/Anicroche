@@ -37,7 +37,6 @@
     .page {
         overflow-y: auto;
         height: 100%;
-
     }
 
     .page > div {
@@ -62,8 +61,9 @@
     <section>
         <div .page>
             <div>
-                <a href="#test">
-                    "TEST"
+                @if [($path = /explorer)]
+                    <a href="#test">
+                        "TEST"
                 <img src="https://static.vecteezy.com/system/resources/previews/023/711/454/non_2x/flat-minimalistic-design-panorama-of-a-mountain-landscape-easy-to-change-colors-vector.jpg">
                 <img src="https://static.vecteezy.com/system/resources/previews/014/763/069/original/flat-design-mountains-landscape-background-illustration-free-vector.jpg">
                 <img id="test" src="https://img.freepik.com/premium-photo/rural-view-field-minimalistic-flat-design-landscape-poster-beautiful-illustration-picture_146671-87846.jpg">

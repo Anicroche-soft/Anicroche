@@ -1,4 +1,6 @@
-import { charger_modele } from './heraut.js'
+import {charger_modele} from './heraut.js'
+import {valoriser} from './scribe.js'
+import {evaluer} from './augure.js'
 import {activer_style, desactiver_style} from './decorateur.js'
 import {initialiser_sculpteur, executer_script, activer_script, desactiver_script} from './sculpteur.js'
 
@@ -25,22 +27,6 @@ export const initialiser_batisseur = async () =>
         const enfants = construire_bloc(index.modele, donnees)
         corps.append(...enfants)
     }
-}
-
-const evaluer = (str, donnees) =>
-{
-    return true
-}
-
-const valoriser = (str, donnees) =>
-{
-    let valeur = str.replace(/(?<!\\)\$[a-zA-Z_][\w]*/g, (nom) => {
-        if (nom in (donnees.args || {}))
-            return donnees.args[nom].replace(/\\/g, "\\\\");
-        else
-            return nom
-    }).replace(/\\(.)/g, "$1")
-    return valeur
 }
 
 const decapsuler = (str) =>
@@ -117,7 +103,7 @@ const construire_enfants = (bloc, donnees) =>
             switch (enfant.args[0])
             {
             case `@if`:
-                if (evaluer(enfant.args[1], donnees))
+                if (evaluer(decapsuler(enfant.args[1]), donnees))
                 {
                     enfants.push(...construire_bloc(enfant, donnees))
                     elsable = false
@@ -128,7 +114,7 @@ const construire_enfants = (bloc, donnees) =>
                 }
                 break
             case `@else-if`:
-                if (elsable && evaluer(enfant.args[1], donnees))
+                if (elsable && evaluer(decapsuler(enfant.args[1]), donnees))
                 {
                     enfants.push(...construire_bloc(enfant, donnees))
                     elsable = false
@@ -142,7 +128,7 @@ const construire_enfants = (bloc, donnees) =>
                 elsable = false
                 break
             case `@unless`:
-                if (!evaluer(enfant.args[1], donnees))
+                if (!evaluer(decapsuler(enfant.args[1]), donnees))
                 {
                     enfants.push(...construire_bloc(enfant, donnees))
                 }
@@ -151,7 +137,7 @@ const construire_enfants = (bloc, donnees) =>
             case `@repeat`:
                 if (enfant.args.length > 1)
                 {
-                    const limite = +evaluer(enfant.args[1], donnees)
+                    const limite = +evaluer(decapsuler(enfant.args[1]), donnees)
                     for (let i = 0; i < limite; i++)
                     {
                         enfants.push(...construire_bloc(enfant, donnees))
@@ -163,7 +149,7 @@ const construire_enfants = (bloc, donnees) =>
                     {
                         enfants.push(...construire_bloc(enfant, donnees))
                     }
-                    while (evaluer(bloc.enfants[i + 1].args[1], donnees))
+                    while (evaluer(decapsuler(bloc.enfants[i + 1].args[1]), donnees))
                 }
                 else if (bloc.enfants.length > i + 1 && bloc.enfants[i + 1].args[0] === `@until`)
                 {
@@ -171,14 +157,14 @@ const construire_enfants = (bloc, donnees) =>
                     {
                         enfants.push(...construire_bloc(enfant, donnees))
                     }
-                    while (!evaluer(bloc.enfants[i + 1].args[1], donnees))
+                    while (!evaluer(decapsuler(bloc.enfants[i + 1].args[1]), donnees))
                 }
                 elsable = false
                 break
             case `@while`:
                 if (i == 0 || bloc.enfants[i - 1].args[0] !== `@repeat`)
                 {
-                    while (evaluer(enfant.args[1], donnees))
+                    while (evaluer(decapsuler(enfant.args[1]), donnees))
                     {
                         enfants.push(...construire_bloc(enfant, donnees))
                     }
@@ -188,7 +174,7 @@ const construire_enfants = (bloc, donnees) =>
             case `@until`:
                 if (i == 0 || bloc.enfants[i - 1].args[0] !== `@repeat`)
                 {
-                    while (!evaluer(enfant.args[1], donnees))
+                    while (!evaluer(decapsuler(enfant.args[1]), donnees))
                     {
                         enfants.push(...construire_bloc(enfant, donnees))
                     }
