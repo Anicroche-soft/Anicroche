@@ -2,7 +2,12 @@ import {charger_modele} from './heraut.js'
 import {valoriser} from './scribe.js'
 import {evaluer} from './augure.js'
 import {activer_style, desactiver_style} from './decorateur.js'
-import {initialiser_sculpteur, executer_script, activer_script, desactiver_script} from './sculpteur.js'
+import {
+    initialiser_sculpteur, executer_script,
+    activer_script, desactiver_script,
+    observer_sculpteur, etat_sculpteur,
+    definir_noeud_courant, effacer_noeud_courant
+} from './sculpteur.js'
 
 const BALISES_SVG = new Set([
     'g',    'path',   'ellipse',
@@ -103,42 +108,66 @@ const construire_enfants = (bloc, donnees) =>
             switch (enfant.args[0])
             {
             case `@if`:
-                if (evaluer(decapsuler(enfant.args[1]), donnees))
-                {
-                    enfants.push(...construire_bloc(enfant, donnees))
-                    elsable = false
-                }
-                else
-                {
-                    elsable = true
-                }
-                break
             case `@else-if`:
-                if (elsable && evaluer(decapsuler(enfant.args[1]), donnees))
+            case `@else`:
+            case `@unless`:
+            {
+                // Collecter tous les blocs de la chaîne conditionnelle
+                const chaine = []
+
+                // Reculer si on est sur un @else-if ou @else
+                let debut = i
+                while (debut > 0)
                 {
-                    enfants.push(...construire_bloc(enfant, donnees))
+                    const precedent = bloc.enfants[debut - 1]
+                    if (
+                        precedent.type === `instruction` &&
+                        [`@if`, `@else-if`, `@unless`].includes(precedent.args[0])
+                    )
+                        debut--
+                    else
+                        break
+                }
+
+                // Avancer pour collecter toute la chaîne depuis i
+                let fin = i
+                if (enfant.args[0] === `@if` || enfant.args[0] === `@unless`)
+                {
+                    chaine.push(enfant)
+                    fin = i + 1
+                    while (fin < bloc.enfants.length)
+                    {
+                        const suivant = bloc.enfants[fin]
+                        if (
+                            suivant.type === `instruction` &&
+                            [`@else-if`, `@else`].includes(suivant.args[0])
+                        )
+                        {
+                            chaine.push(suivant)
+                            fin++
+                        }
+                        else break
+                    }
+                    i = fin - 1
+                    elsable = false
+
+                    enfants.push(...construire_conditionnel(chaine, donnees))
+                }
+                else if (enfant.args[0] === `@else-if` || enfant.args[0] === `@else`)
+                {
+                    // Ces cas sont désormais gérés dans la collecte du @if
+                    // On les ignore ici car ils ont déjà été consommés
                     elsable = false
                 }
                 break
-            case `@else`:
-                if (elsable)
-                {
-                    enfants.push(...construire_bloc(enfant, donnees))
-                }
-                elsable = false
-                break
-            case `@unless`:
-                if (!evaluer(decapsuler(enfant.args[1]), donnees))
-                {
-                    enfants.push(...construire_bloc(enfant, donnees))
-                }
-                elsable = false
-                break
+            }
+
+            // ...existing code... (les autres cas @repeat, @while, etc.)
             case `@repeat`:
                 if (enfant.args.length > 1)
                 {
                     const limite = +evaluer(decapsuler(enfant.args[1]), donnees)
-                    for (let i = 0; i < limite; i++)
+                    for (let j = 0; j < limite; j++)
                     {
                         enfants.push(...construire_bloc(enfant, donnees))
                     }
@@ -182,7 +211,6 @@ const construire_enfants = (bloc, donnees) =>
                 elsable = false
                 break
             case `@for-each`:
-                // Gérer `@for-each`
                 elsable = false
                 break
             case `@stud`:
@@ -197,7 +225,6 @@ const construire_enfants = (bloc, donnees) =>
                         ...donnees,
                         tenons: donnees.tenons.slice(0, -1)
                     }
-
                     enfants.push(...construire_enfants(bloc_tenon, donnees_tenon))
                 }
                 elsable = false
@@ -213,6 +240,132 @@ const construire_enfants = (bloc, donnees) =>
         }
     }
     return enfants
+}
+
+// Évalue quelle branche de la chaîne conditionnelle doit s'afficher
+const evaluer_chaine = (chaine, donnees) =>
+{
+    for (const branche of chaine)
+    {
+        switch (branche.args[0])
+        {
+        case `@if`:
+        case `@else-if`:
+            if (evaluer(decapsuler(branche.args[1]), donnees))
+                return branche
+            break
+        case `@unless`:
+            if (!evaluer(decapsuler(branche.args[1]), donnees))
+                return branche
+            break
+        case `@else`:
+            return branche
+        }
+    }
+    return null
+}
+
+// Construit un bloc conditionnel réactif avec des ancres
+const construire_conditionnel = (chaine, donnees) =>
+{
+    const ancre_debut = document.createComment(`@if`)
+    const ancre_fin   = document.createComment(`/@if`)
+
+    // Tracker les dépendances des conditions
+    for (const branche of chaine)
+    {
+        if (branche.args[1])
+        {
+            definir_noeud_courant(ancre_debut)
+            evaluer(decapsuler(branche.args[1]), donnees)
+            effacer_noeud_courant()
+        }
+    }
+
+    const deps_condition = ancre_debut._avec_deps ?? new Set()
+
+    // Construire le contenu initial
+    let branche_active = evaluer_chaine(chaine, donnees)
+    const noeuds_actifs = branche_active
+        ? construire_enfants(branche_active, donnees)
+        : []
+
+    if (deps_condition.size > 0)
+    {
+        const desabonner = observer_sculpteur((propriete) =>
+        {
+            if (!deps_condition.has(propriete)) return
+
+            if (!ancre_debut.parentNode)
+            {
+                desabonner()
+                return
+            }
+
+            const nouvelle_branche = evaluer_chaine(chaine, donnees)
+
+            // Ne rien faire si la même branche reste active
+            if (nouvelle_branche === branche_active) return
+
+            branche_active = nouvelle_branche
+
+            // Supprimer les nœuds actuels entre les ancres
+            let noeud = ancre_debut.nextSibling
+            while (noeud && noeud !== ancre_fin)
+            {
+                const suivant = noeud.nextSibling
+                demonter_noeud(noeud)
+                noeud.parentNode.removeChild(noeud)
+                noeud = suivant
+            }
+
+            // Reconstruire la nouvelle branche
+            if (nouvelle_branche)
+            {
+                const nouveaux_noeuds = construire_enfants(nouvelle_branche, donnees)
+                ancre_fin.before(...nouveaux_noeuds)
+
+                queueMicrotask(() => {
+                    nouveaux_noeuds.forEach(n => {
+                        if (n.nodeType === 1 && document.contains(n))
+                            monter_noeud(n)
+                    })
+                })
+            }
+        })
+    }
+
+    return [ancre_debut, ...noeuds_actifs, ancre_fin]
+}
+
+const construire_texte = (bloc, donnees) =>
+{
+    const noeud = document.createTextNode(``)
+
+    // Tracker les dépendances lors de la première valorisation
+    definir_noeud_courant(noeud)
+    noeud.textContent = valoriser(decapsuler(bloc.args[0]), donnees)
+    effacer_noeud_courant()
+
+    // Si des variables ont été lues, s'abonner aux changements
+    if (noeud._avec_deps?.size > 0)
+    {
+        const desabonner = observer_sculpteur((propriete) =>
+        {
+            if (!noeud._avec_deps.has(propriete)) return
+
+            // Le nœud est-il encore dans le DOM ?
+            if (!document.contains(noeud))
+            {
+                desabonner()
+                return
+            }
+
+            noeud.textContent = valoriser(decapsuler(bloc.args[0]), donnees)
+        })
+    }
+
+    return [noeud]
 }
 
 const construire_balise = (bloc, donnees) =>
@@ -305,23 +458,32 @@ const construire_balise = (bloc, donnees) =>
                 })
             }
         }
-        else
+        else if (attribut.includes(`=`) && !attribut.startsWith('on') && attribut[0] !== '@')
         {
             const [clef, ...reste] = attribut.split(`=`)
-            let valeur = reste.join(`=`)
+            let valeur_brute = reste.join(`=`)
 
-            valeur = valoriser(decapsuler(valeur), donnees)
+            // Tracker les dépendances de cet attribut
+            definir_noeud_courant(noeud)
+            let valeur = valoriser(decapsuler(valeur_brute), donnees)
+            effacer_noeud_courant()
 
-            switch (clef)
+            appliquer_attribut(noeud, clef, valeur)
+
+            // S'abonner si des variables ont été lues
+            if (noeud._avec_deps?.size > 0)
             {
-            case `id`:
-                noeud.id = valeur
-                break
-            case `class`:
-                valeur.split(/\s+/).forEach(c => c && noeud.classList.add(c))
-                break
-            default:
-                noeud.setAttribute(clef, valeur)
+                const desabonner = observer_sculpteur((propriete) =>
+                {
+                    if (!noeud._avec_deps.has(propriete)) return
+                    if (!document.contains(noeud)) { desabonner(); return }
+
+                    definir_noeud_courant(noeud)
+                    const nouvelle_valeur = valoriser(decapsuler(valeur_brute), donnees)
+                    effacer_noeud_courant()
+
+                    appliquer_attribut(noeud, clef, nouvelle_valeur)
+                })
             }
         }
     }
@@ -339,11 +501,21 @@ const construire_balise = (bloc, donnees) =>
     return [noeud]
 }
 
-const construire_texte = (bloc, donnees) =>
+// Fonction utilitaire extraite pour éviter la duplication
+const appliquer_attribut = (noeud, clef, valeur) =>
 {
-    const noeud = document.createTextNode(valoriser(decapsuler(bloc.args[0]), donnees))
-
-    return [noeud]
+    switch (clef)
+    {
+    case `id`:
+        noeud.id = valeur
+        break
+    case `class`:
+        noeud.className = ``
+        valeur.split(/\s+/).forEach(c => c && noeud.classList.add(c))
+        break
+    default:
+        noeud.setAttribute(clef, valeur)
+    }
 }
 
 const construire_modele = (bloc, donnees) =>

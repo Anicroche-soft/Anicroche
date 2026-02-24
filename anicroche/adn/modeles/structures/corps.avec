@@ -31,6 +31,7 @@
     }
 
     .navigation {
+        flex-flow: row nowrap;
         height: 1.5rem;
     }
 
@@ -57,11 +58,12 @@
 <main #corps>
     <nav>
         <div .navigation>
+            "$path"
             icone-horloge
     <section>
         <div .page>
             <div>
-                @if [($path = /explorer)]
+                @if [$path = /explorer | $path = /creer]
                     <a href="#test">
                         "TEST"
                 <img src="https://static.vecteezy.com/system/resources/previews/023/711/454/non_2x/flat-minimalistic-design-panorama-of-a-mountain-landscape-easy-to-change-colors-vector.jpg">

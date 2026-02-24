@@ -3,12 +3,54 @@ export const etat_sculpteur = {
 }
 
 const scripts_actifs = new Map()
+const observateurs   = new Set()
+
+// Le nœud en cours de construction (pour tracker ses dépendances)
+let noeud_courant = null
+
+export const definir_noeud_courant = (noeud) => { noeud_courant = noeud }
+export const effacer_noeud_courant = ()       => { noeud_courant = null  }
+
+export const observer_sculpteur = (fn) =>
+{
+    observateurs.add(fn)
+    return () => observateurs.delete(fn) // Retourne une fonction pour se désabonner
+}
+
+const notifier = (propriete, valeur, ancienne_valeur) =>
+{
+    for (const fn of observateurs)
+        fn(propriete, valeur, ancienne_valeur)
+}
 
 export const initialiser_sculpteur = () =>
 {
     if (etat_sculpteur.instance) return
 
-    etat_sculpteur.instance = {}
+    etat_sculpteur.instance = new Proxy({}, {
+        get(cible, propriete)
+        {
+            // Enregistrer la dépendance sur le nœud en cours de construction
+            if (noeud_courant && typeof propriete === 'string')
+            {
+                if (!noeud_courant._avec_deps)
+                    noeud_courant._avec_deps = new Set()
+                noeud_courant._avec_deps.add(propriete)
+            }
+            return cible[propriete]
+        },
+
+        set(cible, propriete, valeur)
+        {
+            const ancienne_valeur = cible[propriete]
+            cible[propriete] = valeur
+
+            if (ancienne_valeur !== valeur)
+                notifier(propriete, valeur, ancienne_valeur)
+
+            return true
+        }
+    })
 }
 
 export const executer_script = (script, evenement, noeud) =>
