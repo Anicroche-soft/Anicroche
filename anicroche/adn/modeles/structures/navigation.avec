@@ -1,11 +1,11 @@
 @script [
-    $monter_page = ($node) =>
+    $monter_navigation = ($node) =>
     {
         $node.classList.add('entree')
         requestAnimationFrame(() => requestAnimationFrame(() => $node.classList.remove('entree')))
     }
 
-    $demonter_page = async ($node) =>
+    $demonter_navigation = async ($node) =>
     {
         $node.classList.add('sortie')
         await new Promise(r => setTimeout(r, 500))
@@ -13,20 +13,25 @@
 ]
 
 @style [
-    .page {
+    .navigation {
+        align-items: center;
+        flex-flow: row nowrap;
+        flex: 1%;
+
+        // transition: opacity 50000ms;
         transition: opacity var(--d-animation);
     }
 
-    .page.entree {
+    .navigation.entree {
         opacity: 0;
     }
 
-    .page.sortie {
+    .navigation.sortie {
         opacity: 0;
     }
 ]
 
-<div .page
-     @mount="$monter_page($node)"
-     @unmount="await $demonter_page($node)">
+<div .navigation
+     @mount="$monter_navigation($node)"
+     @unmount="await $demonter_navigation($node)">
     @stud

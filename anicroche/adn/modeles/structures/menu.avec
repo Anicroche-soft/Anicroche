@@ -43,7 +43,7 @@
     ancre-boite /creer
         alt
             "Créer"
-        icone-sucette
+        icone-baguette
         <span>
             "Créer"
     ancre-boite /autre

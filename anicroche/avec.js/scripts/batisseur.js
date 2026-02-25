@@ -314,6 +314,11 @@ const construire_conditionnel = (chaine, donnees) =>
                 if (n.parentNode) n.parentNode.removeChild(n)
             }
 
+            for (const n of noeuds_a_supprimer)
+            {
+                nettoyer_noeud(n)
+            }
+
             if (cible)
             {
                 const nouveaux_noeuds = construire_enfants(cible, donnees)
@@ -598,24 +603,28 @@ const demonter_noeud = async (noeud) =>
 {
     if (noeud.nodeType === 1)
     {
-        const promesses = []
-
         if (noeud._avec_actions?.unmount)
         {
-            promesses.push(executer_script_async(noeud._avec_actions.unmount, null, noeud))
+            await executer_script_async(noeud._avec_actions.unmount, null, noeud)
         }
 
-        for (const enfant of noeud.children)
-        {
-            promesses.push(demonter_noeud(enfant))
-        }
+        await Promise.all([...noeud.children].map(enfant => demonter_noeud(enfant)))
+    }
+}
 
-        await Promise.all(promesses)
-
+const nettoyer_noeud = (noeud) =>
+{
+    if (noeud.nodeType === 1)
+    {
         if (noeud._avec_modele)
         {
             desactiver_style(noeud._avec_modele)
             desactiver_script(noeud._avec_modele)
+        }
+
+        for (const enfant of noeud.children)
+        {
+            nettoyer_noeud(enfant)
         }
     }
 }
