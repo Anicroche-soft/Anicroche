@@ -3,6 +3,8 @@
         grid-area: 1 / 2 / 3 / 3;
         overflow: hidden;
         gap: 0;
+
+        height: 100%;
     }
 
     .petit.portrait #corps {
@@ -18,6 +20,7 @@
     }
 
     #corps > section {
+        position: relative;
         overflow: hidden;
         flex: 1;
     }
@@ -30,47 +33,183 @@
         padding-left: 3.5rem;
     }
 
-    .navigation {
+    #navigation {
         flex-flow: row nowrap;
         height: 1.5rem;
     }
 
-    .page {
+    #page {
         overflow-y: auto;
         height: 100%;
     }
 
-    .page > div {
+    #page > div {
         --b-fond: var(--c-theme);
         --c-fond: var(--c-theme);
         padding: 1rem;
     }
 
-    .petit.portrait .page {
+    .petit.portrait #page {
         padding-bottom: 3.5rem;
     }
 
-    .page img {
+    #page img {
         border-radius: 1rem;
     }
 ]
 
 <main #corps>
     <nav>
-        <div .navigation>
+        <div #navigation>
             "$path"
             icone-horloge
     <section>
-        <div .page>
-            <div>
-                @if [$path ~= '/<$chose :- f>']
-                    "BONJOUR $chose"
-                @if [:) & [/explorer, /creer] }- $path]
-                    <a href="#test">
-                        "TEST"
-                "TROIS : $chose"
-                <img src="https://static.vecteezy.com/system/resources/previews/023/711/454/non_2x/flat-minimalistic-design-panorama-of-a-mountain-landscape-easy-to-change-colors-vector.jpg">
-                <img src="https://static.vecteezy.com/system/resources/previews/014/763/069/original/flat-design-mountains-landscape-background-illustration-free-vector.jpg">
+        <div #page>
+            @if [$path ~= '/']
+                page
+                    "BONJOUR"
+                    <img src="https://static.vecteezy.com/system/resources/previews/023/711/454/non_2x/flat-minimalistic-design-panorama-of-a-mountain-landscape-easy-to-change-colors-vector.jpg">
+                    <img src="https://static.vecteezy.com/system/resources/previews/014/763/069/original/flat-design-mountains-landscape-background-illustration-free-vector.jpg">
 
-                <img id="test" src="https://img.freepik.com/premium-photo/rural-view-field-minimalistic-flat-design-landscape-poster-beautiful-illustration-picture_146671-87846.jpg">
-                <img src="https://i.pinimg.com/originals/f2/5e/9b/f25e9bdf8ffda3906ec023f771d28ea4.jpg">
+                    <img src="https://img.freepik.com/premium-photo/rural-view-field-minimalistic-flat-design-landscape-poster-beautiful-illustration-picture_146671-87846.jpg">
+                    <img src="https://i.pinimg.com/originals/f2/5e/9b/f25e9bdf8ffda3906ec023f771d28ea4.jpg">
+            @else-if [$path ~= '/explorer']
+                page
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+                    <p>
+                        "Est-ce que ça fonctionne ?"
+                    <p>
+                        "Est-ce que ça fonctionne bien ?"
+            @else-if [$path ~= '/creer']
+                page
+                    <p>
+                        "CREER"
+            @else-if [$path ~= '/autre']
+                page
+                    <p>
+                        "AUTRE"
+            @else
+                page
+                    <p>
+                        "404"
+                    <p>
+                        "4044"
+                    <p>
+                        "40444"
+                    <p>
+                        "404444"
+                    <p>
+                        "4044444"
+                    <p>
+                        "40444444"
+                    <p>
+                        "404444444"
+                    <p>
+                        "4044444444"
+                    <p>
+                        "40444444444"
+                    <p>
+                        "404444444444"
+                    <p>
+                        "4044444444444"
+                    <p>
+                        "40444444444444"
+                    <p>
+                        "404444444444444"
+                    <p>
+                        "4044444444444444"
+                    <p>
+                        "40444444444444444"
+                    <p>
+                        "404444444444444444"
+                    <p>
+                        "404444444444444444"
+                    <p>
+                        "40444444444444444"
+                    <p>
+                        "4044444444444444"
+                    <p>
+                        "404444444444444"
+                    <p>
+                        "40444444444444"
+                    <p>
+                        "4044444444444"
+                    <p>
+                        "404444444444"
+                    <p>
+                        "40444444444"
+                    <p>
+                        "4044444444"
+                    <p>
+                        "404444444"
+                    <p>
+                        "40444444"
+                    <p>
+                        "4044444"
+                    <p>
+                        "404444"
+                    <p>
+                        "40444"
+                    <p>
+                        "4044"
+                    <p>
+                        "404"

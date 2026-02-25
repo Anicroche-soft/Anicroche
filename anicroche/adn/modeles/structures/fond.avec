@@ -1,0 +1,42 @@
+@style [
+    #fond {
+        position: fixed;
+        z-index: -1;
+        inset: 0;
+
+        display: grid;
+
+        gap: 0;
+    }
+
+    #fond .tete {
+        --b-fond: var(--c-analogue);
+        --c-fond: var(--c-analogue);
+    }
+
+    #fond .corps {
+        --b-fond: var(--c-theme);
+        --c-fond: var(--c-theme);
+    }
+
+    .grand #fond {
+        grid-template-columns: var(--l-tete) 1fr;
+    }
+
+    .petit.paysage #fond {
+        grid-template-columns: 3.5rem 1fr;
+    }
+
+    .petit.portrait #fond {
+        grid-template-columns: none;
+        grid-template-rows: 1fr 3.5rem;
+    }
+
+    .petit.portrait #fond .tete {
+        grid-row: 2;
+    }
+]
+
+<div #fond>
+    <div .tete>
+    <div .corps>

@@ -3,7 +3,7 @@ import {valoriser} from './scribe.js'
 import {evaluer} from './augure.js'
 import {activer_style, desactiver_style} from './decorateur.js'
 import {
-    initialiser_sculpteur, executer_script,
+    initialiser_sculpteur, executer_script, executer_script_async,
     activer_script, desactiver_script,
     observer_sculpteur, etat_sculpteur,
     definir_noeud_courant, effacer_noeud_courant
@@ -292,6 +292,51 @@ const construire_conditionnel = (chaine, donnees) =>
 
     if (deps_condition.size > 0)
     {
+        let transition_en_cours = false
+        let branche_en_attente  = null
+
+        const executer_transition = async (cible) =>
+        {
+            transition_en_cours = true
+
+            const noeuds_a_supprimer = []
+            let noeud = ancre_debut.nextSibling
+            while (noeud && noeud !== ancre_fin)
+            {
+                noeuds_a_supprimer.push(noeud)
+                noeud = noeud.nextSibling
+            }
+
+            await Promise.all(noeuds_a_supprimer.map(n => demonter_noeud(n)))
+
+            for (const n of noeuds_a_supprimer)
+            {
+                if (n.parentNode) n.parentNode.removeChild(n)
+            }
+
+            if (cible)
+            {
+                const nouveaux_noeuds = construire_enfants(cible, donnees)
+                ancre_fin.before(...nouveaux_noeuds)
+
+                queueMicrotask(() => {
+                    nouveaux_noeuds.forEach(n => {
+                        if (n.nodeType === 1 && document.contains(n))
+                            monter_noeud(n)
+                    })
+                })
+            }
+
+            transition_en_cours = false
+
+            if (branche_en_attente !== null)
+            {
+                const prochaine   = branche_en_attente
+                branche_en_attente = null
+                executer_transition(prochaine)
+            }
+        }
+
         const desabonner = observer_sculpteur((propriete) =>
         {
             if (!deps_condition.has(propriete)) return
@@ -304,34 +349,14 @@ const construire_conditionnel = (chaine, donnees) =>
 
             const nouvelle_branche = evaluer_chaine(chaine, donnees)
 
-            // Ne rien faire si la même branche reste active
             if (nouvelle_branche === branche_active) return
 
             branche_active = nouvelle_branche
 
-            // Supprimer les nœuds actuels entre les ancres
-            let noeud = ancre_debut.nextSibling
-            while (noeud && noeud !== ancre_fin)
-            {
-                const suivant = noeud.nextSibling
-                demonter_noeud(noeud)
-                noeud.parentNode.removeChild(noeud)
-                noeud = suivant
-            }
-
-            // Reconstruire la nouvelle branche
-            if (nouvelle_branche)
-            {
-                const nouveaux_noeuds = construire_enfants(nouvelle_branche, donnees)
-                ancre_fin.before(...nouveaux_noeuds)
-
-                queueMicrotask(() => {
-                    nouveaux_noeuds.forEach(n => {
-                        if (n.nodeType === 1 && document.contains(n))
-                            monter_noeud(n)
-                    })
-                })
-            }
+            if (transition_en_cours)
+                branche_en_attente = nouvelle_branche
+            else
+                executer_transition(nouvelle_branche)
         })
     }
 
@@ -569,19 +594,23 @@ const monter_noeud = (noeud) =>
     }
 }
 
-const demonter_noeud = (noeud) =>
+const demonter_noeud = async (noeud) =>
 {
     if (noeud.nodeType === 1)
     {
+        const promesses = []
+
         if (noeud._avec_actions?.unmount)
         {
-            executer_script(noeud._avec_actions.unmount, null, noeud)
+            promesses.push(executer_script_async(noeud._avec_actions.unmount, null, noeud))
         }
 
         for (const enfant of noeud.children)
         {
-            demonter_noeud(enfant)
+            promesses.push(demonter_noeud(enfant))
         }
+
+        await Promise.all(promesses)
 
         if (noeud._avec_modele)
         {

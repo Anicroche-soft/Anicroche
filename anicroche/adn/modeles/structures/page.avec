@@ -1,0 +1,32 @@
+@script [
+    $monter_page = ($node) =>
+    {
+        $node.classList.add('entree')
+        requestAnimationFrame(() => requestAnimationFrame(() => $node.classList.remove('entree')))
+    }
+
+    $demonter_page = async ($node) =>
+    {
+        $node.classList.add('sortie')
+        await new Promise(r => setTimeout(r, 500))
+    }
+]
+
+@style [
+    .page {
+        transition: opacity var(--d-animation) linear;
+    }
+
+    .page.entree {
+        opacity: 0;
+    }
+
+    .page.sortie {
+        opacity: 0;
+    }
+]
+
+<div .page
+     @mount="$monter_page($node)"
+     @unmount="await $demonter_page($node)">
+    @stud

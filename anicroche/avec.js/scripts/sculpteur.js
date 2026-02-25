@@ -53,6 +53,31 @@ export const initialiser_sculpteur = () =>
     })
 }
 
+export const executer_script_async = async (script, evenement, noeud) =>
+{
+    if (etat_sculpteur.instance)
+    {
+        try
+        {
+            const FonctionAsync = async function(){}.constructor
+            await new FonctionAsync(
+                `runtime`,
+                `$event`,
+                `$node`,
+                `
+                with (runtime) {
+                    ${script}
+                }
+                `
+            )(etat_sculpteur.instance, evenement, noeud)
+        }
+        catch (erreur)
+        {
+            console.error(`Erreur handler AVEC :`, erreur)
+        }
+    }
+}
+
 export const executer_script = (script, evenement, noeud) =>
 {
     if (etat_sculpteur.instance)
