@@ -2,13 +2,33 @@
     $monter_page = ($node) =>
     {
         $node.classList.add('entree')
-        requestAnimationFrame(() => requestAnimationFrame(() => $node.classList.remove('entree')))
+        requestAnimationFrame(() => 
+            requestAnimationFrame(() => 
+                $node.classList.remove('entree')
+            )
+        )
     }
 
     $demonter_page = async ($node) =>
     {
+        const style = getComputedStyle($node)
+
+        const parseTime = (value) =>
+        {
+            return value.split(',')
+                .map(v => v.trim())
+                .map(v => v.endsWith('ms') ? parseFloat(v) : parseFloat(v) * 1000)
+        }
+
+        const durations = parseTime(style.transitionDuration)
+        const delays = parseTime(style.transitionDelay)
+
+        const times = durations.map((d, i) => d + (delays[i] || 0))
+        const maxTime = Math.max(...times, 0)
+
         $node.classList.add('sortie')
-        await new Promise(r => setTimeout(r, 500))
+
+        await new Promise(r => setTimeout(r, maxTime))
     }
 ]
 
