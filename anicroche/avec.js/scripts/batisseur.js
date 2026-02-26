@@ -216,13 +216,14 @@ const construire_enfants = (bloc, donnees) =>
             case `@stud`:
                 if (donnees.tenons.length > 0)
                 {
+                    const tenon = donnees.tenons.at(-1)
                     const bloc_tenon = {
                         type: `instruction`,
                         args: [`@stud`],
-                        enfants: donnees.tenons.at(-1)
+                        enfants: tenon.enfants
                     }
                     const donnees_tenon = {
-                        ...donnees,
+                        ...tenon.donnees,
                         tenons: donnees.tenons.slice(0, -1)
                     }
                     enfants.push(...construire_enfants(bloc_tenon, donnees_tenon))
@@ -571,7 +572,7 @@ const construire_modele = (bloc, donnees) =>
             const valeurs = bloc.args.slice(1)
             for (let i = 0; i < noms.length; i++)
             {
-                args[noms[i]] = valeurs[i]
+                args[noms[i]] = valoriser(decapsuler(valeurs[i] ?? ``), donnees)
             }
         }
     }
@@ -579,7 +580,7 @@ const construire_modele = (bloc, donnees) =>
     const donnees_modele = {
         ...donnees,
         args: args,
-        tenons: [...donnees.tenons, bloc.enfants]
+        tenons: [...donnees.tenons, { enfants: bloc.enfants, donnees }]
     }
 
     const noeuds = construire_bloc(modele, donnees_modele)

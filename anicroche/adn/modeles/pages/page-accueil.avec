@@ -1,0 +1,15 @@
+@args [$section]
+
+@if [$section = navigation]
+    navigation
+        <div .centre>
+            <span>
+                "Accueil"
+
+        <div .droite>
+            icone-horloge
+
+@if [$section = page]
+    page
+        <h1>
+            "Bienvenue sur Anicroche !"

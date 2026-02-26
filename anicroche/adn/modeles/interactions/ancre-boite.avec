@@ -9,7 +9,9 @@
     }
 ]
 
-@args [$adresse]
+@args [$adresse $alt]
 
 <a .ancre-boite href="$adresse">
+    alt
+        "$alt"
     @stud

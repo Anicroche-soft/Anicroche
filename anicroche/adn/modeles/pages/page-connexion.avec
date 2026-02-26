@@ -1,0 +1,20 @@
+@args [$section]
+
+@if [$section = navigation]
+    navigation
+        <div .gauche>
+            ancre-boite / Retour
+                icone-fleche-gauche
+
+        <div .centre>
+            <span>
+                "Connexion"
+
+        <div .droite>
+            ancre-boite /parametres "parametres"
+                icone-engrenage
+
+@if [$section = page]
+    page
+        <h1>
+            "Connectez-vous !"

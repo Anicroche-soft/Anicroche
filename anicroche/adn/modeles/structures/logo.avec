@@ -21,8 +21,6 @@
 ]
 
 <div #logo>
-    ancre-boite /
-        alt
-            "Anicroche"
+    ancre-boite / Anicroche
         icone-anicroche
         logotype-anicroche

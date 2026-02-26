@@ -35,8 +35,8 @@
 @style [
     .navigation {
         align-items: center;
-        flex-flow: row nowrap;
-        flex: 1%;
+        flex-direction: row;
+        flex: 1;
 
         transition: opacity var(--d-animation);
     }
@@ -48,9 +48,28 @@
     .navigation.sortie {
         opacity: 0;
     }
+
+    .navigation div {
+        flex-direction: row;
+    }
+
+    .navigation .gauche {
+        justify-content: flex-start;
+    }
+
+    .navigation .centre {
+        flex: 1;
+        justify-content: center;
+    }
+
+    .navigation .droite {
+        justify-content: flex-end;
+    }
 ]
 
-<div .navigation
-     @mount="$monter_navigation($node)"
-     @unmount="await $demonter_navigation($node)">
+<div
+    .navigation
+    @mount="$monter_navigation($node)"
+    @unmount="await $demonter_navigation($node)"
+>
     @stud

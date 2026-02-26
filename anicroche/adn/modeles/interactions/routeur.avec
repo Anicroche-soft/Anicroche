@@ -1,61 +1,10 @@
 @args [$section]
 
 @if [$path ~= '/']
-    @if [$section = navigation]
-        navigation
-            "Accueil"
-            icone-horloge
+    page-accueil $section
 
-    @else-if [$section = page]
-        page
-            "BONJOUR"
-            <img src="https://static.vecteezy.com/system/resources/previews/023/711/454/non_2x/flat-minimalistic-design-panorama-of-a-mountain-landscape-easy-to-change-colors-vector.jpg">
-            <img src="https://static.vecteezy.com/system/resources/previews/014/763/069/original/flat-design-mountains-landscape-background-illustration-free-vector.jpg">
-            <img src="https://img.freepik.com/premium-photo/rural-view-field-minimalistic-flat-design-landscape-poster-beautiful-illustration-picture_146671-87846.jpg">
-            <img src="https://i.pinimg.com/originals/f2/5e/9b/f25e9bdf8ffda3906ec023f771d28ea4.jpg">
-
-@else-if [$path ~= '/explorer']
-    @if [$section = navigation]
-        navigation
-            "Explorer"
-            icone-horloge
-
-    @else-if [$section = page]
-        page
-            <p>
-                "Est-ce que ça fonctionne ?"
-            <p>
-                "Est-ce que ça fonctionne bien ?"
-
-@else-if [$path ~= '/creer']
-    @if [$section = navigation]
-        navigation
-            "Créer"
-            icone-horloge
-
-    @else-if [$section = page]
-        page
-            <p>
-                "CREER"
-
-@else-if [$path ~= '/autre']
-    @if [$section = navigation]
-        navigation
-            "Autre"
-            icone-horloge
-
-    @else-if [$section = page]
-        page
-            <p>
-                "AUTRE"
+@else-if [$path ~= '/connexion']
+    page-connexion $section
 
 @else
-    @if [$section = navigation]
-        navigation
-            "404"
-            icone-horloge
-
-    @else-if [$section = page]
-        page
-            <p>
-                "404"
+    page-404 $section

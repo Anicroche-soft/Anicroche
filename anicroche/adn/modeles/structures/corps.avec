@@ -39,6 +39,14 @@
         height: 1.5rem;
     }
 
+    #navigation span {
+        white-space: nowrap;
+        font-family: var(--f-titre);
+
+        --l-fonte: 1.5rem;
+        --e-fonte: 500;
+    }
+
     #page {
         overflow-y: auto;
         height: 100%;

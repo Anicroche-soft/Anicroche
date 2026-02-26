@@ -46,7 +46,9 @@
     }
 ]
 
-<div .page
-     @mount="$monter_page($node)"
-     @unmount="await $demonter_page($node)">
+<div
+    .page
+    @mount="$monter_page($node)"
+    @unmount="await $demonter_page($node)"
+>
     @stud

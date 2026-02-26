@@ -6,8 +6,9 @@
     }
 
     #menu span {
-        font-family: 'Eczar', serif;
-        font-weight: 500;
+        font-family: var(--f-bouton);
+
+        --e-fonte: 500;
     }
 
     .grand #menu .alt,
@@ -28,33 +29,33 @@
 ]
 
 <nav #menu>
-    ancre-boite /
-        alt
-            "Accueil"
+    ancre-boite / Accueil
         icone-maison
         <span>
             "Accueil"
-    ancre-boite /explorer
-        alt
-            "Explorer"
+
+    ancre-boite /explorer Explorer
         icone-arc
         <span>
             "Explorer"
-    ancre-boite /creer
-        alt
-            "Créer"
+
+    ancre-boite /creer Créer
         icone-baguette
         <span>
             "Créer"
-    ancre-boite /autre
-        alt
-            "Autre"
+
+    ancre-boite /autre Autre
         icone-bonbon
         <span>
             "Autre"
-    ancre-boite /profil
-        alt
-            "Profil"
-        icone-masque
-        <span>
-            "Profil"
+
+    @if [$connecte]
+        ancre-boite /profil Profil
+            icone-masque
+            <span>
+                "Profil"
+    @else
+        ancre-boite /connexion Connexion
+            icone-masque
+            <span>
+                "Connexion"

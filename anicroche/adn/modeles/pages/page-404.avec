@@ -1,0 +1,19 @@
+@args [$section]
+
+@if [$section = navigation]
+    navigation
+        <div .gauche>
+            ancre-boite / Retour
+                icone-fleche-gauche
+
+        <div .centre>
+            <span>
+                "404"
+
+        <div .droite>
+            icone-horloge
+
+@if [$section = page]
+    page
+        <h1>
+            "Contenu introuvable !"
