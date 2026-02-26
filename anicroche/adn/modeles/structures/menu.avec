@@ -6,7 +6,7 @@
     }
 
     #menu span {
-        font-family: var(--f-bouton);
+        font-family: var(--p-bouton);
 
         --e-fonte: 500;
     }
@@ -55,7 +55,7 @@
             <span>
                 "Profil"
     @else
-        ancre-boite /connexion Connexion
+        ancre-boite /connexion Profil
             icone-masque
             <span>
-                "Connexion"
+                "Profil"

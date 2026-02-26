@@ -44,7 +44,7 @@
     * {
         gap: var(--l-ecart);
 
-        background:  var(--b-fond);
+        background:  var(--f-fond);
         font-size:   var(--l-fonte);
         font-weight: var(--e-fonte);
         line-height: var(--l-fonte);
@@ -57,7 +57,7 @@
 
         transition: outline-color var(--d-animation);
 
-        --b-fond: transparent;
+        --f-fond: transparent;
     }
 
     *:focus-visible {
@@ -80,8 +80,8 @@
     html {
         overflow: hidden;
 
-        --f-titre:  'Eczar', serif;
-        --f-bouton: 'Eczar', sans-serif;
+        --p-titre:  'Eczar', serif;
+        --p-bouton: 'Eczar', sans-serif;
 
         --l-fonte: 1rem;
         --l-ligne: 1;
@@ -116,7 +116,7 @@
         --c-vif:    oklch(0.65 var(--s-theme) var(--t-theme));
         --c-clair:  oklch(0.85 var(--s-theme) var(--t-theme));
 
-        --b-fond: var(--c-theme);
+        --f-fond: var(--c-theme);
         --c-fond: var(--c-theme);
         --c-flux: var(--c-inverse);
     }
@@ -135,7 +135,7 @@
         --c-plus:     var(--c-clair);
         --c-moins:    var(--c-sombre);
 
-        --b-degrade-vif: linear-gradient(90deg, var(--c-vif), var(--c-clair));
+        --f-degrade-vif: linear-gradient(90deg, var(--c-vif), var(--c-clair));
     }
 
     .sombre {
@@ -152,7 +152,7 @@
         --c-plus:     var(--c-sombre);
         --c-moins:    var(--c-clair);
 
-        --b-degrade-vif: linear-gradient(90deg, var(--c-sombre), var(--c-vif));
+        --f-degrade-vif: linear-gradient(90deg, var(--c-sombre), var(--c-vif));
     }
 
     body {

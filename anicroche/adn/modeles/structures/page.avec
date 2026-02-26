@@ -34,6 +34,7 @@
 
 @style [
     .page {
+        min-height: 100%;
         transition: opacity var(--d-animation);
     }
 

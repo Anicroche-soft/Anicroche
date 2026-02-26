@@ -10,7 +10,7 @@
 
         backdrop-filter: blur(var(--l-blur));
 
-        --b-fond: var(--c-analogue-trans);
+        --f-fond: var(--c-analogue-trans);
         --c-fond: var(--c-analogue);
         --l-ecart: 2rem;
     }

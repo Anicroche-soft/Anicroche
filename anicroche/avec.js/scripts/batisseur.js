@@ -29,7 +29,8 @@ export const initialiser_batisseur = async () =>
     {
         const donnees = {
             dependances: index.dependances,
-            tenons: []
+            tenons: [],
+            attente: null
         }
         const enfants = construire_bloc(index.modele, donnees)
         corps.append(...enfants)
@@ -100,6 +101,16 @@ const construire_fichier = (bloc, donnees) =>
 
 const construire_enfants = (bloc, donnees) =>
 {
+    // Pré-scan : un modèle d'attente (?) déclaré à ce niveau prime sur celui hérité
+    for (const enfant of bloc.enfants)
+    {
+        if (enfant.type === 'modele' && enfant.args[0][0] === '?' && /^[a-zA-Z]$/.test(enfant.args[0][1]))
+        {
+            donnees = { ...donnees, attente: enfant }
+            break
+        }
+    }
+
     let enfants = []
     let elsable = false
     for (let i = 0; i < bloc.enfants.length; i++)
@@ -554,11 +565,26 @@ const appliquer_attribut = (noeud, clef, valeur) =>
 const construire_modele = (bloc, donnees) =>
 {
     const nom_complet = bloc.args[0]
-    const differe = nom_complet[0] === '-'
-    const nom = differe ? nom_complet.slice(1) : nom_complet
+    const est_remplacement = nom_complet[0] === '?'
+    const differe          = nom_complet[0] === '-'
+    const nom = (differe || est_remplacement) ? nom_complet.slice(1) : nom_complet
+
+    // Modèle d'attente : déjà pris en compte par le pré-scan, on ne construit rien
+    if (est_remplacement)
+        return []
 
     if (differe && !donnees.dependances[nom])
     {
+        // Construire les nœuds du modèle d'attente
+        const bloc_attente = donnees.attente
+        const nom_attente  = bloc_attente?.args[0].slice(1)
+        const noeuds_attente = nom_attente && donnees.dependances[nom_attente]
+            ? construire_modele(
+                { type: 'modele', args: [nom_attente, ...bloc_attente.args.slice(1)], enfants: [] },
+                donnees
+              )
+            : []
+
         const ancre = document.createComment(`-${nom}`)
 
         if (!chargements_en_cours.has(nom))
@@ -583,6 +609,14 @@ const construire_modele = (bloc, donnees) =>
             if (!ancre.parentNode) return
             if (!donnees.dependances[nom]) return
 
+            // Supprimer le modèle d'attente
+            for (const n of noeuds_attente)
+            {
+                await demonter_noeud(n)
+                nettoyer_noeud(n)
+                n.parentNode?.removeChild(n)
+            }
+
             const noeuds = construire_modele({ ...bloc, args: [nom, ...bloc.args.slice(1)] }, donnees)
             ancre.after(...noeuds)
             ancre.remove()
@@ -595,7 +629,7 @@ const construire_modele = (bloc, donnees) =>
             })
         })()
 
-        return [ancre]
+        return [ancre, ...noeuds_attente]
     }
 
     const modele = donnees.dependances[nom]

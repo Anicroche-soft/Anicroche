@@ -1,0 +1,25 @@
+@style [
+    .section-chargement {
+        height: 100%;
+
+        display: grid;
+        place-items: center;
+
+        margin: var(--l-marge);
+
+        --l-marge: -1rem;
+        --f-fond:  var(--f-degrade-vif);
+        --c-fond:  var(--c-vif);
+        --c-flux:  var(--c-creme)
+    }
+]
+
+@args [$section]
+
+@if [$section = navigation]
+    navigation
+
+@if [$section = page]
+    page
+        <section .section-chargement>
+            "Chargement en cours..."

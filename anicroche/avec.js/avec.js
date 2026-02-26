@@ -12,6 +12,8 @@ console.log(`\
 
 const adn = generer_adn()
 
+const delai = 0
+
 const composants = {
     "/systeme/scripts": {
         chemin: "avec.js/scripts",
@@ -80,8 +82,10 @@ export const rechercher_fichier = (dossier, nom, recursif) =>
     return (false)
 }
 
-const serveur = http.createServer((req, rep) =>
+const serveur = http.createServer(async (req, rep) =>
     {
+        if (delai > 0)
+            await new Promise(r => setTimeout(r, delai * 1000))
         let chemin = "avec.js/index.html"
         let infos = null
         for (const prefixe in composants)

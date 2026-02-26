@@ -11,7 +11,7 @@
                 "Connexion"
 
         <div .droite>
-            ancre-boite /parametres "parametres"
+            ancre-boite /preferences Préférences
                 icone-engrenage
 
 @if [$section = page]

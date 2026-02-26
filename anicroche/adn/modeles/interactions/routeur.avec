@@ -6,5 +6,10 @@
 @else-if [$path ~= '/connexion']
     -page-connexion $section
 
+@else-if [$path ~= '/chargement']
+    -page-chargement $section
+
 @else
     -page-404 $section
+
+?page-chargement $section

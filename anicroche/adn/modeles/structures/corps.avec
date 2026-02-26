@@ -14,7 +14,7 @@
     #corps > nav {
         padding: var(--l-marge);
 
-        --b-fond: var(--b-degrade-vif);
+        --f-fond: var(--f-degrade-vif);
         --c-fond: var(--c-vif);
         --c-flux: var(--c-creme);
     }
@@ -41,7 +41,7 @@
 
     #navigation span {
         white-space: nowrap;
-        font-family: var(--f-titre);
+        font-family: var(--p-titre);
 
         --l-fonte: 1.5rem;
         --e-fonte: 500;
@@ -53,7 +53,7 @@
     }
 
     #page > div {
-        --b-fond: var(--c-theme);
+        --f-fond: var(--c-theme);
         --c-fond: var(--c-theme);
         padding: 1rem;
     }

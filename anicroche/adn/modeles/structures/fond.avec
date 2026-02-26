@@ -10,12 +10,12 @@
     }
 
     #fond .tete {
-        --b-fond: var(--c-analogue);
+        --f-fond: var(--c-analogue);
         --c-fond: var(--c-analogue);
     }
 
     #fond .corps {
-        --b-fond: var(--c-theme);
+        --f-fond: var(--c-theme);
         --c-fond: var(--c-theme);
     }
 

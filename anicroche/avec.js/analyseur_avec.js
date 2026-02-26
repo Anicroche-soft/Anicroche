@@ -249,6 +249,18 @@ const analyser_bloc_avec = (str, deb, fin, fichier, json) =>
         bloc.type = 'modele'
         // Modèle différé : pas de chargement au moment du parsing
     }
+    else if (bloc.args[0][0] == '?' && /^[a-zA-Z]$/.test(bloc.args[0][1]))
+    {
+        bloc.type = 'modele'
+        const nom = bloc.args[0].slice(1)
+        if (!json.dependances[nom])
+        {
+            if (analyser_dependance(nom, json) != 0)
+            {
+                return erreur("Chargement du modèle impossible", fichier, str, deb + indentation)
+            }
+        }
+    }
     else if (/^[a-zA-Z]$/.test(bloc.args[0][0]))
     {
         bloc.type = 'modele'
