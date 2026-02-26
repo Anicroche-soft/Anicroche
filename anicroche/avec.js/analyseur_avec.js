@@ -244,6 +244,11 @@ const analyser_bloc_avec = (str, deb, fin, fichier, json) =>
     {
         bloc.type = 'texte'
     }
+    else if (bloc.args[0][0] == '-' && /^[a-zA-Z]$/.test(bloc.args[0][1]))
+    {
+        bloc.type = 'modele'
+        // Modèle différé : pas de chargement au moment du parsing
+    }
     else if (/^[a-zA-Z]$/.test(bloc.args[0][0]))
     {
         bloc.type = 'modele'

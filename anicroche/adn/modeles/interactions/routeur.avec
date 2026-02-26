@@ -1,10 +1,10 @@
 @args [$section]
 
 @if [$path ~= '/']
-    page-accueil $section
+    -page-accueil $section
 
 @else-if [$path ~= '/connexion']
-    page-connexion $section
+    -page-connexion $section
 
 @else
-    page-404 $section
+    -page-404 $section

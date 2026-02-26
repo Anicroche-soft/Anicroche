@@ -9,6 +9,8 @@ import {
     definir_noeud_courant, effacer_noeud_courant
 } from './sculpteur.js'
 
+const chargements_en_cours = new Map()
+
 const BALISES_SVG = new Set([
     'g',    'path',   'ellipse',
     'svg',  'rect',   'polygon',
@@ -551,7 +553,52 @@ const appliquer_attribut = (noeud, clef, valeur) =>
 
 const construire_modele = (bloc, donnees) =>
 {
-    const modele = donnees.dependances[bloc.args[0]]
+    const nom_complet = bloc.args[0]
+    const differe = nom_complet[0] === '-'
+    const nom = differe ? nom_complet.slice(1) : nom_complet
+
+    if (differe && !donnees.dependances[nom])
+    {
+        const ancre = document.createComment(`-${nom}`)
+
+        if (!chargements_en_cours.has(nom))
+        {
+            const promesse = charger_modele(nom).then(json =>
+            {
+                chargements_en_cours.delete(nom)
+                if (!json) return
+                for (const [clef, val] of Object.entries(json.dependances))
+                {
+                    if (!donnees.dependances[clef])
+                        donnees.dependances[clef] = val
+                }
+            })
+            chargements_en_cours.set(nom, promesse)
+        }
+
+        (async () =>
+        {
+            await chargements_en_cours.get(nom)
+
+            if (!ancre.parentNode) return
+            if (!donnees.dependances[nom]) return
+
+            const noeuds = construire_modele({ ...bloc, args: [nom, ...bloc.args.slice(1)] }, donnees)
+            ancre.after(...noeuds)
+            ancre.remove()
+
+            queueMicrotask(() => {
+                noeuds.forEach(n => {
+                    if (n.nodeType === 1 && document.contains(n))
+                        monter_noeud(n)
+                })
+            })
+        })()
+
+        return [ancre]
+    }
+
+    const modele = donnees.dependances[nom]
     const args = {}
 
     for (const enfant of modele.enfants)
@@ -559,12 +606,12 @@ const construire_modele = (bloc, donnees) =>
         if (enfant.type === `instruction` && enfant.args[0] === `@style`)
         {
             const css = decapsuler(enfant.args[1])
-            activer_style(bloc.args[0], css)
+            activer_style(nom, css)
         }
         if (enfant.type === `instruction` && enfant.args[0] === `@script`)
         {
             const js = decapsuler(enfant.args[1])
-            activer_script(bloc.args[0], js)
+            activer_script(nom, js)
         }
         if (enfant.type === `instruction` && enfant.args[0] === `@args`)
         {
@@ -584,7 +631,7 @@ const construire_modele = (bloc, donnees) =>
     }
 
     const noeuds = construire_bloc(modele, donnees_modele)
-    noeuds.forEach(noeud => noeud._avec_modele = bloc.args[0])
+    noeuds.forEach(noeud => noeud._avec_modele = nom)
 
     return noeuds
 }
