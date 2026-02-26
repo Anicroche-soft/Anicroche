@@ -84,8 +84,6 @@ export const rechercher_fichier = (dossier, nom, recursif) =>
 
 const serveur = http.createServer(async (req, rep) =>
     {
-        if (delai > 0)
-            await new Promise(r => setTimeout(r, delai * 1000))
         let chemin = "avec.js/index.html"
         let infos = null
         for (const prefixe in composants)
@@ -99,6 +97,8 @@ const serveur = http.createServer(async (req, rep) =>
                 break
             }
         }
+        if (delai > 0 && infos?.composant)
+            await new Promise(r => setTimeout(r, delai * 1000))
         const chemin_complet = path.join("./", chemin)
         const dossier = path.dirname(chemin_complet)
         const fichier = path.basename(chemin_complet)

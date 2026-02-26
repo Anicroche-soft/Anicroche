@@ -13,3 +13,4 @@
     -page-404 $section
 
 ?page-chargement $section
+!page-404 $section

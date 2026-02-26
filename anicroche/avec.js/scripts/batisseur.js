@@ -30,7 +30,8 @@ export const initialiser_batisseur = async () =>
         const donnees = {
             dependances: index.dependances,
             tenons: [],
-            attente: null
+            attente: null,
+            repli: null
         }
         const enfants = construire_bloc(index.modele, donnees)
         corps.append(...enfants)
@@ -101,13 +102,15 @@ const construire_fichier = (bloc, donnees) =>
 
 const construire_enfants = (bloc, donnees) =>
 {
-    // Pré-scan : un modèle d'attente (?) déclaré à ce niveau prime sur celui hérité
+    // Pré-scan : les modèles d'attente (?) et de repli (!) déclarés à ce niveau priment sur ceux hérités
     for (const enfant of bloc.enfants)
     {
-        if (enfant.type === 'modele' && enfant.args[0][0] === '?' && /^[a-zA-Z]$/.test(enfant.args[0][1]))
+        if (enfant.type === 'modele')
         {
-            donnees = { ...donnees, attente: enfant }
-            break
+            if (enfant.args[0][0] === '?' && /^[a-zA-Z]$/.test(enfant.args[0][1]))
+                donnees = { ...donnees, attente: enfant }
+            else if (enfant.args[0][0] === '!' && /^[a-zA-Z]$/.test(enfant.args[0][1]))
+                donnees = { ...donnees, repli: enfant }
         }
     }
 
@@ -565,12 +568,13 @@ const appliquer_attribut = (noeud, clef, valeur) =>
 const construire_modele = (bloc, donnees) =>
 {
     const nom_complet = bloc.args[0]
-    const est_remplacement = nom_complet[0] === '?'
-    const differe          = nom_complet[0] === '-'
-    const nom = (differe || est_remplacement) ? nom_complet.slice(1) : nom_complet
+    const est_attente  = nom_complet[0] === '?'
+    const est_repli    = nom_complet[0] === '!'
+    const differe      = nom_complet[0] === '-'
+    const nom = (differe || est_attente || est_repli) ? nom_complet.slice(1) : nom_complet
 
-    // Modèle d'attente : déjà pris en compte par le pré-scan, on ne construit rien
-    if (est_remplacement)
+    // Modèle d'attente ou de repli : déjà pris en compte par le pré-scan, on ne construit rien
+    if (est_attente || est_repli)
         return []
 
     if (differe && !donnees.dependances[nom])
@@ -607,7 +611,6 @@ const construire_modele = (bloc, donnees) =>
             await chargements_en_cours.get(nom)
 
             if (!ancre.parentNode) return
-            if (!donnees.dependances[nom]) return
 
             // Supprimer le modèle d'attente
             for (const n of noeuds_attente)
@@ -615,6 +618,25 @@ const construire_modele = (bloc, donnees) =>
                 await demonter_noeud(n)
                 nettoyer_noeud(n)
                 n.parentNode?.removeChild(n)
+            }
+
+            if (!donnees.dependances[nom])
+            {
+                // Échec de chargement : afficher le modèle de repli
+                const bloc_repli   = donnees.repli
+                const nom_repli    = bloc_repli?.args[0].slice(1)
+                const noeuds_repli = nom_repli && donnees.dependances[nom_repli]
+                    ? construire_modele(
+                        { type: 'modele', args: [nom_repli, ...bloc_repli.args.slice(1)], enfants: [] },
+                        donnees
+                      )
+                    : []
+                ancre.after(...noeuds_repli)
+                ancre.remove()
+                queueMicrotask(() => noeuds_repli.forEach(n => {
+                    if (n.nodeType === 1 && document.contains(n)) monter_noeud(n)
+                }))
+                return
             }
 
             const noeuds = construire_modele({ ...bloc, args: [nom, ...bloc.args.slice(1)] }, donnees)
