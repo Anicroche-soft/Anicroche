@@ -1,0 +1,11 @@
+services:
+
+    anicroche:
+        volumes:
+            - ./anicroche/avec.js:/app/avec.js
+            - ./anicroche/adn:/app/adn
+
+    apicroche:
+        volumes:
+            - ./apicroche/sans.js:/app/sans.js
+            - ./apicroche/adn:/app/adn

@@ -4,6 +4,6 @@
     "main": "avec.js/avec.js",
     "type": "module",
     "scripts": {
-        "start": "node avec.js/avec.js"
+        "start": "node --watch avec.js/avec.js"
     }
 }

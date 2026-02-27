@@ -1,21 +1,29 @@
 SERVICE ?= anicroche
 
+-include .env
+
+ifeq ($(mode),dev)
+	COMPOSE = docker compose -f docker-compose.yml -f docker-compose.dev.yml
+else
+	COMPOSE = docker compose
+endif
+
 up:
-	@docker compose up -d
+	@$(COMPOSE) up -d
 
 down:
-	@docker compose down
+	@$(COMPOSE) down
 
 build:
-	@docker compose build
+	@$(COMPOSE) build
 
 re:
-	@docker compose up --build -d
+	@$(COMPOSE) up --build -d
 
 logs:
-	@docker compose logs -f $(SERVICE)
+	@$(COMPOSE) logs -f $(SERVICE)
 
 ps:
-	@docker compose ps
+	@$(COMPOSE) ps
 
 .PHONY: up down build rebuild logs ps

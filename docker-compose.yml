@@ -1,4 +1,5 @@
 services:
+
     anicroche:
         build: ./anicroche
         container_name: anicroche
@@ -6,6 +7,13 @@ services:
             - "4030:4030"
         environment:
             - PORT=4030
+
+    apicroche:
+        build: ./apicroche
+        container_name: apicroche
+        ports:
+            - "5030:5030"
+        environment:
+            - PORT=5030
         volumes:
-            - ./anicroche/avec.js:/app/avec.js
-            - ./anicroche/adn:/app/adn
+            - ./apicroche/depot:/app/depot

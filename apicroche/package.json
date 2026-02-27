@@ -1,0 +1,9 @@
+{
+    "name": "sans",
+    "version": "1.0.0",
+    "main": "sans.js/sans.js",
+    "type": "module",
+    "scripts": {
+        "start": "node --watch sans.js/sans.js"
+    }
+}
