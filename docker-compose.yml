@@ -1,11 +1,11 @@
 services:
-  anicroche:
-    build: ./anicroche
-    container_name: anicroche
-    ports:
-      - "4030:4030"
-    environment:
-      - PORT=4030
-    volumes:
-      - ./anicroche/avec.js:/app/avec.js
-      - ./anicroche/adn:/app/adn
+    anicroche:
+        build: ./anicroche
+        container_name: anicroche
+        ports:
+            - "4030:4030"
+        environment:
+            - PORT=4030
+        volumes:
+            - ./anicroche/avec.js:/app/avec.js
+            - ./anicroche/adn:/app/adn
