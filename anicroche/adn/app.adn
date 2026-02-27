@@ -1,24 +1,2 @@
 nom    : Anicroche
 langue : fr
-
-routes : [
-    {
-        voie : /
-        modele : accueil
-    }
-
-    {
-        voie : /avec
-        modele : avec
-    }
-
-    {
-        voie : /@<identifiant>
-        modele : utilisateur
-    }
-
-    {
-        voie : /<id>
-        modele : anicroche
-    }
-] <$id :+ />
