@@ -18,8 +18,11 @@
 
 @if [$section = navigation]
     navigation
+        <div .centre>
+            <span>
+                "Chargement"
 
 @if [$section = page]
     page
         <section .section-chargement>
-            "Chargement en cours..."
+            animation-chargement
