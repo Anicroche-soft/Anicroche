@@ -23,16 +23,16 @@
     }
 
     .animation-chargement .gauche {
-        animation: animation-chargement-gauche calc(var(--d-animation) * 4) infinite;
+        animation: animation-chargement-gauche calc(var(--d-animation) * 3) linear infinite;
     }
 
     .animation-chargement .centre {
-        animation: animation-chargement-centre calc(var(--d-animation) * 4) infinite;
+        animation: animation-chargement-centre calc(var(--d-animation) * 3) linear infinite;
         animation-delay: calc(var(--d-animation) * -0.5);
     }
 
     .animation-chargement .droite {
-        animation: animation-chargement-droite calc(var(--d-animation) * 4) infinite;
+        animation: animation-chargement-droite calc(var(--d-animation) * 3) linear infinite;
         animation-delay: calc(var(--d-animation) * -1);
     }
 ]

@@ -687,7 +687,7 @@ const construire_modele = (bloc, donnees) =>
     }
 
     const noeuds = construire_bloc(modele, donnees_modele)
-    noeuds.forEach(noeud => noeud._avec_modele = nom)
+    noeuds.forEach(noeud => { if (!noeud._avec_modele) noeud._avec_modele = nom })
 
     return noeuds
 }

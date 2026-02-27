@@ -1,0 +1,74 @@
+@script [
+    $monter_chargement = ($node) =>
+    {
+        $node.classList.add('entree')
+        requestAnimationFrame(() => 
+            requestAnimationFrame(() => 
+                $node.classList.remove('entree')
+            )
+        )
+    }
+
+    $demonter_chargement = async ($node) =>
+    {
+        const style = getComputedStyle($node)
+
+        const parseTime = (value) =>
+        {
+            return value.split(',')
+                .map(v => v.trim())
+                .map(v => v.endsWith('ms') ? parseFloat(v) : parseFloat(v) * 1000)
+        }
+
+        const durations = parseTime(style.transitionDuration)
+        const delays = parseTime(style.transitionDelay)
+
+        const times = durations.map((d, i) => d + (delays[i] || 0))
+        const maxTime = Math.max(...times, 0)
+
+        $node.classList.add('sortie')
+
+        await new Promise(r => setTimeout(r, maxTime))
+    }
+]
+
+@style [
+    #chargement {
+        height: 100vh;
+
+        display: grid;
+        place-items: center;
+
+        transition: opacity var(--d-animation);
+
+        --f-fond: var(--f-degrade-vif);
+        --c-fond: var(--c-vif);
+        --c-flux: var(--c-creme);
+    }
+
+    #chargement.entree,
+    #chargement.sortie {
+        opacity: 0;
+    }
+
+    #chargement > section {
+        align-items: center;
+    }
+
+    #chargement > section span {
+        font-family: var(--p-titre);
+
+        --l-fonte: 1.5rem;
+        --e-fonte: 450;
+    }
+]
+
+<div
+    #chargement
+    @mount="$monter_chargement($node)"
+    @unmount="await $demonter_chargement($node)"
+>
+    <section>
+        <span>
+            "Chargement"
+        animation-chargement

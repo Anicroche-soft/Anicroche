@@ -1,3 +1,15 @@
+@script [
+    $monter_fond = ($node) =>
+    {
+        $node.classList.add('entree')
+        requestAnimationFrame(() => 
+            requestAnimationFrame(() => 
+                $node.classList.remove('entree')
+            )
+        )
+    }
+]
+
 @style [
     #fond {
         position: fixed;
@@ -37,6 +49,9 @@
     }
 ]
 
-<div #fond>
+<div
+    #fond
+    @mount="$monter_fond($node)"
+>
     <div .tete>
     <div .corps>

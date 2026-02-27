@@ -3,14 +3,6 @@
     $format = `petit`
     $orientation = `paysage`
 
-    const actualiser_theme = (media_query) =>
-    {
-        $theme = media_query.matches ? `sombre` : `clair`
-
-        document.documentElement.classList.remove(`clair`, `sombre`)
-        document.documentElement.classList.add($theme)
-    }
-
     const actualiser_format = () =>
     {
         const w = window.innerWidth
@@ -23,13 +15,21 @@
         document.documentElement.classList.add($format, $orientation)
     }
 
+    const actualiser_theme = (media_query) =>
+    {
+        $theme = media_query.matches ? `sombre` : `clair`
+
+        document.documentElement.classList.remove(`clair`, `sombre`)
+        document.documentElement.classList.add($theme)
+    }
+
     const media_query = window.matchMedia(`(prefers-color-scheme: dark)`)
 
-    actualiser_theme(media_query)
     actualiser_format()
+    actualiser_theme(media_query)
 
-    media_query.addEventListener(`change`, actualiser_theme)
     window.addEventListener(`resize`, actualiser_format)
+    media_query.addEventListener(`change`, actualiser_theme)
 ]
 
 @style [
@@ -163,8 +163,6 @@
     }
 ]
 
-tete
+-base
 
-corps
-
-fond
+?chargement
