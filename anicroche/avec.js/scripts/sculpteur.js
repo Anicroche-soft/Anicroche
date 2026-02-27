@@ -64,12 +64,13 @@ export const executer_script_async = async (script, evenement, noeud) =>
                 `runtime`,
                 `$event`,
                 `$node`,
+                `$vars`,
                 `
                 with (runtime) {
                     ${script}
                 }
                 `
-            )(etat_sculpteur.instance, evenement, noeud)
+            )(etat_sculpteur.instance, evenement, noeud, noeud?._avec_vars)
         }
         catch (erreur)
         {
@@ -88,12 +89,13 @@ export const executer_script = (script, evenement, noeud) =>
                 `runtime`,
                 `$event`,
                 `$node`,
+                `$vars`,
                 `
                 with (runtime) {
                     ${script}
                 }
                 `
-            )(etat_sculpteur.instance, evenement, noeud)
+            )(etat_sculpteur.instance, evenement, noeud, noeud?._avec_vars)
         }
         catch (erreur)
         {
