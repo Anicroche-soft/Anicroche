@@ -120,7 +120,7 @@ const serveur = http.createServer(async (req, rep) =>
             {
                 try
                 {
-                    contenu = infos.script(contenu, fichier)
+                    contenu = infos.script(contenu, fichier, req)
                 }
                 catch (erreur)
                 {

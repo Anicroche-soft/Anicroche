@@ -1,9 +1,12 @@
-export const charger_modele = async (nom) =>
+export const charger_modele = async (nom, connus = []) =>
 {
     try
     {
         const reponse = await fetch(`/systeme/modeles/${nom}.avec`, {
-            headers: {'X-AC-Composant': `true`}
+            headers: {
+                'X-AC-Composant': `true`,
+                'X-AC-Connus': connus.join(',')
+            }
         })
         if (!reponse.ok)
         {

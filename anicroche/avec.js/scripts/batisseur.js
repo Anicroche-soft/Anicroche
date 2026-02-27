@@ -593,7 +593,7 @@ const construire_modele = (bloc, donnees) =>
 
         if (!chargements_en_cours.has(nom))
         {
-            const promesse = charger_modele(nom).then(json =>
+            const promesse = charger_modele(nom, Object.keys(donnees.dependances)).then(json =>
             {
                 chargements_en_cours.delete(nom)
                 if (!json) return

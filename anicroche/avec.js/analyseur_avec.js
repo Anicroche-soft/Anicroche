@@ -396,7 +396,7 @@ const analyser_fichier_avec = (str, deb, fin, fichier, json) =>
     return modele
 }
 
-export const analyser_avec = (str, fichier) =>
+export const analyser_avec = (str, fichier, req) =>
 {
     const nom = fichier.replace(/\.avec$/, '')
     let json = {
@@ -405,7 +405,8 @@ export const analyser_avec = (str, fichier) =>
             args: [nom],
             enfants: []
         },
-        dependances: {}
+        dependances: {},
+        connus: new Set(req?.headers['x-ac-connus']?.split(',').filter(Boolean) ?? [])
     }
     let modele = analyser_fichier_avec(str, 0, str.length - 1, fichier, json)
     json.dependances[nom] = modele
@@ -414,6 +415,8 @@ export const analyser_avec = (str, fichier) =>
 
 const analyser_dependance = (nom, json) =>
 {
+    if (json.connus?.has(nom))
+        return 0
     const dossier = `./adn/modeles`
     const fichier = `${nom}.avec`
     const chemin = rechercher_fichier(dossier, fichier, true)
