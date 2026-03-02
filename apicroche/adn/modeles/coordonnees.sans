@@ -1,0 +1,35 @@
+@primary [ id ]
+
+@unique [
+    [ hachage_coordonnee ]
+]
+
+@fields [
+    {
+        name : id
+        type : char
+        size : 15
+    }
+
+    {
+        name : type
+        type : courriel/telephone
+        size : 1-16
+    }
+
+    {
+        name : coordonnee
+        type : crypt
+        size : 1-512
+    }
+
+    {
+        name : hachage_coordonnee
+        type : hash
+    }
+
+    {
+        name : est_principale
+        type : boolean
+    }
+]

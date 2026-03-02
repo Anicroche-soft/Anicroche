@@ -1,0 +1,31 @@
+@primary [ id ]
+
+@fields [
+    {
+        name : id
+        type : char
+        size : 12
+    }
+
+    {
+        name : hachage_mot_de_passe
+        type : hash
+        size : 1-256
+    }
+
+    {
+        name : date_naissance
+        type : crypt
+        size : 1-64
+    }
+
+    {
+        name : date_inscription
+        type : date
+    }
+
+    {
+        name  : coordonnees
+        count : 0-N
+    }
+]
