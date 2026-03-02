@@ -19,6 +19,12 @@
         display: grid;
 
         gap: 0;
+
+        transition: opacity var(--d-animation);
+    }
+
+    #fond.entree {
+        opacity: 0;
     }
 
     #fond .tete {

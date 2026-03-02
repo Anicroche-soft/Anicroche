@@ -2,12 +2,24 @@
     $monter_icone_horloge = ($node, $vars) =>
     {
         const horloge = {
-            aiguille_heures: $node.querySelector('.aiguille.heures'),
-            aiguille_minutes: $node.querySelector('.aiguille.minutes'),
-            nombre_xii: $node.querySelector('.nombre.xii'),
-            nombre_iii: $node.querySelector('.nombre.iii'),
-            nombre_vi: $node.querySelector('.nombre.vi'),
-            nombre_ix: $node.querySelector('.nombre.ix')
+            aiguilles : {
+                heures:  $node.querySelector('.aiguille.heures'),
+                minutes: $node.querySelector('.aiguille.minutes')
+            },
+            nombres : [
+                $node.querySelector('.nombre.xii'),
+                $node.querySelector('.nombre.i'),
+                $node.querySelector('.nombre.ii'),
+                $node.querySelector('.nombre.iii'),
+                $node.querySelector('.nombre.iv'),
+                $node.querySelector('.nombre.v'),
+                $node.querySelector('.nombre.vi'),
+                $node.querySelector('.nombre.vii'),
+                $node.querySelector('.nombre.viii'),
+                $node.querySelector('.nombre.ix'),
+                $node.querySelector('.nombre.x'),
+                $node.querySelector('.nombre.xi')
+            ]
         }
 
         actualiser(horloge)
@@ -47,29 +59,17 @@
         const angle_heures = (heures % 12) * 30 + minutes * 0.5
         const angle_minutes = minutes * 6
 
-        horloge.aiguille_heures.style.transform = `rotate(${angle_heures}deg)`
-        horloge.aiguille_minutes.style.transform = `rotate(${angle_minutes}deg)`
+        horloge.aiguilles.heures.style.transform = `rotate(${angle_heures}deg)`
+        horloge.aiguilles.minutes.style.transform = `rotate(${angle_minutes}deg)`
 
-        horloge.nombre_xii.classList.toggle(
-            'masque',
-            difference_angle(angle_heures, 0) < 15
-         || difference_angle(angle_minutes, 0) < 30
-        )
-        horloge.nombre_iii.classList.toggle(
-            'masque',
-            difference_angle(angle_heures, 90) < 15
-         || difference_angle(angle_minutes, 90) < 30
-        )
-        horloge.nombre_vi.classList.toggle(
-            'masque',
-            difference_angle(angle_heures, 180) < 15
-         || difference_angle(angle_minutes, 180) < 30
-        )
-        horloge.nombre_ix.classList.toggle(
-            'masque',
-            difference_angle(angle_heures, 270) < 15
-         || difference_angle(angle_minutes, 270) < 30
-        )
+        for (let i in horloge.nombres)
+        {
+            horloge.nombres[i].classList.toggle(
+                'masque',
+                difference_angle(angle_heures, i * 30) < 15
+             || difference_angle(angle_minutes, i * 30) < 30
+            )
+        }
     }
 
     const difference_angle = (a, b) => {
@@ -109,7 +109,16 @@
     <path .aiguille .heures  d="M12 10V7">
     <path .aiguille .minutes d="M12 10V5">
 
-    <path .nombre   .xii     d="M12 1V3">
+    <path .nombre   .i       d="M16.5007 4.20324L18.1549 1.33795">
+    <path .nombre   .ii      d="M19.7967 7.49568L22.661 5.84198">
     <path .nombre   .iii     d="M23 12H21">
+    <path .nombre   .iv      d="M19.8017 16.4957L22.6642 18.1483">
+    <path .nombre   .v       d="M16.5093 19.7917L18.1647 22.6589">
     <path .nombre   .vi      d="M12 23V21">
+    <path .nombre   .vii     d="M7.50068 19.7917L5.84375 22.6616">
+    <path .nombre   .viii    d="M4.20829 16.4957L1.3374 18.1532">
     <path .nombre   .ix      d="M1 12H3">
+    <path .nombre   .x       d="M4.21328 7.49567L1.34055 5.8371">
+    <path .nombre   .xi      d="M7.50934 4.20327L5.8535 1.33527">
+    <path .nombre   .xii     d="M12 1V3">
+

@@ -17,6 +17,12 @@
         gap: 0;
 
         height: 100%;
+
+        transition: opacity var(--d-animation);
+    }
+
+    #corps.entree {
+        opacity: 0;
     }
 
     .petit.portrait #corps {
