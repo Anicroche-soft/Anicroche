@@ -1,3 +1,5 @@
+@name [ coordonnees, coordonnee ]
+
 @primary [ id ]
 
 @unique [

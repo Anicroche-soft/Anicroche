@@ -1,3 +1,5 @@
+@name [ comptes, compte ]
+
 @primary [ id ]
 
 @fields [

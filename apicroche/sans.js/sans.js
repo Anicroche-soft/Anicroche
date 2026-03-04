@@ -2,14 +2,87 @@ import http from "http"
 import path from "path"
 import fs   from "fs"
 
-import {generer_adn} from "./analyseur_adn.js"
+import {generer_adn}    from "./analyseur_adn.js"
+import {charger_modeles} from "./analyseur_sans.js"
 
 console.log(`\
 ╔══════╗
 ║ SANS ║
 ╚══════╝`)
 
-const adn = generer_adn()
+const adn     = generer_adn()
+const schemas = charger_modeles("adn/modeles")
+
+const afficher_schemas = ({ tables, relations }) =>
+{
+    const pad = (str, n) => str + ' '.repeat(Math.max(0, n - str.length))
+
+    const formater_type = (champ) =>
+    {
+        const { type, min, max } = champ
+        if (min === null && max === null)
+            return type
+        if (min === max)
+            return `${type}(${min})`
+        return `${type}(${min}, ${max})`
+    }
+
+    console.log(`\nSchéma — ${tables.length} table(s), ${relations.length} relation(s)\n`)
+
+    for (const table of tables)
+    {
+        const titre = table.entry_name
+            ? `TABLE ${table.name}  (entrée : ${table.entry_name})`
+            : `TABLE ${table.name}`
+        console.log(titre)
+
+        if (table.primary.length > 0)
+            console.log(`  Clef primaire : ${table.primary.join(', ')}`)
+
+        if (table.unique.length > 0)
+        {
+            for (const contrainte of table.unique)
+                console.log(`  Contrainte unique : [ ${contrainte.join(', ')} ]`)
+        }
+
+        if (table.fields.length > 0)
+        {
+            console.log('  Champs :')
+            const largeur_nom  = Math.max(...table.fields.map(f => f.name.length))
+            const largeur_type = Math.max(...table.fields.map(f => formater_type(f).length))
+
+            for (const champ of table.fields)
+            {
+                let ligne = `    ${pad(champ.name, largeur_nom)}  ${pad(formater_type(champ), largeur_type)}`
+                ligne    += `  ${champ.nullable ? 'NULL    ' : 'NOT NULL'}`
+                if (champ.treatment)
+                    ligne += `  → ${champ.treatment}`
+                if (champ.values)
+                    ligne += `  [ ${champ.values.join(' | ')} ]`
+                console.log(ligne)
+            }
+        }
+        console.log('')
+    }
+
+    if (relations.length > 0)
+    {
+        console.log('Relations :')
+        for (const rel of relations)
+        {
+            let ligne = `  ${rel.table_source}.${rel.champ_source} → ${rel.table_cible}  [${rel.count}]`
+            if (rel.cle_etrangere)
+                ligne += `  (FK : ${rel.cle_etrangere})`
+            if (rel.table_jonction)
+                ligne += `  (jonction : ${rel.table_jonction})`
+            console.log(ligne)
+        }
+        console.log('')
+    }
+}
+
+afficher_schemas(schemas)
+console.log(JSON.stringify(schemas, null, 4))
 
 const types_mime = {
     ".json":  "application/json",
