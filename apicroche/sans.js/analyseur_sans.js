@@ -360,7 +360,7 @@ const resoudre_relations = (tables) =>
 
             if (rel.min === 'N' && rel.max === 'N')
             {
-                relation.table_jonction = `${table.name}_${rel.table_cible}`
+                relation.table_jonction = `${rel.champ_source}_${table_cible.entry_name ?? table_cible.name}`
             }
             else if (rel.max === 'N')
             {

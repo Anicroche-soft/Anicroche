@@ -29,3 +29,38 @@ port   : 5030
 |---|---|---|---|
 | `nom` | texte | `sans.js` | Nom de l'API |
 | `port` | nombre | `5030` | Port d'écoute du serveur (peut aussi être défini via la variable d'environnement `PORT`) |
+
+## Variables d'environnement
+
+Les paramètres de connexion à la base de données et le mode d'exécution sont fournis via des variables d'environnement (typiquement un fichier `.env` monté par Docker) :
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `database_host` | `localhost` | Hôte du serveur MySQL |
+| `database_port` | `3306` | Port du serveur MySQL |
+| `database_name` | — | Nom de la base de données (**obligatoire**) |
+| `database_user` | — | Utilisateur MySQL (**obligatoire**) |
+| `database_pass` | *(vide)* | Mot de passe MySQL |
+| `mode` | `prod` | Mode d'exécution : `dev` ou `prod` |
+| `PORT` | `5030` | Port d'écoute HTTP |
+
+> **Important :** la base de données doit exister avant le démarrage. sans.js ne la crée pas — il affiche une erreur si la connexion échoue.
+
+### Différences entre les modes
+
+| Action | `dev` | `prod` |
+|---|---|---|
+| Créer les tables absentes | ✓ | ✓ |
+| Ajouter / modifier des colonnes | ✓ | ✓ |
+| Supprimer les colonnes disparues du schéma | ✓ | — |
+| Supprimer les tables disparues du schéma | ✓ | — |
+
+## Fichiers statiques — route `/depot/`
+
+Tout fichier placé dans le dossier `depot/` est accessible publiquement via la route `/depot/<nom-du-fichier>`. La recherche est récursive : les sous-dossiers sont parcourus automatiquement.
+
+```
+GET /depot/photo.png  →  depot/uploads/photo.png
+```
+
+Les types MIME courants (images, polices, audio, vidéo, JSON…) sont détectés automatiquement à partir de l'extension.

@@ -4,6 +4,7 @@ import fs   from "fs"
 
 import {generer_adn}    from "./analyseur_adn.js"
 import {charger_modeles} from "./analyseur_sans.js"
+import {construire_base} from "./batisseur.js"
 
 console.log(`\
 ╔══════╗
@@ -82,7 +83,8 @@ const afficher_schemas = ({ tables, relations }) =>
 }
 
 afficher_schemas(schemas)
-console.log(JSON.stringify(schemas, null, 4))
+
+await construire_base(schemas)
 
 const types_mime = {
     ".json":  "application/json",

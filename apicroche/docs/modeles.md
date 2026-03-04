@@ -37,6 +37,19 @@ Un modèle est composé d'**annotations** (commençant par `@`) et d'une liste d
 
 ## Annotations
 
+### `@name`
+
+Permet de définir le nom de la table en base de données et, optionnellement, un **nom d'entrée** (utilisé pour nommer les clefs étrangères qui pointent vers cette table).
+
+```
+@name [ comptes, compte ]
+```
+
+- Le premier élément est le nom de la table.
+- Le second (optionnel) est le nom d'entrée : les clefs étrangères seront nommées `id_<nom_entree>` (ex. `id_compte`).
+
+Si `@name` est absent, le nom du fichier `.sans` (sans extension) est utilisé comme nom de table.
+
 ### `@primary`
 
 Déclare la clef primaire de la table. Prend une liste de noms de champs.
@@ -86,8 +99,8 @@ Détermine le type de la colonne en base de données :
 | `date` | Date seule | `DATE` |
 | `datetime` | Date et heure | `DATETIME` |
 | `boolean` | Valeur vraie ou fausse | `BOOLEAN` |
-| `hash` | Valeur hachée (non réversible) | `CHAR` |
-| `crypt` | Valeur chiffrée (réversible) | `VARCHAR` |
+| `hash` | Valeur hachée (non réversible) | `CHAR` / `BINARY(32)` |
+| `crypt` | Valeur chiffrée (réversible) | `BINARY` / `VARBINARY` |
 | `a/b/c` | Type énuméré — valeur stockée directement, validée par le cadriciel | `VARCHAR` |
 
 ### `size`
@@ -107,7 +120,32 @@ Indique la cardinalité du champ ou de la relation :
 | `0-1` | Valeur optionnelle — zéro ou une |
 | `1-N` | Relation obligatoire — une au minimum |
 | `0-N` | Relation optionnelle — zéro ou plusieurs |
-| `N-N` | Relation many-to-many — table de jonction générée automatiquement |
+| `N-N` | Relation many-to-many — table de jonction générée automatiquement (voir ci-dessous) |
+
+### Tables de jonction (relation `N-N`)
+
+Lorsqu'une relation `N-N` est déclarée, sans.js génère automatiquement une **table de jonction** nommée :
+
+```
+<name_du_champ>_<entree_de_la_table_cible>
+```
+
+C'est le `name` du champ de relation (pas le nom de la table source) qui sert de préfixe, ce qui permet d'avoir plusieurs relations N-N vers la même table cible sans collision.
+
+Cette table contient deux colonnes :
+
+| Colonne | Type | Description |
+|---|---|---|
+| `id_<entree_source>` | même type que la PK source | Référence vers l'entrée source |
+| `id_<entree_cible>` | même type que la PK cible | Référence vers l'entrée cible |
+
+La **clef primaire composite** porte sur les deux colonnes.
+
+```
+# modèle articles — deux relations N-N vers profils (entry_name: profil)
+{ name: auteurs   ref: profils   count: N-N }  →  table auteurs_profil
+{ name: lecteurs  ref: profils   count: N-N }  →  table lecteurs_profil
+```
 
 ### `ref`
 
