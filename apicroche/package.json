@@ -7,6 +7,7 @@
         "start": "node --watch sans.js/sans.js"
     },
     "dependencies": {
+        "argon2": "^0.43.0",
         "mysql2": "^3.11.5"
     }
 }
