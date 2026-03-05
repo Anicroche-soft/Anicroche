@@ -1,0 +1,27 @@
+@name [ clefs, clef ]
+
+@primary [ hachage_coordonnee, type ]
+
+@fields [
+    {
+        name : hachage_coordonnee
+        type : hash
+    }
+
+    {
+        name : type
+        type : inscription/connexion
+        size : 1-32
+    }
+
+    {
+        name : clef
+        type : hash
+        size : 1-256
+    }
+
+    {
+        name : date_inscription
+        type : date
+    }
+]

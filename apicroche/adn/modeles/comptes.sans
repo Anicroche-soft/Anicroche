@@ -17,18 +17,92 @@
     }
 
     {
-        name : date_naissance
-        type : crypt
-        size : 1-64
+        name :  date_naissance
+        type :  crypt
+        size :  1-64
+        count : 0-1
     }
 
     {
-        name : date_inscription
-        type : date
+        name    : date_inscription
+        type    : date
+        default : now
     }
 
     {
         name  : coordonnees
         count : 0-N
+    }
+]
+
+@routes [
+    {
+        path   : /inscription
+        action : $inscrire_compte($body)
+    }
+
+    {
+        path   : /connexion
+        action : $connecter_compte($body)
+
+        # 1. Lire l'identifiant et le mot de passe depuis le corps de la requête
+        # 2. Hacher l'identifiant avec HMAC-SHA256
+        # 3. Chercher la coordonnée correspondante en base via ce hash
+        # 4. Si introuvable → répondre 401 (message générique, sans précision)
+        # 5. Récupérer le compte lié à cette coordonnée
+        # 6. Vérifier le mot de passe avec Argon2id
+        # 7. Si invalide → répondre 401 (même message générique)
+        # 8. Générer un access token JWT
+        #      (sub = id du compte, auth_time = maintenant, + claims configurés dans @auth)
+        # 9. Générer un refresh token opaque
+        # 10. Stocker le refresh token en base (lié au compte, prêt pour la rotation)
+        # 11. Poser le refresh token en cookie HttpOnly + Secure + SameSite=Strict
+        # 12. Répondre 200 avec l'access token
+    }
+]
+
+@script [
+    $inscrire_compte = async ($body) =>
+    {
+        if (
+            !$body.type_coordonnee
+         || !$body.coordonnee
+         || !$body.clef
+         || !$body.mot_de_passe
+        )
+            return $indicate(400, "Corps incomplet")
+
+        const clef = await $search_one('clef', {
+            hachage_coordonnee : $body.coordonnee,
+            type               : 'inscription',
+            clef               : $body.clef
+        })
+
+        if (!clef)
+            return $indicate(403, 'Accès refusé')
+
+        await $delete_one('clef', {
+            hachage_coordonnee : $body.coordonnee,
+            type               : 'inscription'
+        })
+
+        const compte = await $create_one('compte', {
+            hachage_mot_de_passe : $body.mot_de_passe
+        })
+
+        await $create_one('coordonnee', {
+            type               : $body.type_coordonnee,
+            coordonnee         : $body.coordonnee,
+            hachage_coordonnee : $body.coordonnee,
+            est_principale     : true,
+            id_compte          : compte.id
+        })
+
+        return $indicate(201, "Compte créé")
+    }
+
+    $connecter_compte = async ($body) =>
+    {
+
     }
 ]

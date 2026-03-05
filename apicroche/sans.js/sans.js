@@ -2,9 +2,10 @@ import http from "http"
 import path from "path"
 import fs   from "fs"
 
-import {generer_adn}    from "./analyseur_adn.js"
-import {charger_modeles} from "./analyseur_sans.js"
-import {construire_base} from "./batisseur.js"
+import {generer_adn}      from "./analyseur_adn.js"
+import {charger_modeles}  from "./analyseur_sans.js"
+import {construire_base}  from "./scripts/batisseur.js"
+import {construire_routes} from "./scripts/routeur.js"
 
 console.log(`\
 ╔══════╗
@@ -86,6 +87,8 @@ afficher_schemas(schemas)
 
 await construire_base(schemas)
 
+const routes = construire_routes(schemas)
+
 const types_mime = {
     ".json":  "application/json",
     ".txt":   "text/plain",
@@ -138,6 +141,19 @@ const repondre_json = (rep, statut, corps) =>
 
 const serveur = http.createServer(async (req, rep) =>
     {
+        const url     = req.url.split('?')[0]
+        const methode = req.method.toUpperCase()
+
+        // Routes des modèles
+        for (const route of routes)
+        {
+            if (route.methode === methode && route.chemin === url)
+            {
+                await route.handler(req, rep)
+                return
+            }
+        }
+
         if (req.url.startsWith("/depot/"))
         {
             const nom = path.basename(req.url)
@@ -161,6 +177,15 @@ const serveur = http.createServer(async (req, rep) =>
             {
                 repondre_json(rep, 404, {erreur: "Fichier introuvable"})
             }
+            return
+        }
+
+        const mode_dev = (process.env.mode || 'prod') === 'dev'
+        if (url === '/' && mode_dev)
+        {
+            const html = fs.readFileSync(new URL('./scripts/index.html', import.meta.url), 'utf-8')
+            rep.writeHead(200, {'Content-Type': 'text/html; charset=utf-8'})
+            rep.end(html)
             return
         }
 

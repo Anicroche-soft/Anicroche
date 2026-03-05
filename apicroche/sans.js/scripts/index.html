@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>sans.js</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: monospace;
+            background: #0f0f0f;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        h1 {
+            font-size: 1.1rem;
+            color: #888;
+            margin-bottom: 2rem;
+            letter-spacing: 0.05em;
+        }
+
+        .champ {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            margin-bottom: 1.2rem;
+        }
+
+        label {
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .ligne {
+            display: flex;
+            gap: 0.6rem;
+        }
+
+        select, input, textarea {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            color: #e0e0e0;
+            font-family: monospace;
+            font-size: 0.9rem;
+            padding: 0.5rem 0.7rem;
+            border-radius: 4px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        select:focus, input:focus, textarea:focus {
+            border-color: #555;
+        }
+
+        select { cursor: pointer; }
+
+        input[type="text"] { flex: 1; }
+
+        textarea {
+            width: 100%;
+            resize: vertical;
+            min-height: 8rem;
+            line-height: 1.5;
+        }
+
+        button {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            color: #e0e0e0;
+            font-family: monospace;
+            font-size: 0.9rem;
+            padding: 0.5rem 1.2rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        button:hover { background: #333; }
+        button:active { background: #222; }
+
+        #reponse {
+            margin-top: 2rem;
+            display: none;
+        }
+
+        #reponse .statut {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
+        #reponse .statut span {
+            font-weight: bold;
+        }
+
+        #reponse .statut span.ok  { color: #4caf50; }
+        #reponse .statut span.err { color: #f44336; }
+
+        #corps-reponse {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 4px;
+            padding: 1rem;
+            white-space: pre;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>sans.js — console</h1>
+
+    <div class="champ">
+        <label>Requête</label>
+        <div class="ligne">
+            <select id="methode">
+                <option>GET</option>
+                <option selected>POST</option>
+                <option>PATCH</option>
+                <option>DELETE</option>
+            </select>
+            <input id="chemin" type="text" placeholder="/route" value="/">
+        </div>
+    </div>
+
+    <div class="champ">
+        <label>Corps (JSON)</label>
+        <textarea id="corps" placeholder="{}" spellcheck="false"></textarea>
+    </div>
+
+    <button id="btn">Envoyer</button>
+
+    <div id="reponse">
+        <p class="statut">Réponse — <span id="statut-code"></span></p>
+        <pre id="corps-reponse"></pre>
+    </div>
+
+    <script>
+        document.getElementById('btn').addEventListener('click', async () => {
+            const methode = document.getElementById('methode').value
+            const chemin  = document.getElementById('chemin').value.trim() || '/'
+            const corps   = document.getElementById('corps').value.trim()
+
+            const options = { method: methode, headers: {} }
+            if (corps && methode !== 'GET') {
+                options.headers['Content-Type'] = 'application/json'
+                options.body = corps
+            }
+
+            const zone_reponse = document.getElementById('reponse')
+            const statut_code  = document.getElementById('statut-code')
+            const corps_rep    = document.getElementById('corps-reponse')
+
+            try {
+                const rep  = await fetch(chemin, options)
+                const texte = await rep.text()
+
+                let affichage
+                try { affichage = JSON.stringify(JSON.parse(texte), null, 2) }
+                catch { affichage = texte }
+
+                statut_code.textContent = rep.status + ' ' + rep.statusText
+                statut_code.className   = rep.ok ? 'ok' : 'err'
+                corps_rep.textContent   = affichage
+            } catch (err) {
+                statut_code.textContent = 'Erreur réseau'
+                statut_code.className   = 'err'
+                corps_rep.textContent   = err.message
+            }
+
+            zone_reponse.style.display = 'block'
+        })
+
+        document.getElementById('chemin').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('btn').click()
+        })
+    </script>
+
+</body>
+</html>

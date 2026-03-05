@@ -1,18 +1,8 @@
 @name [ coordonnees, coordonnee ]
 
-@primary [ id ]
-
-@unique [
-    [ hachage_coordonnee ]
-]
+@primary [ hachage_coordonnee ]
 
 @fields [
-    {
-        name : id
-        type : char
-        size : 15
-    }
-
     {
         name : type
         type : courriel/telephone

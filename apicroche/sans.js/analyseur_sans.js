@@ -115,6 +115,29 @@ const lire_dict = (str, pos) =>
     }
 }
 
+const lire_bloc_brut = (str, pos) =>
+{
+    if (pos >= str.length || str[pos] !== '[')
+        return { valeur: "invalide", pos }
+    pos++
+    let profondeur = 1
+    let contenu    = ''
+    while (pos < str.length)
+    {
+        if (str[pos] === '[')
+            profondeur++
+        else if (str[pos] === ']')
+        {
+            profondeur--
+            if (profondeur === 0)
+                return { valeur: contenu.trim(), pos: pos + 1 }
+        }
+        contenu += str[pos]
+        pos++
+    }
+    return { valeur: "invalide", pos }
+}
+
 const analyser_sans = (str) =>
 {
     const annotations = {}
@@ -132,7 +155,9 @@ const analyser_sans = (str) =>
             return "invalide"
         pos = res_nom.pos
         pos = passer_blancs(str, pos)
-        const res_val = lire_valeur(str, pos)
+        const res_val = res_nom.valeur === 'script'
+            ? lire_bloc_brut(str, pos)
+            : lire_valeur(str, pos)
         if (res_val.valeur === "invalide")
             return "invalide"
         annotations[res_nom.valeur] = res_val.valeur
@@ -257,6 +282,7 @@ const transformer_champ = (champ_brut, champs_dans_unique) =>
         min      : type_res.min,
         max      : type_res.max,
         nullable,
+        default  : champ_brut.default ?? null,
         treatment: type_res.treatment
     }
     if (type_res.values)
@@ -275,8 +301,10 @@ const transformer_modele = (annotations, nom_fichier) =>
 
     const primary            = Array.isArray(annotations.primary) ? annotations.primary : []
     const unique             = (Array.isArray(annotations.unique) ? annotations.unique : []).filter(Array.isArray)
-    const champs_dans_unique = unique.flat()
+    const champs_dans_unique = [...primary, ...unique.flat()]
     const champs_bruts       = Array.isArray(annotations.fields) ? annotations.fields : []
+    const routes             = Array.isArray(annotations.routes) ? annotations.routes : []
+    const script             = typeof annotations.script === 'string' ? annotations.script : null
 
     const champs    = []
     const relations = []
@@ -317,6 +345,8 @@ const transformer_modele = (annotations, nom_fichier) =>
         primary,
         unique,
         fields    : champs,
+        routes,
+        script,
         _relations: relations
     }
 }

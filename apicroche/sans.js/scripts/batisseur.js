@@ -23,6 +23,23 @@ const type_sql = (champ) =>
 const normaliser_type = (str) =>
     str.toLowerCase().replace(/^(tiny|small|medium|big)?int\(\d+\)$/, (_, prefix) => `${prefix ?? ''}int`)
 
+const default_sql = (champ) =>
+{
+    if (!champ.default) return ''
+    if (champ.default === 'now')
+        return champ.type === 'date' ? 'DEFAULT (CURRENT_DATE)' : 'DEFAULT CURRENT_TIMESTAMP'
+    return `DEFAULT '${champ.default}'`
+}
+
+// Valeur telle que MySQL la stocke dans INFORMATION_SCHEMA.COLUMN_DEFAULT
+const normaliser_default = (champ) =>
+{
+    if (!champ.default) return null
+    if (champ.default === 'now')
+        return champ.type === 'date' ? 'current_date()' : 'CURRENT_TIMESTAMP'
+    return String(champ.default)
+}
+
 // ─── Connexion ────────────────────────────────────────────────────────────────
 
 const creer_connexion = async () =>
@@ -56,7 +73,7 @@ const creer_connexion = async () =>
 const creer_table = async (connexion, table) =>
 {
     const colonnes = table.fields.map(champ =>
-        `\`${champ.name}\` ${type_sql(champ)} ${champ.nullable ? 'NULL' : 'NOT NULL'}`
+        `\`${champ.name}\` ${type_sql(champ)} ${champ.nullable ? 'NULL' : 'NOT NULL'} ${default_sql(champ)}`.trimEnd()
     )
 
     const contraintes = []
@@ -189,7 +206,7 @@ const synchro_contraintes = async (connexion, table) =>
 const mettre_a_jour_table = async (connexion, table, mode_dev) =>
 {
     const [rows] = await connexion.query(
-        `SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE
+        `SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT
          FROM INFORMATION_SCHEMA.COLUMNS
          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
         [table.name]
@@ -208,7 +225,7 @@ const mettre_a_jour_table = async (connexion, table, mode_dev) =>
             try
             {
                 await connexion.query(
-                    `ALTER TABLE \`${table.name}\` ADD COLUMN \`${champ.name}\` ${type_cible} ${nullable_sql}`
+                    `ALTER TABLE \`${table.name}\` ADD COLUMN \`${champ.name}\` ${type_cible} ${nullable_sql} ${default_sql(champ)}`.trimEnd()
                 )
                 console.log(`  ALTER TABLE \`${table.name}\` ADD COLUMN \`${champ.name}\``)
             }
@@ -221,12 +238,14 @@ const mettre_a_jour_table = async (connexion, table, mode_dev) =>
         {
             const type_actuel     = normaliser_type(existante.COLUMN_TYPE)
             const nullable_actuel = existante.IS_NULLABLE === 'YES'
-            if (type_actuel !== normaliser_type(type_cible) || nullable_actuel !== champ.nullable)
+            const default_actuel  = existante.COLUMN_DEFAULT ?? null
+            const default_cible   = normaliser_default(champ)
+            if (type_actuel !== normaliser_type(type_cible) || nullable_actuel !== champ.nullable || default_actuel !== default_cible)
             {
                 try
                 {
                     await connexion.query(
-                        `ALTER TABLE \`${table.name}\` MODIFY COLUMN \`${champ.name}\` ${type_cible} ${nullable_sql}`
+                        `ALTER TABLE \`${table.name}\` MODIFY COLUMN \`${champ.name}\` ${type_cible} ${nullable_sql} ${default_sql(champ)}`.trimEnd()
                     )
                     console.log(`  ALTER TABLE \`${table.name}\` MODIFY COLUMN \`${champ.name}\``)
                 }
