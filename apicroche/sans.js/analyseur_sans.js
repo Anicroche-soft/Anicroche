@@ -57,6 +57,61 @@ const lire_scalaire = (str, pos) =>
     return { valeur, pos }
 }
 
+// ─── Analyse d'un jeu de caractères style [A-Z0-9] ───────────────────────────
+
+const analyser_chars = (str) =>
+{
+    if (!str) return null
+    let resultat = ''
+    let i = 0
+    while (i < str.length)
+    {
+        if (i + 2 < str.length && str[i + 1] === '-')
+        {
+            const debut = str.charCodeAt(i)
+            const fin   = str.charCodeAt(i + 2)
+            for (let c = debut; c <= fin; c++)
+                resultat += String.fromCharCode(c)
+            i += 3
+        }
+        else
+        {
+            resultat += str[i]
+            i++
+        }
+    }
+    return resultat || null
+}
+
+const lire_regex = (str, pos) =>
+{
+    pos++ // passer le '/' ouvrant
+    let source = ''
+    while (pos < str.length && str[pos] !== '/')
+    {
+        if (str[pos] === '\\' && pos + 1 < str.length)
+        {
+            source += str[pos] + str[pos + 1]
+            pos += 2
+        }
+        else
+        {
+            source += str[pos]
+            pos++
+        }
+    }
+    if (pos >= str.length)
+        return { valeur: "invalide", pos }
+    pos++ // passer le '/' fermant
+    let flags = ''
+    while (pos < str.length && /^[gimsuy]$/.test(str[pos]))
+    {
+        flags += str[pos]
+        pos++
+    }
+    return { valeur: { __regex__: true, source, flags }, pos }
+}
+
 const lire_valeur = (str, pos) =>
 {
     pos = passer_blancs(str, pos)
@@ -66,6 +121,8 @@ const lire_valeur = (str, pos) =>
         return lire_liste(str, pos)
     if (str[pos] == '{')
         return lire_dict(str, pos)
+    if (str[pos] == '/')
+        return lire_regex(str, pos)
     return lire_scalaire(str, pos)
 }
 
@@ -276,6 +333,13 @@ const transformer_champ = (champ_brut, champs_dans_unique) =>
     const count    = analyser_count(champ_brut.count ?? null)
     const nullable = count ? count.min === 0 : false
 
+    const regle_brute = champ_brut.rule ?? null
+    const rule  = (regle_brute && regle_brute.__regex__) ? regle_brute : null
+
+    const chars_bruts = champ_brut.chars ?? null
+    const chars_str   = Array.isArray(chars_bruts) ? chars_bruts[0] : (chars_bruts ?? null)
+    const chars       = analyser_chars(chars_str)
+
     const champ = {
         name     : champ_brut.name,
         type     : type_res.type,
@@ -283,7 +347,9 @@ const transformer_champ = (champ_brut, champs_dans_unique) =>
         max      : type_res.max,
         nullable,
         default  : champ_brut.default ?? null,
-        treatment: type_res.treatment
+        chars,
+        treatment: type_res.treatment,
+        rule
     }
     if (type_res.values)
         champ.values = type_res.values

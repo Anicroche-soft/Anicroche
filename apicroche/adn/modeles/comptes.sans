@@ -4,9 +4,11 @@
 
 @fields [
     {
-        name : id
-        type : char
-        size : 12
+        name    : id
+        type    : char
+        size    : 12
+        chars   : [A-Z0-9]
+        default : auto
     }
 
     {
@@ -14,6 +16,7 @@
         type  : hash
         size  : 1-256
         count : 0-1
+        rule  : /^.{12,128}$/
     }
 
     {
