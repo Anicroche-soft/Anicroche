@@ -1,4 +1,5 @@
 import { creer_fonctions_magasin } from './magasin.js'
+import { creer_fonctions_mailer }  from './mailer.js'
 
 // ─── $indicate ────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,8 @@ const VARIABLES_HANDLER = ['$body']
 export const construire_routes = (schemas) =>
 {
     const fonctions_magasin = creer_fonctions_magasin(schemas)
+    const fonctions_mailer  = creer_fonctions_mailer()
+    const fonctions_base    = { ...fonctions_magasin, ...fonctions_mailer }
     const routes            = []
     let premiere_route      = true
 
@@ -102,7 +105,7 @@ export const construire_routes = (schemas) =>
 
                 // Compiler le script à chaque requête pour lier $indicate à cette réponse
                 const fonctions = compiler_script(table.script, {
-                    ...fonctions_magasin,
+                    ...fonctions_base,
                     $indicate
                 })
 
