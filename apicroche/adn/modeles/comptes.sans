@@ -10,9 +10,10 @@
     }
 
     {
-        name : hachage_mot_de_passe
-        type : hash
-        size : 1-256
+        name  : hachage_mot_de_passe
+        type  : hash
+        size  : 1-256
+        count : 0-1
     }
 
     {

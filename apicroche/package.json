@@ -4,10 +4,12 @@
     "main": "sans.js/sans.js",
     "type": "module",
     "scripts": {
-        "start": "node --watch sans.js/sans.js"
+        "start": "node --watch sans.js/sans.js",
+        "dev": "nodemon --watch adn --watch sans.js --ext js,sans sans.js/sans.js"
     },
     "dependencies": {
         "argon2": "^0.43.0",
-        "mysql2": "^3.11.5"
+        "mysql2": "^3.11.5",
+        "nodemon": "^3.1.9"
     }
 }

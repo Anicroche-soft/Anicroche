@@ -49,13 +49,13 @@ const afficher_schemas = ({ tables, relations }) =>
         if (table.fields.length > 0)
         {
             console.log('  Champs :')
-            const largeur_nom  = Math.max(...table.fields.map(f => f.name.length))
+            const largeur_nom  = Math.max(...table.fields.map(f => f.nullable ? f.name.length + 2 : f.name.length))
             const largeur_type = Math.max(...table.fields.map(f => formater_type(f).length))
 
             for (const champ of table.fields)
             {
-                let ligne = `    ${pad(champ.name, largeur_nom)}  ${pad(formater_type(champ), largeur_type)}`
-                ligne    += `  ${champ.nullable ? 'NULL    ' : 'NOT NULL'}`
+                const nom_affiche = champ.nullable ? `(${champ.name})` : champ.name
+                let ligne = `    ${pad(nom_affiche, largeur_nom)}  ${pad(formater_type(champ), largeur_type)}`
                 if (champ.treatment)
                     ligne += `  → ${champ.treatment}`
                 if (champ.values)

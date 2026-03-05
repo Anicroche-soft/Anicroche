@@ -6,6 +6,7 @@ services:
             - ./anicroche/adn:/app/adn
 
     apicroche:
+        command: npm run dev
         volumes:
             - ./apicroche/sans.js:/app/sans.js
             - ./apicroche/adn:/app/adn
