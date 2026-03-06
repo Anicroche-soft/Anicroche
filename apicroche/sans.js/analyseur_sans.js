@@ -121,8 +121,6 @@ const lire_valeur = (str, pos) =>
         return lire_liste(str, pos)
     if (str[pos] == '{')
         return lire_dict(str, pos)
-    if (str[pos] == '/')
-        return lire_regex(str, pos)
     return lire_scalaire(str, pos)
 }
 
@@ -301,9 +299,9 @@ const resoudre_type_sql = (type_sans, taille, est_deterministe) =>
                     treatment: est_deterministe ? 'deterministic_hashing' : 'hashing'
                 }
             return {
-                type     : 'binary',
-                min      : 32,
-                max      : 32,
+                type     : 'char',
+                min      : 64,
+                max      : 64,
                 treatment: est_deterministe ? 'deterministic_hashing' : 'hashing'
             }
 
@@ -334,11 +332,18 @@ const transformer_champ = (champ_brut, champs_dans_unique) =>
     const nullable = count ? count.min === 0 : false
 
     const regle_brute = champ_brut.rule ?? null
-    const rule  = (regle_brute && regle_brute.__regex__) ? regle_brute : null
+    const rule = typeof regle_brute === 'string' ? regle_brute : null
+
+    const can_create  = typeof champ_brut.can_create  === 'string' ? champ_brut.can_create.trim()  : null
+    const prior_create = typeof champ_brut.prior_create === 'string' ? champ_brut.prior_create.trim() : null
+    const alt          = typeof champ_brut.alt          === 'string' ? champ_brut.alt.trim()          : null
 
     const chars_bruts = champ_brut.chars ?? null
     const chars_str   = Array.isArray(chars_bruts) ? chars_bruts[0] : (chars_bruts ?? null)
     const chars       = analyser_chars(chars_str)
+
+    const length_brut = champ_brut.length ?? null
+    const length      = length_brut !== null ? analyser_taille(String(length_brut)) : null
 
     const champ = {
         name     : champ_brut.name,
@@ -348,8 +353,12 @@ const transformer_champ = (champ_brut, champs_dans_unique) =>
         nullable,
         default  : champ_brut.default ?? null,
         chars,
+        length,
         treatment: type_res.treatment,
-        rule
+        rule,
+        can_create,
+        prior_create,
+        alt
     }
     if (type_res.values)
         champ.values = type_res.values
@@ -538,8 +547,9 @@ const lire_dossier = (dossier, tables) =>
 
 export const charger_modeles = (dossier) =>
 {
-    const tables = []
-    lire_dossier(dossier, tables)
+    const tables      = []
+    const noms_connus = new Set()
+    lire_dossier(dossier, tables, noms_connus)
     const relations = resoudre_relations(tables)
-    return { tables, relations }
+    return { tables, relations, noms_connus }
 }

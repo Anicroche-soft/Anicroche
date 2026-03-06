@@ -1,5 +1,6 @@
-import { creer_fonctions_magasin } from './magasin.js'
+import { creer_fonctions_magasin, preparer_donnees } from './magasin.js'
 import { creer_fonctions_mailer }  from './mailer.js'
+import { evaluer, ERREUR as ERREUR_AUGURE } from './augure.js'
 
 // ─── $indicate ────────────────────────────────────────────────────────────────
 
@@ -142,6 +143,107 @@ export const construire_routes = (schemas) =>
             }
             console.log(`  ${methode.padEnd(6)} ${chemin}  →  ${action.nom}`)
         }
+    }
+
+    for (const table of schemas.tables)
+    {
+        // ─── Routes POST automatiques (can_create) ────────────────────────────
+        const champs_can_create = table.fields.filter(f => f.can_create != null)
+        if (!champs_can_create.length) continue
+
+        const nom_entree = table.entry_name ?? table.name
+        const chemin     = `/${table.name}`
+        const methode    = 'POST'
+
+        const handler = async (req, rep) =>
+        {
+            const $body     = await lire_corps(req)
+            const $indicate = creer_indicate(rep)
+
+            // Construire le contexte augure depuis le corps de la requête
+            // (lire avec le nom alt si défini, stocker sous le nom interne)
+            const contexte = {}
+            for (const champ of table.fields)
+                contexte[`$${champ.name}`] = $body[champ.alt ?? champ.name] ?? ERREUR_AUGURE
+
+            // Vérifier toutes les conditions can_create
+            for (const champ of champs_can_create)
+            {
+                if (!evaluer(champ.can_create, contexte))
+                {
+                    $indicate(403, 'Accès refusé')
+                    return
+                }
+            }
+
+            // Filtrer le corps : seulement les champs autorisés
+            const donnees = {}
+            for (const champ of champs_can_create)
+            {
+                const valeur_body = $body[champ.alt ?? champ.name]
+                if (valeur_body !== undefined)
+                    donnees[champ.name] = valeur_body
+            }
+
+            // Pré-générer les valeurs auto pour les rendre disponibles dans prior_create
+            const $values = preparer_donnees(table, donnees)
+
+            // Exécuter les prior_create avant l'insertion (tous les champs, pas seulement can_create)
+            const champs_prior_create = table.fields.filter(f => f.prior_create != null)
+            if (champs_prior_create.length && table.script)
+            {
+                const fonctions = compiler_script(table.script, { ...fonctions_base, $indicate })
+                for (const champ of champs_prior_create)
+                {
+                    const action = analyser_action(champ.prior_create)
+                    if (!action) continue
+                    const fn = fonctions[action.nom]
+                    if (typeof fn !== 'function') continue
+                    const valeurs_args = action.args.map(arg =>
+                    {
+                        if (arg === '$body')   return $body
+                        if (arg === '$values') return $values
+                        return undefined
+                    })
+                    try
+                    {
+                        await fn(...valeurs_args)
+                    }
+                    catch (err)
+                    {
+                        console.log(`/!\ erreur prior_create ${champ.prior_create} : ${err.message}`)
+                        if (!rep.headersSent) $indicate(500, 'Erreur interne')
+                        return
+                    }
+                    if (rep.headersSent) return
+                }
+            }
+
+            try
+            {
+                await fonctions_magasin.$create_one(nom_entree, $values)
+                $indicate(201, 'Créé')
+            }
+            catch (err)
+            {
+                if (err.code === 'RULE_VIOLATION' || err.code === 'ENUM_VIOLATION')
+                {
+                    $indicate(422, err.message)
+                    return
+                }
+                console.log(`/!\ erreur POST /${nom_entree} : ${err.message}`)
+                if (!rep.headersSent)
+                    $indicate(500, 'Erreur interne')
+            }
+        }
+
+        routes.push({ methode, chemin, handler })
+        if (premiere_route)
+        {
+            console.log('\nRoutes :')
+            premiere_route = false
+        }
+        console.log(`  ${methode.padEnd(6)} ${chemin}  →  can_create [${champs_can_create.map(f => f.name).join(', ')}]`)
     }
 
     return routes

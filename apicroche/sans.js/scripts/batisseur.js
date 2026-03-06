@@ -23,11 +23,26 @@ const type_sql = (champ) =>
 const normaliser_type = (str) =>
     str.toLowerCase().replace(/^(tiny|small|medium|big)?int\(\d+\)$/, (_, prefix) => `${prefix ?? ''}int`)
 
+const UNITES_INTERVAL = { s: 'SECOND', m: 'MINUTE', h: 'HOUR', d: 'DAY' }
+
+const parser_default_now = (valeur) =>
+{
+    if (valeur === 'now') return { now: true, interval: null }
+    const match = /^now\s*\+\s*(\d+)([smhd])$/.exec(valeur)
+    if (match) return { now: true, interval: { valeur: parseInt(match[1]), unite: UNITES_INTERVAL[match[2]] } }
+    return null
+}
+
 const default_sql = (champ) =>
 {
     if (!champ.default) return ''
-    if (champ.default === 'now')
-        return champ.type === 'date' ? 'DEFAULT (CURRENT_DATE)' : 'DEFAULT CURRENT_TIMESTAMP'
+    const now = parser_default_now(champ.default)
+    if (now)
+    {
+        if (champ.type === 'date') return 'DEFAULT (CURRENT_DATE)'
+        if (!now.interval)        return 'DEFAULT CURRENT_TIMESTAMP'
+        return `DEFAULT (NOW() + INTERVAL ${now.interval.valeur} ${now.interval.unite})`
+    }
     return `DEFAULT '${champ.default}'`
 }
 
@@ -35,8 +50,13 @@ const default_sql = (champ) =>
 const normaliser_default = (champ) =>
 {
     if (!champ.default) return null
-    if (champ.default === 'now')
-        return champ.type === 'date' ? 'current_date()' : 'CURRENT_TIMESTAMP'
+    const now = parser_default_now(champ.default)
+    if (now)
+    {
+        if (champ.type === 'date') return 'current_date()'
+        if (!now.interval)        return 'CURRENT_TIMESTAMP'
+        return `(now() + interval ${now.interval.valeur} ${now.interval.unite.toLowerCase()})`
+    }
     return String(champ.default)
 }
 
@@ -362,7 +382,8 @@ export const construire_base = async (schemas) =>
     {
         const noms_schema = new Set([
             ...tables.map(t => t.name),
-            ...jonctions.map(r => r.table_jonction)
+            ...jonctions.map(r => r.table_jonction),
+            ...(schemas.noms_connus ?? [])
         ])
         for (const nom of tables_existantes)
         {

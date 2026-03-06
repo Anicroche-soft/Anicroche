@@ -99,6 +99,27 @@ const tokeniser = (str) =>
             continue
         }
 
+        // Regex : /pattern/flags — seulement après un opérateur ou en début d'expression
+        if (str[pos] === '/')
+        {
+            const dernier_token = tokens.at(-1)
+            if (!dernier_token || dernier_token.type === 'op')
+            {
+                pos++ // passe le / ouvrant
+                let source = ''
+                while (pos < str.length && str[pos] !== '/')
+                {
+                    if (str[pos] === '\\' && pos + 1 < str.length) { source += str[pos] + str[pos + 1]; pos += 2 }
+                    else { source += str[pos]; pos++ }
+                }
+                pos++ // passe le / fermant
+                let flags = ''
+                while (pos < str.length && /[gimsuy]/.test(str[pos])) { flags += str[pos]; pos++ }
+                tokens.push({ type: 'regex', source, flags })
+                continue
+            }
+        }
+
         // Nombres
         if (/[0-9]/.test(str[pos]) || ((str[pos] === '+' || str[pos] === '-') && /[0-9]/.test(str[pos + 1]) && (tokens.length === 0 || tokens.at(-1).type === 'op')))
         {
@@ -616,6 +637,9 @@ const parser_primaire = (etat) =>
         return noeud
     }
 
+    if (token.type === 'regex')
+        return { type: 'regex', source: token.source, flags: token.flags }
+
     return { type: 'erreur' }
 }
 
@@ -793,7 +817,21 @@ const evaluer_noeud = (noeud, donnees) =>
         if (noeud.op === '~=')
         {
             const gauche = evaluer_noeud(noeud.gauche, donnees)
-            const brut   = noeud.droite.type === 'valeur' ? noeud.droite.valeur : ERREUR
+
+            // Regex : $champ ~= /pattern/flags
+            if (noeud.droite.type === 'regex')
+            {
+                if (est_erreur(gauche)) return FAUX
+                try
+                {
+                    const regex = new RegExp(noeud.droite.source, noeud.droite.flags)
+                    return regex.test(String(gauche)) ? VRAI : FAUX
+                }
+                catch { return ERREUR }
+            }
+
+            // Pattern de capture : $champ ~= "<$var> ..."
+            const brut = noeud.droite.type === 'valeur' ? noeud.droite.valeur : ERREUR
             if (est_erreur(brut)) return ERREUR
             return op_correspondance(gauche, brut, donnees)
         }

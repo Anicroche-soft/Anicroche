@@ -2,6 +2,7 @@ import mysql  from 'mysql2/promise'
 import crypto from 'node:crypto'
 
 import { hacher_hmac, hacher_argon2, verifier_argon2, chiffrer_aes, dechiffrer_aes } from './crypto.js'
+import { evaluer, ERREUR as ERREUR_AUGURE } from './augure.js'
 
 
 // ─── Pool de connexions ───────────────────────────────────────────────────────
@@ -45,13 +46,12 @@ const generer_id = (taille = 12, alphabet = CHARS_ID) =>
     return Array.from(octets).map(b => alphabet[b % alphabet.length]).join('')
 }
 
-// Valider la valeur brute contre la rule (regex) du champ, avant tout traitement
-const valider_regle = (champ, valeur) =>
+// Valider la valeur brute contre la rule (expression augure) du champ
+// contexte : { '$nom_champ': valeur | ERREUR_AUGURE }
+const valider_regle = (champ, contexte) =>
 {
-    if (!champ?.rule || valeur === null || valeur === undefined)
-        return true
-    const regex = new RegExp(champ.rule.source, champ.rule.flags)
-    return regex.test(String(valeur))
+    if (!champ?.rule) return true
+    return evaluer(champ.rule, contexte)
 }
 
 // Appliquer le traitement crypto avant écriture en base
@@ -274,7 +274,7 @@ const inserer_batch = async (modele, tableau) =>
         if (champ.default !== 'auto') continue
 
         const alphabet = champ.chars ?? CHARS_ID
-        const taille   = champ.max ?? 12
+        const taille   = champ.length?.max ?? champ.length?.min ?? champ.max ?? 12
         const besoin   = insertions.filter(ins => ins[champ.name] === undefined)
         if (!besoin.length) continue
 
@@ -334,13 +334,37 @@ const inserer_batch = async (modele, tableau) =>
         }
     }
 
+    // 1b. Résoudre les defaults par référence ($autre_champ)
+    for (const champ of modele.fields)
+    {
+        if (typeof champ.default !== 'string' || !champ.default.startsWith('$')) continue
+        const nom_source = champ.default.slice(1)
+        for (const ins of insertions)
+        {
+            if (ins[champ.name] === undefined && ins[nom_source] !== undefined)
+                ins[champ.name] = ins[nom_source]
+        }
+    }
+
     // 2. Valider les règles
     for (let i = 0; i < insertions.length; i++)
     {
+        // Construire le contexte : tous les champs connus, absents → ERREUR_AUGURE (':x')
+        const contexte = {}
+        for (const champ of modele.fields)
+            contexte[`$${champ.name}`] = insertions[i][champ.name] ?? ERREUR_AUGURE
+
         for (const champ of modele.fields)
         {
-            if (insertions[i][champ.name] === undefined) continue
-            if (!valider_regle(champ, insertions[i][champ.name]))
+            const valeur = insertions[i][champ.name]
+
+            if (valeur !== undefined && champ.values && !champ.values.includes(String(valeur)))
+                throw Object.assign(
+                    new Error(`Valeur "${valeur}" non autorisée pour le champ "${champ.name}" (valeurs : ${champ.values.join(', ')})`),
+                    { code: 'ENUM_VIOLATION', champ: champ.name, index: i }
+                )
+
+            if (!valider_regle(champ, contexte))
                 throw Object.assign(
                     new Error(`Valeur invalide pour le champ "${champ.name}" (ligne ${i})`),
                     { code: 'RULE_VIOLATION', champ: champ.name, index: i }
@@ -390,6 +414,42 @@ const inserer_batch = async (modele, tableau) =>
         }
         return resultat
     })
+}
+
+// ─── Pré-génération des valeurs (hors vérif DB) pour prior_create ─────────────
+// Génère les valeurs auto des champs hors contrainte et résout les defaults par
+// référence, sans toucher la base. Permet d'exposer les valeurs générées
+// (ex. clef à 9 chiffres) dans les scripts prior_create via $enregistrement.
+
+export const preparer_donnees = (modele, donnees) =>
+{
+    const resultat = { ...donnees }
+
+    const dans_contrainte = (nom) =>
+        modele.primary.includes(nom) ||
+        modele.unique.some(groupe => groupe.includes(nom))
+
+    // Valeurs auto hors contrainte (pas de vérification d'unicité en base)
+    for (const champ of modele.fields)
+    {
+        if (champ.default !== 'auto')               continue
+        if (dans_contrainte(champ.name))            continue
+        if (resultat[champ.name] !== undefined)     continue
+        const alphabet = champ.chars ?? CHARS_ID
+        const taille   = champ.length?.max ?? champ.length?.min ?? champ.max ?? 12
+        resultat[champ.name] = generer_id(taille, alphabet)
+    }
+
+    // Defaults par référence ($autre_champ)
+    for (const champ of modele.fields)
+    {
+        if (typeof champ.default !== 'string' || !champ.default.startsWith('$')) continue
+        const nom_source = champ.default.slice(1)
+        if (resultat[champ.name] === undefined && resultat[nom_source] !== undefined)
+            resultat[champ.name] = resultat[nom_source]
+    }
+
+    return resultat
 }
 
 // ─── $create_one ─────────────────────────────────────────────────────────────

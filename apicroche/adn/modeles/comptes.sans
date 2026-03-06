@@ -16,7 +16,7 @@
         type  : hash
         size  : 1-256
         count : 0-1
-        rule  : /^.{12,128}$/
+        rule  : "$hachage_mot_de_passe ~= /^.{12,128}$/"
     }
 
     {

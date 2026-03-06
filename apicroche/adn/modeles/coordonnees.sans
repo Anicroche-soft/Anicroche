@@ -13,11 +13,14 @@
         name : coordonnee
         type : crypt
         size : 1-512
+        rule : "($type = courriel & $coordonnee ~= /^[^@\s]+@[^@\s]+\.[^@\s]+$/) | ($type = telephone & $coordonnee ~= /^\+?[\d\s\-(). ]{7,20}$/)"
     }
 
     {
-        name : hachage_coordonnee
-        type : hash
+        name    : hachage_coordonnee
+        type    : hash
+        default : $coordonnee
+        rule    : "$hachage_coordonnee = $coordonnee"
     }
 
     {

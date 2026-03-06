@@ -4,24 +4,60 @@
 
 @fields [
     {
+        alt  : coordonnee
         name : hachage_coordonnee
         type : hash
+
+        can_create  : "
+            $type -{ [inscription, connexion]
+          & $hachage_coordonnee ~= /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+        "
+        prior_create : $supprimer_clef($values)
     }
 
     {
         name : type
         type : inscription/connexion
         size : 1-32
+
+        can_create : "
+            $type -{ [inscription, connexion]
+        "
     }
 
     {
-        name : clef
-        type : hash
-        size : 1-256
+        name    : clef
+        type    : hash
+        size    : 1-256
+        chars   : [0-9]
+        length  : 9
+        default : auto
+
+        prior_create : $envoyer_clef($values)
     }
 
     {
-        name : date_inscription
-        type : date
+        name    : date_validite
+        type    : datetime
+        default : now+15m
+    }
+]
+
+@script [
+    $supprimer_clef = async ($values) =>
+    {
+        await $delete_all('clefs', {
+            hachage_coordonnee : $values.hachage_coordonnee,
+            type               : $values.type
+        })
+    }
+
+    $envoyer_clef = async ($values) =>
+    {
+        await $send_email({
+            to      : $values.hachage_coordonnee,
+            subject : 'Votre code de vérification',
+            content : `<p>Votre code : <strong>${$values.clef}</strong></p>`
+        })
     }
 ]
