@@ -114,6 +114,21 @@ const types_utf8 = [
     ".txt"
 ]
 
+const composants = {
+    "/depot": {
+        chemin: "depot",
+        recursif: true
+    },
+    "/systeme/images": {
+        chemin: "adn/images",
+        recursif: true
+    },
+    "/systeme/fontes": {
+        chemin: "adn/fontes",
+        recursif: true
+    }
+}
+
 const rechercher_fichier = (dossier, nom, recursif) =>
 {
     const fichiers = fs.readdirSync(dossier, {withFileTypes: true})
@@ -154,36 +169,42 @@ const serveur = http.createServer(async (req, rep) =>
             }
         }
 
-        if (req.url.startsWith("/depot/"))
+        for (const prefixe in composants)
         {
-            const nom = path.basename(req.url)
-            const chemin_reel = rechercher_fichier("depot", nom, true)
+            if (req.url.startsWith(`${prefixe}/`))
+            {
+                const infos = composants[prefixe]
+                const chemin = path.join("./", `${infos.chemin}${req.url.slice(prefixe.length)}`)
+                const dossier = path.dirname(chemin)
+                const fichier = path.basename(chemin)
+                const chemin_reel = rechercher_fichier(dossier, fichier, infos.recursif)
 
-            if (chemin_reel)
-            {
-                const ext = path.extname(nom).toLowerCase()
-                let contenu
-                if (types_utf8.includes(ext))
-                    contenu = fs.readFileSync(chemin_reel, "utf-8")
+                if (chemin_reel)
+                {
+                    const ext = path.extname(fichier).toLowerCase()
+                    let contenu
+                    if (types_utf8.includes(ext))
+                        contenu = fs.readFileSync(chemin_reel, "utf-8")
+                    else
+                        contenu = fs.readFileSync(chemin_reel)
+                    let type = types_mime[ext] || "application/octet-stream"
+                    if (types_utf8.includes(ext))
+                        type += "; charset=utf-8"
+                    rep.writeHead(200, {"Content-Type": type})
+                    rep.end(contenu)
+                }
                 else
-                    contenu = fs.readFileSync(chemin_reel)
-                let type = types_mime[ext] || "application/octet-stream"
-                if (types_utf8.includes(ext))
-                    type += "; charset=utf-8"
-                rep.writeHead(200, {"Content-Type": type})
-                rep.end(contenu)
+                {
+                    repondre_json(rep, 404, {erreur: "Fichier introuvable"})
+                }
+                return
             }
-            else
-            {
-                repondre_json(rep, 404, {erreur: "Fichier introuvable"})
-            }
-            return
         }
 
         const mode_dev = (process.env.mode || 'prod') === 'dev'
         if (url === '/' && mode_dev)
         {
-            const html = fs.readFileSync(new URL('./scripts/index.html', import.meta.url), 'utf-8')
+            const html = fs.readFileSync(new URL('./index.html', import.meta.url), 'utf-8')
             rep.writeHead(200, {'Content-Type': 'text/html; charset=utf-8'})
             rep.end(html)
             return
