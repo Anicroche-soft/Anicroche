@@ -55,10 +55,12 @@
 
     $envoyer_clef = async ($values) =>
     {
+        const clef_affichee = String($values.clef).replace(/(\d{3})(?=\d)/g, '$1 ')
+
         await $send_email({
             to      : $values.hachage_coordonnee,
             subject : 'Votre code de vérification',
-            content : `<p>Votre code : <strong>${$values.clef}</strong></p>`
+            content : `<p>Votre code : <strong>${clef_affichee}</strong></p>`
         })
     }
 ]
