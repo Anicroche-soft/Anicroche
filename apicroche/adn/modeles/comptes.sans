@@ -75,6 +75,12 @@
         )
             return $indicate(400, "Corps incomplet")
 
+        const coordonnee_existante = await $search_one('coordonnee',
+            `
+            $hachage_coordonnee = $body.coordonnee
+            `
+        )
+
         const clef = await $search_one('clef',
             `
             $hachage_coordonnee = $body.coordonnee
@@ -84,7 +90,7 @@
             `
         )
 
-        if (!clef)
+        if (!clef || coordonnee_existante)
             return $indicate(403, 'Accès refusé')
 
         await $delete_one('clef',

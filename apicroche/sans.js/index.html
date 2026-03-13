@@ -102,7 +102,6 @@
             z-index: 1;
             width: auto;
             font-size: 0.75rem;
-            padding: 0.35rem 0.6rem;
             border-radius: 0.25rem;
         }
 
@@ -136,10 +135,11 @@
             font-family: monospace;
             font-size: 1rem;
             line-height: 1;
+            font-weight: 600;
             border-radius: 0.5rem;
             cursor: pointer;
             transition: filter 0.15s;
-            padding: 0.5rem 1.5rem;
+            padding: 0.5em;
             width: min-content;
         }
 
@@ -153,7 +153,6 @@
         }
 
         #reponse .statut {
-            font-size: 0.8rem;
             color: var(--c-inverse);
         }
 
@@ -273,7 +272,7 @@
                     clearTimeout(timer)
                     timer = setTimeout(() => {
                         btn.classList.remove('est-copie')
-                    }, 1200)
+                    }, 1000)
                 } catch (_) {
                     btn.classList.remove('est-copie')
                 }
