@@ -67,6 +67,15 @@ const analyser_action = (action) =>
     return { nom, args }
 }
 
+const citer_condition = (valeur) =>
+{
+    if (valeur === undefined)
+        return 'null'
+
+    const json = JSON.stringify(valeur)
+    return json === undefined ? 'null' : json
+}
+
 // ─── Variables injectées dans les handlers ────────────────────────────────────
 // $body → corps JSON de la requête (sera fourni au moment de l'appel)
 
@@ -78,7 +87,6 @@ export const construire_routes = (schemas) =>
 {
     const fonctions_magasin = creer_fonctions_magasin(schemas)
     const fonctions_mailer  = creer_fonctions_mailer()
-    const fonctions_base    = { ...fonctions_magasin, ...fonctions_mailer }
     const routes            = []
     let premiere_route      = true
 
@@ -103,11 +111,27 @@ export const construire_routes = (schemas) =>
             {
                 const $body     = await lire_corps(req)
                 const $indicate = creer_indicate(rep)
+                const $q        = citer_condition
+
+                const contexte_condition = { $body }
+                const fonctions_magasin_requete = {
+                    ...fonctions_magasin,
+                    $search_one: (nom_modele, condition, contexte = {}) =>
+                        fonctions_magasin.$search_one(nom_modele, condition, { ...contexte_condition, ...contexte }),
+                    $search_all: (nom_modele, condition, contexte = {}) =>
+                        fonctions_magasin.$search_all(nom_modele, condition, { ...contexte_condition, ...contexte }),
+                    $delete_one: (nom_modele, condition, contexte = {}) =>
+                        fonctions_magasin.$delete_one(nom_modele, condition, { ...contexte_condition, ...contexte }),
+                    $delete_all: (nom_modele, condition, contexte = {}) =>
+                        fonctions_magasin.$delete_all(nom_modele, condition, { ...contexte_condition, ...contexte }),
+                }
 
                 // Compiler le script à chaque requête pour lier $indicate à cette réponse
                 const fonctions = compiler_script(table.script, {
-                    ...fonctions_base,
-                    $indicate
+                    ...fonctions_magasin_requete,
+                    ...fonctions_mailer,
+                    $indicate,
+                    $q
                 })
 
                 const fn = fonctions[action.nom]
@@ -192,7 +216,13 @@ export const construire_routes = (schemas) =>
             const champs_prior_create = table.fields.filter(f => f.prior_create != null)
             if (champs_prior_create.length && table.script)
             {
-                const fonctions = compiler_script(table.script, { ...fonctions_base, $indicate })
+                const $q = citer_condition
+                const fonctions = compiler_script(table.script, {
+                    ...fonctions_magasin,
+                    ...fonctions_mailer,
+                    $indicate,
+                    $q
+                })
                 for (const champ of champs_prior_create)
                 {
                     const action = analyser_action(champ.prior_create)

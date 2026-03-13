@@ -46,10 +46,11 @@
 @script [
     $supprimer_clef = async ($values) =>
     {
-        await $delete_all('clefs', {
-            hachage_coordonnee : $values.hachage_coordonnee,
-            type               : $values.type
-        })
+        await $delete_all(
+            'clefs',
+            '$hachage_coordonnee = $values.hachage_coordonnee & $type = $values.type',
+            { $values }
+        )
     }
 
     $envoyer_clef = async ($values) =>

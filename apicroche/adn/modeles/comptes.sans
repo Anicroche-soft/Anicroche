@@ -75,19 +75,24 @@
         )
             return $indicate(400, "Corps incomplet")
 
-        const clef = await $search_one('clef', {
-            hachage_coordonnee : $body.coordonnee,
-            type               : 'inscription',
-            clef               : $body.clef
-        })
+        const clef = await $search_one('clef',
+            `
+            $hachage_coordonnee = $body.coordonnee
+          & $type               = inscription
+          & $clef               = $body.clef
+          & $date_validite      > $now
+            `
+        )
 
         if (!clef)
             return $indicate(403, 'Accès refusé')
 
-        await $delete_one('clef', {
-            hachage_coordonnee : $body.coordonnee,
-            type               : 'inscription'
-        })
+        await $delete_one('clef',
+            `
+            $hachage_coordonnee = $body.coordonnee
+          & $type               = inscription
+            `
+        )
 
         const compte = await $create_one('compte', {
             hachage_mot_de_passe : $body.mot_de_passe
@@ -106,6 +111,6 @@
 
     $connecter_compte = async ($body) =>
     {
-
+        
     }
 ]

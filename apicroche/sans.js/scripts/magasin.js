@@ -124,6 +124,179 @@ const verifier_post = async (modele, ligne, post) =>
     return true
 }
 
+const construire_contexte_condition = (modele, ligne, now = new Date(), contexte_externe = {}) =>
+{
+    const contexte = { $now: now, ...contexte_externe }
+
+    for (const champ of modele.fields)
+    {
+        const presente = Object.prototype.hasOwnProperty.call(ligne, champ.name)
+        contexte[`$${champ.name}`] = presente ? ligne[champ.name] : ERREUR_AUGURE
+    }
+
+    return contexte
+}
+
+const respecter_condition = (modele, ligne, condition, now = new Date(), contexte_externe = {}, criteres = {}) =>
+{
+    if (!condition) return true
+    const contexte = construire_contexte_condition(modele, ligne, now, contexte_externe)
+
+    // Quand une égalité a déjà été résolue via les critères (SQL/post-vérification),
+    // on réinjecte la valeur brute attendue pour que l'expression Augure ne compare
+    // pas une valeur stockée (hash/chiffrement) à la valeur brute de la requête.
+    for (const [nom, valeur] of Object.entries(criteres))
+        contexte[`$${nom}`] = valeur
+
+    return evaluer(condition, contexte)
+}
+
+const normaliser_condition = (condition) =>
+{
+    if (condition === null || condition === undefined)
+        throw new Error('Condition requise : utilisez une expression Augure sous forme de chaîne')
+
+    if (typeof condition !== 'string' || !condition.trim())
+        throw new Error('Condition invalide : utilisez une expression Augure sous forme de chaîne')
+
+    return condition.trim()
+}
+
+const normaliser_contexte_condition = (contexte) =>
+{
+    if (contexte === null || contexte === undefined)
+        return {}
+
+    if (typeof contexte !== 'object' || Array.isArray(contexte))
+        throw new Error('Contexte invalide : utilisez un objet de variables Augure')
+
+    return contexte
+}
+
+const parser_litteral_condition = (token) =>
+{
+    if (!token) return null
+
+    if (token.startsWith('"') && token.endsWith('"'))
+    {
+        try   { return JSON.parse(token) }
+        catch { return token.slice(1, -1) }
+    }
+
+    if ((token.startsWith("'") && token.endsWith("'")) || (token.startsWith('`') && token.endsWith('`')))
+        return token.slice(1, -1)
+
+    if (/^-?\d+(\.\d+)?$/.test(token))
+        return Number(token)
+
+    if (token === 'true')  return true
+    if (token === 'false') return false
+    if (token === 'null')  return null
+
+    return token
+}
+
+const parser_clef_bracket = (brut) =>
+{
+    if (/^\d+$/.test(brut))
+        return Number(brut)
+
+    const premier = brut[0]
+    const dernier = brut[brut.length - 1]
+    if ((premier === '"' && dernier === '"') || (premier === "'" && dernier === "'") || (premier === '`' && dernier === '`'))
+    {
+        if (premier === '"')
+        {
+            try   { return JSON.parse(brut) }
+            catch { return brut.slice(1, -1) }
+        }
+        return brut.slice(1, -1)
+    }
+
+    return brut
+}
+
+const lire_variable_contexte = (token, contexte) =>
+{
+    const racine = token.match(/^\$\w+/)?.[0]
+    if (!racine)
+        return { trouvee: false, valeur: undefined }
+
+    if (!Object.prototype.hasOwnProperty.call(contexte, racine))
+        return { trouvee: false, valeur: undefined }
+
+    let valeur = contexte[racine]
+    let pos = racine.length
+
+    while (pos < token.length)
+    {
+        if (token[pos] === '.')
+        {
+            pos++
+            const match = token.slice(pos).match(/^\w+/)
+            if (!match)
+                return { trouvee: false, valeur: undefined }
+            const clef = match[0]
+            if (valeur === null || valeur === undefined)
+                return { trouvee: false, valeur: undefined }
+            valeur = valeur[clef]
+            pos += clef.length
+            continue
+        }
+
+        if (token[pos] === '[')
+        {
+            const fin = token.indexOf(']', pos)
+            if (fin === -1)
+                return { trouvee: false, valeur: undefined }
+            const brut = token.slice(pos + 1, fin).trim()
+            const clef = parser_clef_bracket(brut)
+            if (valeur === null || valeur === undefined)
+                return { trouvee: false, valeur: undefined }
+            valeur = valeur[clef]
+            pos = fin + 1
+            continue
+        }
+
+        return { trouvee: false, valeur: undefined }
+    }
+
+    return { trouvee: true, valeur }
+}
+
+const extraire_criteres_depuis_condition = (modele, condition, contexte_condition = {}) =>
+{
+    const champs_modele = new Set(modele.fields.map(f => f.name))
+    const criteres = {}
+
+    const regex_egalite = /(?:^|[&(])\s*\$(\w+)\s*=\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[^\s&|()]+)/g
+    let match
+
+    while ((match = regex_egalite.exec(condition)) !== null)
+    {
+        const nom_champ = match[1]
+        const token     = match[2]
+
+        if (!champs_modele.has(nom_champ))
+            continue
+        if (!token)
+            continue
+
+        if (token.startsWith('$'))
+        {
+            const { trouvee, valeur } = lire_variable_contexte(token, contexte_condition)
+            if (!trouvee)
+                continue
+            criteres[nom_champ] = valeur
+            continue
+        }
+
+        criteres[nom_champ] = parser_litteral_condition(token)
+    }
+
+    return criteres
+}
+
 // Construire la clause WHERE
 const construire_where = (criteres_sql) =>
 {
@@ -145,33 +318,48 @@ const supprimer_par_pk = async (modele, ligne) =>
 
 // ─── $search_one ─────────────────────────────────────────────────────────────
 
-const creer_search_one = (schemas) => async (nom_modele, criteres = {}) =>
+const creer_search_one = (schemas) => async (nom_modele, condition, contexte_condition = {}) =>
 {
     const modele = trouver_modele_entree(schemas, nom_modele)
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
+    const condition_norm = normaliser_condition(condition)
+    const contexte_norm  = normaliser_contexte_condition(contexte_condition)
+
+    const criteres = extraire_criteres_depuis_condition(modele, condition_norm, contexte_norm)
 
     const { sql, post }       = separer_criteres(modele, criteres)
     const { clause, valeurs } = construire_where(sql)
     const besoin_post         = Object.keys(post).length > 0
 
-    // Sans post-vérification : LIMIT 1 possible
-    const requete  = `SELECT * FROM \`${modele.name}\` ${clause} ${besoin_post ? '' : 'LIMIT 1'}`.trim()
+    const requete  = `SELECT * FROM \`${modele.name}\` ${clause}`.trim()
     const [lignes] = await pool().query(requete, valeurs)
+
+    const now = new Date()
 
     for (const ligne of lignes)
     {
-        if (!besoin_post || await verifier_post(modele, ligne, post))
-            return decrypter_ligne(modele, ligne)
+        if (besoin_post && !await verifier_post(modele, ligne, post))
+            continue
+
+        const ligne_decryptee = decrypter_ligne(modele, ligne)
+        if (!respecter_condition(modele, ligne_decryptee, condition_norm, now, contexte_norm, criteres))
+            continue
+
+        return ligne_decryptee
     }
     return null
 }
 
 // ─── $search_all ─────────────────────────────────────────────────────────────
 
-const creer_search_all = (schemas) => async (nom_modele, criteres = {}) =>
+const creer_search_all = (schemas) => async (nom_modele, condition, contexte_condition = {}) =>
 {
     const modele = trouver_modele_table(schemas, nom_modele)
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
+    const condition_norm = normaliser_condition(condition)
+    const contexte_norm  = normaliser_contexte_condition(contexte_condition)
+
+    const criteres = extraire_criteres_depuis_condition(modele, condition_norm, contexte_norm)
 
     const { sql, post }       = separer_criteres(modele, criteres)
     const { clause, valeurs } = construire_where(sql)
@@ -182,77 +370,86 @@ const creer_search_all = (schemas) => async (nom_modele, criteres = {}) =>
         valeurs
     )
 
+    const now = new Date()
     const resultats = []
     for (const ligne of lignes)
     {
-        if (!besoin_post || await verifier_post(modele, ligne, post))
-            resultats.push(decrypter_ligne(modele, ligne))
+        if (besoin_post && !await verifier_post(modele, ligne, post))
+            continue
+
+        const ligne_decryptee = decrypter_ligne(modele, ligne)
+        if (!respecter_condition(modele, ligne_decryptee, condition_norm, now, contexte_norm, criteres))
+            continue
+
+        resultats.push(ligne_decryptee)
     }
     return resultats
 }
 
 // ─── $delete_one ─────────────────────────────────────────────────────────────
 
-const creer_delete_one = (schemas) => async (nom_modele, criteres = {}) =>
+const creer_delete_one = (schemas) => async (nom_modele, condition, contexte_condition = {}) =>
 {
     const modele = trouver_modele_entree(schemas, nom_modele)
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
+    const condition_norm = normaliser_condition(condition)
+    const contexte_norm  = normaliser_contexte_condition(contexte_condition)
+
+    const criteres = extraire_criteres_depuis_condition(modele, condition_norm, contexte_norm)
 
     const { sql, post }       = separer_criteres(modele, criteres)
     const { clause, valeurs } = construire_where(sql)
     const besoin_post         = Object.keys(post).length > 0
 
-    if (!besoin_post)
-    {
-        await pool().query(
-            `DELETE FROM \`${modele.name}\` ${clause} LIMIT 1`.trim(),
-            valeurs
-        )
-        return
-    }
-
     const [lignes] = await pool().query(
         `SELECT * FROM \`${modele.name}\` ${clause}`.trim(),
         valeurs
     )
+    const now = new Date()
     for (const ligne of lignes)
     {
-        if (await verifier_post(modele, ligne, post))
-        {
-            await supprimer_par_pk(modele, ligne)
-            return
-        }
+        if (besoin_post && !await verifier_post(modele, ligne, post))
+            continue
+
+        const ligne_decryptee = decrypter_ligne(modele, ligne)
+        if (!respecter_condition(modele, ligne_decryptee, condition_norm, now, contexte_norm, criteres))
+            continue
+
+        await supprimer_par_pk(modele, ligne)
+        return
     }
 }
 
 // ─── $delete_all ─────────────────────────────────────────────────────────────
 
-const creer_delete_all = (schemas) => async (nom_modele, criteres = {}) =>
+const creer_delete_all = (schemas) => async (nom_modele, condition, contexte_condition = {}) =>
 {
     const modele = trouver_modele_table(schemas, nom_modele)
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
+    const condition_norm = normaliser_condition(condition)
+    const contexte_norm  = normaliser_contexte_condition(contexte_condition)
+
+    const criteres = extraire_criteres_depuis_condition(modele, condition_norm, contexte_norm)
 
     const { sql, post }       = separer_criteres(modele, criteres)
     const { clause, valeurs } = construire_where(sql)
     const besoin_post         = Object.keys(post).length > 0
 
-    if (!besoin_post)
-    {
-        await pool().query(
-            `DELETE FROM \`${modele.name}\` ${clause}`.trim(),
-            valeurs
-        )
-        return
-    }
-
     const [lignes] = await pool().query(
         `SELECT * FROM \`${modele.name}\` ${clause}`.trim(),
         valeurs
     )
+    const now = new Date()
     for (const ligne of lignes)
     {
-        if (await verifier_post(modele, ligne, post))
-            await supprimer_par_pk(modele, ligne)
+        if (besoin_post && !await verifier_post(modele, ligne, post))
+            continue
+
+        const ligne_decryptee = decrypter_ligne(modele, ligne)
+        if (!respecter_condition(modele, ligne_decryptee, condition_norm, now, contexte_norm, criteres))
+            continue
+
+        await supprimer_par_pk(modele, ligne)
     }
 }
 

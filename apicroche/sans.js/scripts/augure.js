@@ -30,6 +30,38 @@ const coercer_nombre = (v) =>
     return ERREUR
 }
 
+const coercer_timestamp = (v) =>
+{
+    if (v instanceof Date)
+    {
+        const t = v.getTime()
+        return isNaN(t) ? ERREUR : t
+    }
+
+    if (est_texte(v))
+    {
+        const t = Date.parse(v)
+        return isNaN(t) ? ERREUR : t
+    }
+
+    return ERREUR
+}
+
+const coercer_comparable = (a, b) =>
+{
+    const na = coercer_nombre(a)
+    const nb = coercer_nombre(b)
+    if (!est_erreur(na) && !est_erreur(nb))
+        return { a: na, b: nb }
+
+    const ta = coercer_timestamp(a)
+    const tb = coercer_timestamp(b)
+    if (!est_erreur(ta) && !est_erreur(tb))
+        return { a: ta, b: tb }
+
+    return { a: ERREUR, b: ERREUR }
+}
+
 const coercer_booleen = (v) =>
 {
     if (est_booleen(v)) return v
@@ -335,30 +367,30 @@ const op_different = (a, b) =>
 
 const op_superieur = (a, b) =>
 {
-    const na = coercer_nombre(a), nb = coercer_nombre(b)
-    if (est_erreur(na) || est_erreur(nb)) return ERREUR
-    return na > nb ? VRAI : FAUX
+    const { a: ca, b: cb } = coercer_comparable(a, b)
+    if (est_erreur(ca) || est_erreur(cb)) return ERREUR
+    return ca > cb ? VRAI : FAUX
 }
 
 const op_superieur_egal = (a, b) =>
 {
-    const na = coercer_nombre(a), nb = coercer_nombre(b)
-    if (est_erreur(na) || est_erreur(nb)) return ERREUR
-    return na >= nb ? VRAI : FAUX
+    const { a: ca, b: cb } = coercer_comparable(a, b)
+    if (est_erreur(ca) || est_erreur(cb)) return ERREUR
+    return ca >= cb ? VRAI : FAUX
 }
 
 const op_inferieur = (a, b) =>
 {
-    const na = coercer_nombre(a), nb = coercer_nombre(b)
-    if (est_erreur(na) || est_erreur(nb)) return ERREUR
-    return na < nb ? VRAI : FAUX
+    const { a: ca, b: cb } = coercer_comparable(a, b)
+    if (est_erreur(ca) || est_erreur(cb)) return ERREUR
+    return ca < cb ? VRAI : FAUX
 }
 
 const op_inferieur_egal = (a, b) =>
 {
-    const na = coercer_nombre(a), nb = coercer_nombre(b)
-    if (est_erreur(na) || est_erreur(nb)) return ERREUR
-    return na <= nb ? VRAI : FAUX
+    const { a: ca, b: cb } = coercer_comparable(a, b)
+    if (est_erreur(ca) || est_erreur(cb)) return ERREUR
+    return ca <= cb ? VRAI : FAUX
 }
 
 const op_contenu_dans = (a, b) =>

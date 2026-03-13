@@ -91,6 +91,44 @@
             line-height: 1.5;
         }
 
+        .zone-copiable {
+            position: relative;
+        }
+
+        .btn-copie {
+            position: absolute;
+            top: 0.25rem;
+            right: 0.25rem;
+            z-index: 1;
+            width: auto;
+            font-size: 0.75rem;
+            padding: 0.35rem 0.6rem;
+            border-radius: 0.25rem;
+        }
+
+        .btn-copie .texte-copier {
+            visibility: visible;
+        }
+
+        .btn-copie .texte-copie {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.15s;
+            pointer-events: none;
+        }
+
+        .btn-copie.est-copie .texte-copier {
+            visibility: hidden;
+        }
+
+        .btn-copie.est-copie .texte-copie {
+            opacity: 1;
+        }
+
         button {
             background: var(--c-vif);
             border: none;
@@ -151,14 +189,26 @@
 
     <div class="champ">
         <label>Corps</label>
-        <textarea id="corps" placeholder="{}" spellcheck="false"></textarea>
+        <div class="zone-copiable">
+            <button id="btn-copie-corps" class="btn-copie" type="button">
+                <span class="texte-copier">Copier</span>
+                <span class="texte-copie">Copié</span>
+            </button>
+            <textarea id="corps" placeholder="{}" spellcheck="false"></textarea>
+        </div>
     </div>
 
     <button id="btn">Envoyer</button>
 
     <div id="reponse">
         <p class="statut">Réponse — <span id="statut-code"></span></p>
-        <pre id="corps-reponse"></pre>
+        <div class="zone-copiable">
+            <button id="btn-copie-reponse" class="btn-copie" type="button">
+                <span class="texte-copier">Copier</span>
+                <span class="texte-copie">Copié</span>
+            </button>
+            <pre id="corps-reponse"></pre>
+        </div>
     </div>
 
     <script>
@@ -192,6 +242,42 @@
 
             // 3. Évaluation comme littéral JS : gère les clefs non quotées, '', ``, etc.
             return (new Function('return (' + s + ')'))()
+        }
+
+        async function copierTexte(texte) {
+            if (!texte) return
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(texte)
+                return
+            }
+
+            const tmp = document.createElement('textarea')
+            tmp.value = texte
+            tmp.style.position = 'fixed'
+            tmp.style.opacity = '0'
+            document.body.appendChild(tmp)
+            tmp.focus()
+            tmp.select()
+            document.execCommand('copy')
+            document.body.removeChild(tmp)
+        }
+
+        function brancherBoutonCopie(idBouton, lireTexte) {
+            const btn = document.getElementById(idBouton)
+            let timer = null
+
+            btn.addEventListener('click', async () => {
+                try {
+                    await copierTexte(lireTexte())
+                    btn.classList.add('est-copie')
+                    clearTimeout(timer)
+                    timer = setTimeout(() => {
+                        btn.classList.remove('est-copie')
+                    }, 1200)
+                } catch (_) {
+                    btn.classList.remove('est-copie')
+                }
+            })
         }
 
         document.getElementById('btn').addEventListener('click', async () => {
@@ -242,6 +328,9 @@
         document.getElementById('chemin').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') document.getElementById('btn').click()
         })
+
+        brancherBoutonCopie('btn-copie-corps', () => document.getElementById('corps').value)
+        brancherBoutonCopie('btn-copie-reponse', () => document.getElementById('corps-reponse').textContent)
     </script>
 
 </body>
