@@ -43,10 +43,10 @@
         <span>
             "Créer"
 
-    boite-ancre [/autre, Autre]
-        icone-bonbon
+    boite-ancre [/gadgets, Gadgets]
+        icone-aimant
         <span>
-            "Autre"
+            "Gadgets"
 
     @if [$connecte]
         boite-ancre [/profil, Profil]

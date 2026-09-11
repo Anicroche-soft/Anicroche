@@ -4,6 +4,9 @@
 @else-if [$path ~= '/']
     -page-accueil
 
+@else-if [$path ~= '/gadgets']
+    -page-gadgets
+
 @else-if [$path ~= '/connexion']
     -page-connexion
 
