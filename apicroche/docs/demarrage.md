@@ -39,6 +39,8 @@ port   : 5030
 
 Les paramètres sensibles et le mode d'exécution sont fournis par des variables d'environnement (typiquement un fichier `.env` transmis par Docker).
 
+Au démarrage, sans.js lit aussi le fichier `.env` du dossier courant ou, à défaut, du dossier parent, ce qui permet de se passer de Docker. Les variables déjà définies dans l'environnement (comme `PORT` fourni par l'hébergeur) ne sont pas écrasées. Le format est `clef=valeur`, une variable par ligne ; les lignes commençant par `#` sont ignorées et les guillemets entourant une valeur sont retirés.
+
 ### Base de données
 
 | Variable | Défaut | Description |

@@ -50,6 +50,10 @@ make reset mode=dev # vider la base MySQL et redémarrer l'API
 
 En mode dev, les dossiers `adn/` et du moteur sont montés dans les conteneurs : les modifications sont prises en compte sans reconstruction.
 
+## Déploiement (hébergement sans Docker)
+
+En production, chaque partie tourne directement avec Node (`npm start` dans `anicroche/` et `apicroche/`). Le `.env` à la racine du dépôt est lu par les cadriciels eux-mêmes. Sur le serveur, `./deployer.sh` fait un `git pull`, réinstalle les dépendances si `package*.json` a changé, puis exécute `commande_redemarrage` (définie dans `.env`). Penser à changer la `VERSION` de `avec.js/scripts/service-worker.js` quand anicroche change.
+
 ## Conventions de code
 
 ### Langue

@@ -47,6 +47,8 @@ Toutes les clefs de `app.adn` sont envoyées au navigateur et deviennent des [va
 
 ## Variables d'environnement
 
+Les variables sont fournies par l'environnement (typiquement un fichier `.env` transmis par Docker). Au démarrage, avec.js lit aussi le fichier `.env` du dossier courant ou, à défaut, du dossier parent, sans écraser les variables déjà définies (comme `PORT` fourni par l'hébergeur). Le format est `clef=valeur`, une variable par ligne ; les lignes commençant par `#` sont ignorées et les guillemets entourant une valeur sont retirés.
+
 | Variable | Défaut | Description |
 |---|---|---|
 | `PORT` | `4030` | Port d'écoute HTTP (si `port` est absent de `app.adn`) |
