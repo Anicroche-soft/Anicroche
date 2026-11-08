@@ -186,14 +186,16 @@ export const demarrer_taches_periodiques = (schemas) =>
             if (execution_en_cours)
                 return
 
-            if (derniere_execution > 0 && (maintenant - derniere_execution) < interval_ms)
+            // La dernière exécution est datée de son début, avec une marge pour
+            // absorber le léger décalage des déclenchements cron.
+            if (derniere_execution > 0 && (maintenant - derniere_execution) < interval_ms - 5000)
                 return
 
             execution_en_cours = true
+            derniere_execution = maintenant
             try
             {
                 await executer_action_periodique(schemas, index.script ?? '', bloc)
-                derniere_execution = Date.now()
             }
             finally
             {

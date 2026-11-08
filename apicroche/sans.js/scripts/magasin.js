@@ -1,9 +1,9 @@
 import mysql  from 'mysql2/promise'
 import crypto from 'node:crypto'
 
-import { hacher_hmac, hacher_argon2, verifier_argon2, chiffrer_aes, dechiffrer_aes } from './crypto.js'
+import { hacher_hmac, hacher_argon2, chiffrer_aes, dechiffrer_aes } from './crypto.js'
 import { evaluer, ERREUR as ERREUR_AUGURE } from './augure.js'
-
+import { trouver_table, resoudre_relation as resoudre_projection_relation, preparer_lecture, traduire_now_sql } from './traducteur.js'
 
 // ─── Pool de connexions ───────────────────────────────────────────────────────
 
@@ -27,9 +27,6 @@ const pool = () =>
 }
 
 // ─── Utilitaires ─────────────────────────────────────────────────────────────
-
-const trouver_table = (schemas, nom_table) =>
-    schemas.tables.find(t => t.name === nom_table) ?? null
 
 const trouver_pk = (table) =>
 {
@@ -127,6 +124,12 @@ const generer_id = (taille = 12, alphabet = CHARS_ID) =>
 const valider_regle = (champ, contexte) =>
 {
     if (!champ?.rule) return true
+
+    // Un champ facultatif sans valeur n'a pas de règle à respecter
+    const valeur = contexte[`$${champ.name}`]
+    if (champ.nullable && (valeur === null || valeur === undefined || valeur === ERREUR_AUGURE))
+        return true
+
     return evaluer(champ.rule, contexte)
 }
 
@@ -149,66 +152,13 @@ const decrypter_ligne = (modele, ligne) =>
     const res = { ...ligne }
     for (const champ of modele.fields)
     {
-        if (champ.treatment === 'encryption' && res[champ.name] != null)
+        if (champ.treatment === 'encryption' && Buffer.isBuffer(res[champ.name]))
         {
             try   { res[champ.name] = dechiffrer_aes(res[champ.name]) }
             catch { res[champ.name] = null }
         }
     }
     return res
-}
-
-const construire_aliases_projection_inverse = (schemas, relation) =>
-{
-    const table_source = trouver_table(schemas, relation.table_source)
-    const table_cible  = trouver_table(schemas, relation.table_cible)
-
-    const nom_source_table = table_source?.name ?? relation.table_source
-    const nom_source_entree = table_source?.entry_name ?? table_source?.name ?? relation.table_source
-    const nom_cible_entree = table_cible?.entry_name ?? table_cible?.name ?? relation.table_cible
-    const nom_relation = relation.entry ?? nom_cible_entree
-
-    return new Set([
-        `is_${nom_relation}_of_${nom_source_table}`,
-        `is_${nom_relation}_of_${nom_source_entree}`,
-        `is_${nom_cible_entree}_of_${nom_source_table}`,
-        `is_${nom_cible_entree}_of_${nom_source_entree}`,
-    ])
-}
-
-const resoudre_projection_relation = (schemas, modele, token) =>
-{
-    for (const relation of schemas.relations ?? [])
-    {
-        if (relation.table_source === modele.name && relation.champ_source === token)
-            return { relation, sens: 'direct' }
-
-        if (relation.table_cible === modele.name)
-        {
-            const aliases = construire_aliases_projection_inverse(schemas, relation)
-            if (aliases.has(token))
-                return { relation, sens: 'inverse' }
-        }
-    }
-
-    return null
-}
-
-const lire_ligne_par_pk = async (modele, pk_values) =>
-{
-    if (!modele?.primary?.length)
-        return null
-
-    const clause = modele.primary.map(champ => `\`${champ}\` = ?`).join(' AND ')
-    const valeurs = modele.primary.map(champ => pk_values[champ])
-    const [lignes] = await pool().query(`SELECT * FROM \`${modele.name}\` WHERE ${clause}`, valeurs)
-    return lignes[0] ?? null
-}
-
-const lire_lignes_par_egalite = async (modele, champ, valeur) =>
-{
-    const [lignes] = await pool().query(`SELECT * FROM \`${modele.name}\` WHERE \`${champ}\` = ?`, [valeur])
-    return lignes
 }
 
 const lire_lignes_par_in = async (modele, champ, valeurs) =>
@@ -219,79 +169,6 @@ const lire_lignes_par_in = async (modele, champ, valeurs) =>
     const clauses = valeurs.map(() => '?').join(', ')
     const [lignes] = await pool().query(`SELECT * FROM \`${modele.name}\` WHERE \`${champ}\` IN (${clauses})`, valeurs)
     return lignes
-}
-
-const projeter_relation = async (schemas, modele, ligne, relation, sens) =>
-{
-    const table_source = trouver_table(schemas, relation.table_source)
-    const table_cible  = trouver_table(schemas, relation.table_cible)
-
-    if (!table_source || !table_cible)
-        return sens === 'inverse' && relation.max === 'N' && relation.min !== 'N' ? null : []
-
-    const pk_source = table_source.primary?.[0] ?? null
-    const pk_cible  = table_cible.primary?.[0] ?? null
-    if (!pk_source || !pk_cible)
-        return sens === 'inverse' && relation.max === 'N' && relation.min !== 'N' ? null : []
-
-    const valeur_pk_source = ligne[pk_source]
-    const valeur_pk_cible   = ligne[pk_cible]
-    const entree_source     = table_source.entry_name ?? table_source.name
-    const entree_cible      = table_cible.entry_name ?? table_cible.name
-    const modele_source     = relation.table_source
-    const modele_cible      = table_cible.entry_name ?? table_cible.name
-
-    if (relation.table_jonction)
-    {
-        const cle_source = `id_${entree_source}`
-        const cle_cible  = `id_${entree_cible}`
-
-        const cle_lire = sens === 'direct' ? cle_source : cle_cible
-        const cle_recherche = sens === 'direct' ? cle_cible : cle_source
-        const valeur_recherche = sens === 'direct' ? valeur_pk_source : valeur_pk_cible
-
-        if (valeur_recherche === undefined || valeur_recherche === null)
-            return []
-
-        const [jonctions] = await pool().query(
-            `SELECT \`${cle_recherche}\` FROM \`${relation.table_jonction}\` WHERE \`${cle_lire}\` = ?`,
-            [valeur_recherche]
-        )
-
-        const valeurs_ids = [...new Set(
-            jonctions
-                .map(l => l[cle_recherche])
-                .filter(v => v !== undefined && v !== null)
-        )]
-
-        const cible_modele = sens === 'direct' ? table_cible : table_source
-        if (!valeurs_ids.length)
-            return []
-
-        const rows = await lire_lignes_par_in(cible_modele, cible_modele.primary[0], valeurs_ids)
-        return rows.map(ligne_brute => decrypter_ligne(cible_modele, ligne_brute))
-    }
-
-    if (relation.cle_etrangere)
-    {
-        if (sens === 'direct')
-        {
-            if (valeur_pk_source === undefined || valeur_pk_source === null)
-                return []
-
-            const rows = await lire_lignes_par_egalite(table_cible, relation.cle_etrangere, valeur_pk_source)
-            return rows.map(ligne_brute => decrypter_ligne(table_cible, ligne_brute))
-        }
-
-        const valeur_fk = ligne[relation.cle_etrangere]
-        if (valeur_fk === undefined || valeur_fk === null)
-            return null
-
-        const ligne_source = await lire_ligne_par_pk(table_source, { [pk_source]: valeur_fk })
-        return ligne_source ? decrypter_ligne(table_source, ligne_source) : null
-    }
-
-    return sens === 'inverse' && relation.max === 'N' && relation.min !== 'N' ? null : []
 }
 
 const normaliser_projection_select = (select) =>
@@ -496,9 +373,7 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
 
         if (contexte_enforce !== null)
         {
-            const relation_meta = schemas.relations.find(r =>
-                r.table_source === modele.name && r.champ_source === token
-            ) ?? null
+            const relation_meta = relation
             const est_direct = spec.sens === 'direct'
 
             let can
@@ -690,6 +565,53 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
             continue
         }
 
+        if (relation.cle_locale)
+        {
+            // Relation 0-1 / 1-1 : la clef étrangère est portée par la table source
+            const cle_locale = relation.cle_locale
+            const pk_cible_nom = pk_cible?.name
+
+            const lire_lignes_liees = async (modele_lu, colonne, valeurs) =>
+            {
+                if (!valeurs.length)
+                    return []
+                if (spec.restrict_conditions?.length)
+                    return creer_search_all(schemas)(
+                        modele_lu.name,
+                        [`#${colonne} -{ $__ids__`, ...spec.restrict_conditions].join(' & '),
+                        { $__ids__: valeurs, $context: contexte_enforce.context, $request: contexte_enforce.request },
+                        { enforce_rules: true }
+                    )
+                return lire_lignes_par_in(modele_lu, colonne, valeurs)
+            }
+
+            if (sens === 'direct')
+            {
+                const valeurs_fk = [...new Set(lignes.map(ligne => ligne[cle_locale]).filter(v => v !== undefined && v !== null))]
+                const rows = await lire_lignes_liees(table_cible, pk_cible_nom, valeurs_fk)
+                const map_rows = new Map(rows.map(ligne_rel => [ligne_rel[pk_cible_nom], decrypter_ligne(table_cible, ligne_rel)]))
+
+                for (let i = 0; i < lignes.length; i++)
+                {
+                    const ligne_rel = map_rows.get(lignes[i][cle_locale]) ?? null
+                    resultats[i][token] = ligne_rel && spec.select ? (await projection_enfant([ligne_rel]))[0] ?? null : ligne_rel
+                }
+                continue
+            }
+
+            // Sens inverse : toutes les entrées source qui pointent vers chaque ligne
+            const ids_lignes = [...new Set(lignes.map(ligne => ligne[pk_cible_nom]).filter(v => v !== undefined && v !== null))]
+            const rows = await lire_lignes_liees(table_source, cle_locale, ids_lignes)
+            const index_rows = indexer_lignes_par_clef(rows, cle_locale)
+
+            for (let i = 0; i < lignes.length; i++)
+            {
+                const lignes_rel = (index_rows.get(lignes[i][pk_cible_nom]) ?? []).map(ligne_rel => decrypter_ligne(table_source, ligne_rel))
+                resultats[i][token] = spec.select ? await projection_enfant(lignes_rel) : lignes_rel
+            }
+            continue
+        }
+
         for (let i = 0; i < lignes.length; i++)
             resultats[i][token] = relation.max === 'N' ? [] : null
     }
@@ -701,139 +623,6 @@ const projeter_ligne_select = async (schemas, modele, ligne, select, contexte_en
 {
     const resultats = await projeter_lignes_select(schemas, modele, [ligne], select, contexte_enforce)
     return resultats[0] ?? null
-}
-
-// Séparer les critères en déterministes (SQL) et non-déterministes (vérification JS)
-const separer_criteres = (modele, criteres) =>
-{
-    const sql  = {}
-    const post = {}
-    for (const [nom, valeur] of Object.entries(criteres))
-    {
-        const champ = trouver_champ(modele, nom)
-        if (!champ) continue
-        switch (champ.treatment)
-        {
-            case 'deterministic_hashing': sql[nom]  = hacher_hmac(valeur); break
-            case 'hashing':               post[nom] = valeur;               break
-            case 'encryption':            post[nom] = valeur;               break
-            default:                      sql[nom]  = valeur
-        }
-    }
-    return { sql, post }
-}
-
-// Vérifier les critères non-SQL sur une ligne déjà lue
-const verifier_post = async (modele, ligne, post) =>
-{
-    for (const [nom, valeur] of Object.entries(post))
-    {
-        const champ = trouver_champ(modele, nom)
-        if (!champ) return false
-
-        if (champ.treatment === 'hashing')
-        {
-            if (!ligne[nom] || !await verifier_argon2(ligne[nom], valeur))
-                return false
-        }
-        else if (champ.treatment === 'encryption')
-        {
-            try   { if (dechiffrer_aes(ligne[nom]) !== String(valeur)) return false }
-            catch { return false }
-        }
-    }
-    return true
-}
-
-const construire_contexte_condition = (modele, ligne, now = new Date(), contexte_externe = {}) =>
-{
-    const contexte = { $now: now, ...contexte_externe }
-
-    for (const champ of modele.fields)
-    {
-        const presente = Object.prototype.hasOwnProperty.call(ligne, champ.name)
-        let valeur = presente ? ligne[champ.name] : ERREUR_AUGURE
-
-        // MySQL peut renvoyer date/datetime sous forme de chaîne ;
-        // on normalise en Date pour des comparaisons fiables avec now.
-        if (
-            valeur !== ERREUR_AUGURE
-         && valeur !== null
-         && (champ.type === 'date' || champ.type === 'datetime')
-         && typeof valeur === 'string'
-        )
-        {
-            const date = new Date(valeur)
-            if (!Number.isNaN(date.getTime()))
-                valeur = date
-        }
-
-        contexte[`$${champ.name}`] = valeur
-    }
-
-    return contexte
-}
-
-const respecter_condition = (modele, ligne, condition, now = new Date(), contexte_externe = {}, criteres = {}) =>
-{
-    if (!condition) return true
-
-    const extraire_condition_residuelle = (condition_brute) =>
-    {
-        // On ne simplifie que les conjonctions simples (&) sans parenthèses ni OR.
-        // Dans les autres cas, on conserve la condition complète par sécurité.
-        if (/[|()]/.test(condition_brute))
-            return condition_brute
-
-        const regex_egalite_ou_in = /^\s*#(\w+)\s*(=|-\{)\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[^\s&|()]+)\s*$/
-
-        const morceaux = condition_brute
-            .split('&')
-            .map(m => m.trim())
-            .filter(Boolean)
-
-        if (!morceaux.length)
-            return condition_brute
-
-        const residuels = []
-        for (const morceau of morceaux)
-        {
-            const eqin = morceau.match(regex_egalite_ou_in)
-            if (eqin)
-            {
-                const nom_champ = eqin[1]
-                // Ce champ a déjà été injecté dans le WHERE SQL (égalité ou IN).
-                if (Object.prototype.hasOwnProperty.call(criteres, nom_champ))
-                    continue
-            }
-
-            // Les comparaisons simples (>, <, >=, <=) qui ont une traduction SQL
-            // sont retirées de la condition résiduelle pour éviter un second filtrage JS.
-            if (convertir_comparaison_simple_en_filtre_sql(modele, morceau, contexte_externe))
-                continue
-
-            if (est_comparaison_chemin_relation_sqlable(morceau))
-                continue
-
-            residuels.push(morceau)
-        }
-
-        return residuels.join(' & ')
-    }
-
-    const condition_residuelle = extraire_condition_residuelle(condition)
-    if (!condition_residuelle)
-        return true
-
-    const contexte = construire_contexte_condition(modele, ligne, now, contexte_externe)
-
-    // Quand une égalité a déjà été résolue via les critères (SQL/post-vérification),
-    // on réinjecte la valeur brute attendue pour que l'expression Augure ne compare
-    // pas une valeur stockée (hash/chiffrement) à la valeur brute de la requête.
-    for (const [nom, valeur] of Object.entries(criteres))
-        contexte[`$${nom}`] = valeur
-
-    return evaluer(condition_residuelle, contexte)
 }
 
 const normaliser_condition = (condition) =>
@@ -998,38 +787,6 @@ const comparer_pour_tri = (a, b, direction) =>
     return 0
 }
 
-const filtrer_champs_select = (objet, champs_select) =>
-{
-    if (!champs_select || champs_select.length === 0)
-        return objet
-
-    const resultat = {}
-    for (const champ of champs_select)
-    {
-        if (Object.prototype.hasOwnProperty.call(objet, champ))
-            resultat[champ] = objet[champ]
-    }
-    return resultat
-}
-
-const dedoublonner_joins_recherche = (joins) =>
-{
-    const vus = new Set()
-    const resultat = []
-
-    for (const join of joins)
-    {
-        const cle = join && typeof join.joins === 'string' ? join.joins : null
-        if (!cle || vus.has(cle))
-            continue
-
-        vus.add(cle)
-        resultat.push(join)
-    }
-
-    return resultat
-}
-
 const appliquer_options_liste = (elements, options, lire_valeur) =>
 {
     let travail = [...elements]
@@ -1054,736 +811,7 @@ const appliquer_options_liste = (elements, options, lire_valeur) =>
     return travail
 }
 
-const parser_now_relatif = (token) =>
-{
-    const match = /^now\s*([+-])\s*(\d+)\s*([smhd])$/i.exec(token)
-    if (!match) return null
-
-    const signe  = match[1] === '+' ? 1 : -1
-    const valeur = Number(match[2])
-    const unite  = match[3].toLowerCase()
-
-    const multiplicateurs = {
-        s: 1000,
-        m: 60 * 1000,
-        h: 60 * 60 * 1000,
-        d: 24 * 60 * 60 * 1000,
-    }
-
-    const multiplicateur = multiplicateurs[unite]
-    if (!multiplicateur || Number.isNaN(valeur)) return null
-
-    return new Date(Date.now() + (signe * valeur * multiplicateur))
-}
-
-const parser_litteral_condition = (token) =>
-{
-    if (!token) return null
-
-    if (token.toLowerCase() === 'now')
-        return new Date()
-
-    const now_relatif = parser_now_relatif(token)
-    if (now_relatif)
-        return now_relatif
-
-    if (token.startsWith('"') && token.endsWith('"'))
-    {
-        try   { return JSON.parse(token) }
-        catch { return token.slice(1, -1) }
-    }
-
-    if ((token.startsWith("'") && token.endsWith("'")) || (token.startsWith('`') && token.endsWith('`')))
-        return token.slice(1, -1)
-
-    if (/^-?\d+(\.\d+)?$/.test(token))
-        return Number(token)
-
-    if (token === 'true')  return true
-    if (token === 'false') return false
-    if (token === 'null')  return null
-
-    return token
-}
-
-const parser_clef_bracket = (brut) =>
-{
-    if (/^\d+$/.test(brut))
-        return Number(brut)
-
-    const premier = brut[0]
-    const dernier = brut[brut.length - 1]
-    if ((premier === '"' && dernier === '"') || (premier === "'" && dernier === "'") || (premier === '`' && dernier === '`'))
-    {
-        if (premier === '"')
-        {
-            try   { return JSON.parse(brut) }
-            catch { return brut.slice(1, -1) }
-        }
-        return brut.slice(1, -1)
-    }
-
-    return brut
-}
-
-const lire_variable_contexte = (token, contexte) =>
-{
-    const racine = token.match(/^\$\w+/)?.[0]
-    if (!racine)
-        return { trouvee: false, valeur: undefined }
-
-    if (!Object.prototype.hasOwnProperty.call(contexte, racine))
-        return { trouvee: false, valeur: undefined }
-
-    let valeur = contexte[racine]
-    let pos = racine.length
-
-    while (pos < token.length)
-    {
-        if (token[pos] === '.')
-        {
-            pos++
-            const match = token.slice(pos).match(/^\w+/)
-            if (!match)
-                return { trouvee: false, valeur: undefined }
-            const clef = match[0]
-            if (valeur === null || valeur === undefined)
-                return { trouvee: false, valeur: undefined }
-            valeur = valeur[clef]
-            pos += clef.length
-            continue
-        }
-
-        if (token[pos] === '[')
-        {
-            const fin = token.indexOf(']', pos)
-            if (fin === -1)
-                return { trouvee: false, valeur: undefined }
-            const brut = token.slice(pos + 1, fin).trim()
-            const clef = parser_clef_bracket(brut)
-            if (valeur === null || valeur === undefined)
-                return { trouvee: false, valeur: undefined }
-            valeur = valeur[clef]
-            pos = fin + 1
-            continue
-        }
-
-        return { trouvee: false, valeur: undefined }
-    }
-
-    return { trouvee: true, valeur }
-}
-
-const extraire_criteres_depuis_condition = (modele, condition, contexte_condition = {}) =>
-{
-    const champs_modele = new Set(modele.fields.map(f => f.name))
-    const criteres = {}
-
-    // Support égalité (=) et IN (-{)
-    const regex = /(?:^|[&(])\s*#(\w+)\s*(=|-\{)\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[^\s&|()]+)/g
-    let match
-
-    while ((match = regex.exec(condition)) !== null)
-    {
-        const nom_champ = match[1]
-        const operateur = match[2]
-        const token     = match[3]
-
-        if (!champs_modele.has(nom_champ))
-            continue
-        if (!token)
-            continue
-
-        let valeur
-        if (token.startsWith('$'))
-        {
-            const { trouvee, valeur: v } = lire_variable_contexte(token, contexte_condition)
-            if (!trouvee)
-                continue
-            valeur = v
-        }
-        else
-        {
-            valeur = parser_litteral_condition(token)
-        }
-
-        if (operateur === '=')
-        {
-            criteres[nom_champ] = valeur
-        }
-        else if (operateur === '-{')
-        {
-            // Toujours tableau pour IN
-            criteres[nom_champ] = Array.isArray(valeur) ? valeur : (valeur instanceof Set ? Array.from(valeur) : [valeur])
-        }
-    }
-
-    return criteres
-}
-
-const UNITES_SQL = {
-    s: 'SECOND',
-    m: 'MINUTE',
-    h: 'HOUR',
-    d: 'DAY'
-}
-
-const traduire_now_sql = (expression) =>
-{
-    const expr = expression.trim().toLowerCase()
-    if (expr === 'now')
-        return 'NOW()'
-
-    const match = /^now\s*([+-])\s*(\d+)\s*([smhd])$/.exec(expr)
-    if (!match)
-        return null
-
-    const operation = match[1] === '+' ? 'DATE_ADD' : 'DATE_SUB'
-    const valeur    = Number(match[2])
-    const unite     = UNITES_SQL[match[3]]
-
-    if (!unite || Number.isNaN(valeur))
-        return null
-
-    return `${operation}(NOW(), INTERVAL ${valeur} ${unite})`
-}
-
-const extraire_filtres_temps_sql = (modele, condition) =>
-{
-    const champs_modele = new Map(modele.fields.map(f => [f.name, f]))
-    const clauses = []
-
-    const regex = /\$(\w+)\s*(>=|>|<=|<)\s*(now(?:\s*[+-]\s*\d+\s*[smhd])?)/gi
-    let match
-
-    while ((match = regex.exec(condition)) !== null)
-    {
-        const nom_champ = match[1]
-        const operateur = match[2]
-        const droite    = match[3]
-
-        const champ = champs_modele.get(nom_champ)
-        if (!champ)
-            continue
-
-        // Uniquement les dates "natives" SQL pour éviter les champs chiffrés/hashés.
-        if ((champ.type !== 'date' && champ.type !== 'datetime') || champ.treatment)
-            continue
-
-        const droite_sql = traduire_now_sql(droite)
-        if (!droite_sql)
-            continue
-
-        clauses.push({
-            sql    : `\`${nom_champ}\` ${operateur} ${droite_sql}`,
-            valeurs: []
-        })
-    }
-
-    return clauses
-}
-
-const convertir_comparaison_simple_en_filtre_sql = (modele, morceau, contexte_condition = {}) =>
-{
-    const match = /^\s*#(\w+)\s*(>=|>|<=|<)\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[^\s&|()]+)\s*$/i.exec(morceau)
-    if (!match)
-        return null
-
-    const nom_champ = match[1]
-    const operateur = match[2]
-    const token     = match[3]
-
-    const champ = modele.fields.find(f => f.name === nom_champ)
-    if (!champ || champ.treatment)
-        return null
-
-    const now_sql = traduire_now_sql(token)
-    if (now_sql)
-    {
-        if (champ.type !== 'date' && champ.type !== 'datetime')
-            return null
-        return {
-            sql    : `\`${nom_champ}\` ${operateur} ${now_sql}`,
-            valeurs: []
-        }
-    }
-
-    let valeur
-    if (token.startsWith('$'))
-    {
-        const { trouvee, valeur: v } = lire_variable_contexte(token, contexte_condition)
-        if (!trouvee)
-            return null
-        valeur = v
-    }
-    else
-    {
-        valeur = parser_litteral_condition(token)
-    }
-
-    if (valeur === undefined || valeur === null)
-        return null
-
-    return {
-        sql    : `\`${nom_champ}\` ${operateur} ?`,
-        valeurs: [valeur]
-    }
-}
-
-const convertir_comparaison_null_en_filtre_sql = (modele, morceau, contexte_condition = {}) =>
-{
-    const match = /^\s*#(\w+)\s*(!=|<>)\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[^\s&|()]+)\s*$/i.exec(morceau)
-    if (!match)
-        return null
-
-    const nom_champ = match[1]
-    const token     = match[3]
-
-    const champ = modele.fields.find(f => f.name === nom_champ)
-    if (!champ)
-        return null
-
-    let valeur
-    if (token.startsWith('$'))
-    {
-        const { trouvee, valeur: v } = lire_variable_contexte(token, contexte_condition)
-        if (!trouvee)
-            return null
-        valeur = v
-    }
-    else
-    {
-        valeur = parser_litteral_condition(token)
-    }
-
-    if (valeur !== null)
-        return null
-
-    return {
-        sql    : `\`${nom_champ}\` IS NOT NULL`,
-        valeurs: []
-    }
-}
-
-const extraire_filtres_comparaison_sql = (modele, condition, contexte_condition = {}) =>
-{
-    const clauses = []
-    const regex = /(?:^|([&|]))\s*(#\w+\s*(?:>=|<=|!=|<>|>|<)\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[^\s&|()]+))/g
-    let match
-
-    let premier_operateur = 'AND'
-    const morceaux = []
-    const valeurs = []
-
-    while ((match = regex.exec(condition)) !== null)
-    {
-        const operateur = match[1] === '|' ? 'OR' : 'AND'
-        const morceau = match[2]
-
-        const filtre_null = convertir_comparaison_null_en_filtre_sql(modele, morceau, contexte_condition)
-        if (filtre_null)
-        {
-            if (!morceaux.length)
-                premier_operateur = operateur
-
-            morceaux.push({ operateur, sql: filtre_null.sql })
-            if (Array.isArray(filtre_null.valeurs) && filtre_null.valeurs.length)
-                valeurs.push(...filtre_null.valeurs)
-            continue
-        }
-
-        const filtre = convertir_comparaison_simple_en_filtre_sql(modele, morceau, contexte_condition)
-        if (filtre)
-        {
-            if (!morceaux.length)
-                premier_operateur = operateur
-
-            morceaux.push({ operateur, sql: filtre.sql })
-            if (Array.isArray(filtre.valeurs) && filtre.valeurs.length)
-                valeurs.push(...filtre.valeurs)
-        }
-    }
-
-    if (!morceaux.length)
-        return clauses
-
-    let sql = ''
-    for (let i = 0; i < morceaux.length; i++)
-    {
-        const morceau = morceaux[i]
-        if (i === 0)
-            sql += `(${morceau.sql})`
-        else
-            sql += ` ${morceau.operateur} (${morceau.sql})`
-    }
-
-    if (premier_operateur === 'OR' && morceaux.length > 1)
-        sql = `((${sql}))`
-    else
-        sql = `(${sql})`
-
-    clauses.push({
-        sql,
-        valeurs
-    })
-
-    return clauses
-}
-
-const est_comparaison_chemin_relation_sqlable = (morceau) =>
-    /^\s*#\w+(?:\.\w+)+\s*(?:=|!=|<>|>=|<=|>|<)\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[^\s&|()]+)\s*$/.test(morceau)
-
-const extraire_filtres_relation_sql = (condition, contexte_condition = {}) =>
-{
-    const clauses = []
-    const regex = /(?:^|([&|]))\s*((?:`[^`]+`\.`[^`]+`)\s*(?:=|!=|<>|>=|<=|>|<)\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[^\s&|()]+))/g
-    let match
-
-    let premier_operateur = 'AND'
-    const morceaux = []
-    const valeurs = []
-
-    while ((match = regex.exec(condition)) !== null)
-    {
-        const operateur = match[1] === '|' ? 'OR' : 'AND'
-        const morceau = match[2]
-        const detail = /^\s*((?:`[^`]+`\.`[^`]+`))\s*(=|!=|<>|>=|<=|>|<)\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[^\s&|()]+)\s*$/.exec(morceau)
-        if (!detail)
-            continue
-
-        const colonne_sql = detail[1]
-        const operateur_sql = detail[2]
-        const token = detail[3]
-
-        let valeur
-        if (token.startsWith('$'))
-        {
-            const { trouvee, valeur: v } = lire_variable_contexte(token, contexte_condition)
-            if (!trouvee)
-                continue
-            valeur = v
-        }
-        else
-        {
-            valeur = parser_litteral_condition(token)
-        }
-
-        if (valeur === undefined)
-            continue
-
-        if (valeur === null)
-        {
-            if (!morceaux.length)
-                premier_operateur = operateur
-
-            if (operateur_sql === '=')
-                morceaux.push({ operateur, sql: `${colonne_sql} IS NULL` })
-            else if (operateur_sql === '!=' || operateur_sql === '<>')
-                morceaux.push({ operateur, sql: `${colonne_sql} IS NOT NULL` })
-
-            continue
-        }
-
-        if (!morceaux.length)
-            premier_operateur = operateur
-
-        morceaux.push({ operateur, sql: `${colonne_sql} ${operateur_sql} ?` })
-        valeurs.push(valeur)
-    }
-
-    if (!morceaux.length)
-        return clauses
-
-    let sql = ''
-    for (let i = 0; i < morceaux.length; i++)
-    {
-        const morceau = morceaux[i]
-        if (i === 0)
-            sql += `(${morceau.sql})`
-        else
-            sql += ` ${morceau.operateur} (${morceau.sql})`
-    }
-
-    if (premier_operateur === 'OR' && morceaux.length > 1)
-        sql = `((${sql}))`
-    else
-        sql = `(${sql})`
-
-    clauses.push({
-        sql,
-        valeurs
-    })
-
-    return clauses
-}
-
-const preparer_condition_recherche = (schemas, modele, condition, contexte_condition = {}) =>
-{
-    const condition_norm = normaliser_condition(condition)
-    const { joins, condition_avec_joins } = analyser_condition_pour_joins(schemas, modele, condition_norm, contexte_condition)
-
-    const criteres = extraire_criteres_depuis_condition(modele, condition_avec_joins, contexte_condition)
-    const filtres_comparaison_sql = extraire_filtres_comparaison_sql(modele, condition_avec_joins, contexte_condition)
-    const filtres_relation_sql = extraire_filtres_relation_sql(condition_avec_joins, contexte_condition)
-
-    const { sql, post }       = separer_criteres(modele, criteres)
-    const { clause, valeurs } = construire_where(sql, [...filtres_comparaison_sql, ...filtres_relation_sql])
-
-    return {
-        joins,
-        condition_avec_joins,
-        criteres,
-        post,
-        clause,
-        valeurs
-    }
-}
-
-const preparer_aux_conditions_recherche = (schemas, modele, aux_conditions = {}, contexte_condition = {}) =>
-{
-    const clauses_select = []
-    const joins = []
-    const valeurs = []
-    const joins_vus = new Set()
-
-    for (const [nom_colonne, condition] of Object.entries(aux_conditions))
-    {
-        if (typeof condition !== 'string' || !condition.trim())
-            continue
-
-        const preparation = preparer_condition_recherche(schemas, modele, condition, contexte_condition)
-
-        for (const join of preparation.joins)
-        {
-            const cle_join = join && typeof join.joins === 'string' ? join.joins : null
-            if (!cle_join || joins_vus.has(cle_join))
-                continue
-
-            joins_vus.add(cle_join)
-            joins.push(join)
-        }
-
-        const clause_sql = preparation.clause ? preparation.clause.replace(/^WHERE\s+/i, '') : '1'
-        clauses_select.push(`CASE WHEN ${clause_sql} THEN TRUE ELSE FALSE END AS \`${nom_colonne}\``)
-
-        if (preparation.valeurs.length)
-            valeurs.push(...preparation.valeurs)
-    }
-
-    return {
-        joins,
-        clauses_select,
-        valeurs
-    }
-}
-
-// ─── JOINs pour conditions sur relations ─────────────────────────────────────
-
-const extraire_chemins_relations_condition = (condition) =>
-{
-    const chemins = new Map()
-    const regex = /#([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)/g
-    let match
-
-    while ((match = regex.exec(condition)) !== null)
-    {
-        const chemin_complet = match[1]
-        if (chemin_complet.includes('.'))
-        {
-            chemins.set(chemin_complet, chemin_complet)
-        }
-    }
-
-    return Array.from(chemins.keys())
-}
-
-const generer_joins_sql = (schemas, modele_source, chemin_relation) =>
-{
-    const parties = chemin_relation.split('.')
-    const joins = []
-    let modele_courant = modele_source
-    let alias_courant = modele_source.name
-    let alias_compteur = 0
-
-    for (let i = 0; i < parties.length; i++)
-    {
-        const nom_relation = parties[i]
-        const projection_relation = resoudre_projection_relation(schemas, modele_courant, nom_relation)
-
-        if (!projection_relation)
-            continue
-
-        const relation = projection_relation.relation
-        const sens = projection_relation.sens
-        const table_source = trouver_table(schemas, relation.table_source)
-        const table_cible = trouver_table(schemas, relation.table_cible)
-
-        if (!table_source || !table_cible)
-            continue
-
-        const modele_enfant = sens === 'direct' ? table_cible : table_source
-        const alias_enfant = `${modele_enfant.name}_${++alias_compteur}`
-
-        if (relation.table_jonction)
-        {
-            const cle_source = `id_${table_source.entry_name ?? table_source.name}`
-            const cle_cible = `id_${table_cible.entry_name ?? table_cible.name}`
-            const est_direct = sens === 'direct'
-            const alias_jonction = `${relation.table_jonction}_${alias_compteur}`
-
-            const cle_lire = est_direct ? cle_source : cle_cible
-            const cle_assoc = est_direct ? cle_cible : cle_source
-            const pk_courant = est_direct ? table_source.primary[0] : table_cible.primary[0]
-            const pk_enfant = modele_enfant.primary[0]
-
-            joins.push(
-                `JOIN \`${relation.table_jonction}\` AS \`${alias_jonction}\` ON \`${alias_courant}\`.\`${pk_courant}\` = \`${alias_jonction}\`.\`${cle_lire}\``
-            )
-            joins.push(
-                `JOIN \`${modele_enfant.name}\` AS \`${alias_enfant}\` ON \`${alias_jonction}\`.\`${cle_assoc}\` = \`${alias_enfant}\`.\`${pk_enfant}\``
-            )
-        }
-        else if (relation.cle_etrangere)
-        {
-            if (sens === 'direct')
-            {
-                joins.push(
-                    `JOIN \`${modele_enfant.name}\` AS \`${alias_enfant}\` ON \`${alias_courant}\`.\`${table_source.primary[0]}\` = \`${alias_enfant}\`.\`${relation.cle_etrangere}\``
-                )
-            }
-            else
-            {
-                joins.push(
-                    `JOIN \`${modele_enfant.name}\` AS \`${alias_enfant}\` ON \`${alias_courant}\`.\`${relation.cle_etrangere}\` = \`${alias_enfant}\`.\`${modele_enfant.primary[0]}\``
-                )
-            }
-        }
-
-        alias_courant = alias_enfant
-        modele_courant = modele_enfant
-    }
-
-    return {
-        joins: joins.join(' '),
-        modele_final: modele_courant,
-        alias_final: alias_courant
-    }
-}
-
-const analyser_condition_pour_joins = (schemas, modele, condition, contexte_condition = {}) =>
-{
-    const chemins = extraire_chemins_relations_condition(condition)
-    const joins_generes = new Map()
-    let condition_avec_alias = String(condition)
-
-    for (const chemin of chemins)
-    {
-        const derniere_partie = chemin.lastIndexOf('.')
-        if (derniere_partie === -1)
-            continue
-
-        const chemin_relations = chemin.slice(0, derniere_partie)
-        const champ_final = chemin.slice(derniere_partie + 1)
-        
-        const generation = generer_joins_sql(schemas, modele, chemin_relations)
-        if (generation.joins)
-        {
-            joins_generes.set(chemin_relations, generation)
-            const ancien_prefix = `$${chemin}`
-            const nouveau_prefix = `\`${generation.alias_final}\`.\`${champ_final}\``
-            condition_avec_alias = condition_avec_alias.replace(new RegExp(`#${chemin.replace(/\./g, '\\.')}`, 'g'), nouveau_prefix)
-        }
-    }
-
-    return {
-        joins: Array.from(joins_generes.values()),
-        condition_avec_joins: condition_avec_alias
-    }
-}
-
-// Construire la requête SELECT complète avec JOINs
-const construire_requete_recherche = (modele, joins_data, clause_where, select_supplementaire = []) =>
-{
-    const select_clause = select_supplementaire.length
-        ? `SELECT DISTINCT \`${modele.name}\`.* , ${select_supplementaire.join(', ')} FROM \`${modele.name}\``
-        : `SELECT DISTINCT \`${modele.name}\`.* FROM \`${modele.name}\``
-    
-    if (!joins_data || !joins_data.length)
-        return select_clause + (clause_where ? ` ${clause_where}` : '')
-
-    const all_joins = joins_data
-        .map(j => j.joins)
-        .filter(Boolean)
-        .join(' ')
-
-    if (!all_joins)
-        return select_clause + (clause_where ? ` ${clause_where}` : '')
-
-    return select_clause + ' ' + all_joins + (clause_where ? ` ${clause_where}` : '')
-}
-
-// Construire la clause WHERE
-const construire_where = (criteres_sql, clauses_supplementaires = []) =>
-{
-    const noms = Object.keys(criteres_sql)
-    const morceaux = []
-    const valeurs = []
-
-    if (noms.length) {
-        for (const n of noms) {
-            let v = criteres_sql[n]
-            // Déplier les tableaux imbriqués (ex: [[a,b]] => [a,b])
-            if (Array.isArray(v) && v.length === 1 && Array.isArray(v[0])) {
-                v = v[0]
-            }
-            if (v === null) {
-                morceaux.push(`\`${n}\` IS NULL`)
-                continue
-            }
-            if (Array.isArray(v) || v instanceof Set) {
-                // Support SQL IN
-                const arr = Array.isArray(v) ? v : Array.from(v)
-                if (arr.length === 0) {
-                    // IN () n'est jamais vrai, donc on force une condition fausse
-                    morceaux.push('0')
-                } else {
-                    const placeholders = arr.map(() => '?').join(', ')
-                    morceaux.push(`\`${n}\` IN (${placeholders})`)
-                    valeurs.push(...arr)
-                }
-            } else {
-                morceaux.push(`\`${n}\` = ?`)
-                valeurs.push(v)
-            }
-        }
-    }
-
-    if (clauses_supplementaires.length)
-    {
-        for (const clause of clauses_supplementaires)
-        {
-            if (typeof clause === 'string')
-            {
-                morceaux.push(clause)
-                continue
-            }
-
-            if (!clause || typeof clause.sql !== 'string')
-                continue
-
-            morceaux.push(clause.sql)
-            if (Array.isArray(clause.valeurs) && clause.valeurs.length)
-                valeurs.push(...clause.valeurs)
-        }
-    }
-
-    if (!morceaux.length) return { clause: '', valeurs: [] }
-
-    return {
-        clause : 'WHERE ' + morceaux.join(' AND '),
-        valeurs
-    }
-}
+// ─── Journal SQL ──────────────────────────────────────────────────────────────
 
 const formater_valeur_sql_debug = (valeur) =>
 {
@@ -1816,6 +844,68 @@ const rendre_requete_sql_debug = (requete, valeurs = []) =>
     })
 }
 
+// ─── Lecture des lignes respectant une condition ──────────────────────────────
+// Retourne les lignes brutes (non déchiffrées), une seule fois par entrée.
+
+const lire_lignes = async (schemas, modele, condition, contexte_condition, etiquette, colonnes_aux = {}) =>
+{
+    const lecture = preparer_lecture(
+        schemas,
+        modele,
+        normaliser_condition(condition),
+        normaliser_contexte_condition(contexte_condition),
+        colonnes_aux
+    )
+
+    console.log(`[${etiquette}] SQL:`, rendre_requete_sql_debug(lecture.sql, lecture.valeurs))
+    const [lignes] = await pool().query(lecture.sql, lecture.valeurs)
+    return lecture.filtrer(lignes)
+}
+
+// ─── Validation des valeurs ───────────────────────────────────────────────────
+
+const longueur_texte = (valeur) => [...String(valeur)].length
+
+// Vérifier une valeur brute (avant hachage ou chiffrement) contre l'énumération
+// et la taille déclarées du champ.
+const verifier_valeur_champ = (champ, valeur, index = 0) =>
+{
+    if (valeur === undefined || valeur === null)
+        return
+
+    if (champ.values && !champ.values.includes(String(valeur)))
+        throw Object.assign(
+            new Error(`Valeur "${valeur}" non autorisée pour le champ "${champ.name}" (valeurs : ${champ.values.join(', ')})`),
+            { code: 'ENUM_VIOLATION', champ: champ.name, index }
+        )
+
+    const taille = champ.size
+    if (!taille || (typeof valeur !== 'string' && typeof valeur !== 'number'))
+        return
+
+    const longueur = longueur_texte(valeur)
+    if (taille.min !== null && longueur < taille.min)
+        throw Object.assign(
+            new Error(`Valeur trop courte pour le champ "${champ.name}" (${taille.min} caractère${taille.min > 1 ? 's' : ''} au minimum)`),
+            { code: 'SIZE_VIOLATION', champ: champ.name, index }
+        )
+
+    // La taille maximale d'un champ haché ou chiffré porte sur la valeur stockée,
+    // pas sur la valeur brute : elle n'est vérifiée que pour les champs non traités.
+    if (!champ.treatment && taille.max !== null && longueur > taille.max)
+        throw Object.assign(
+            new Error(`Valeur trop longue pour le champ "${champ.name}" (${taille.max} caractère${taille.max > 1 ? 's' : ''} au maximum)`),
+            { code: 'SIZE_VIOLATION', champ: champ.name, index }
+        )
+}
+
+// ─── Construction du SET d'une mise à jour ────────────────────────────────────
+
+// Valeur de mise à jour calculée par la base : `now`, `now + 1d`, `champ + 1`
+const est_expression_update = (modele, valeur) =>
+    typeof valeur === 'string'
+    && (traduire_now_sql(valeur) !== null || /^\s*(\w+)\s*([+-])\s*(\d+(?:\.\d+)?)\s*$/.test(valeur) && trouver_champ(modele, valeur.trim().split(/\s*[+-]/)[0]))
+
 const construire_set_update = async (modele, donnees) =>
 {
     const morceaux = []
@@ -1836,24 +926,14 @@ const construire_set_update = async (modele, donnees) =>
                 continue
             }
 
-            const valeur_temps = parser_litteral_condition(valeur_brute)
-            if (valeur_temps instanceof Date && !Number.isNaN(valeur_temps.getTime()))
-            {
-                morceaux.push(`\`${nom_champ}\` = ?`)
-                valeurs.push(valeur_temps)
-                continue
-            }
-
             const expression = valeur_brute.match(/^\s*(\w+)\s*([+-])\s*(\d+(?:\.\d+)?)\s*$/)
-            if (expression)
+            if (expression && trouver_champ(modele, expression[1]))
             {
                 const champ_source_nom = expression[1]
                 const operateur        = expression[2]
                 const delta            = Number(expression[3])
                 const champ_source     = trouver_champ(modele, champ_source_nom)
 
-                if (!champ_source)
-                    throw new Error(`Champ source inconnu dans l'expression de mise à jour : ${champ_source_nom}`)
                 if (champ.treatment || champ_source.treatment)
                     throw new Error(`Expression arithmétique non autorisée pour un champ traité : ${nom_champ}`)
 
@@ -1873,6 +953,65 @@ const construire_set_update = async (modele, donnees) =>
     }
 }
 
+// Valider les données d'une mise à jour pour une ligne existante :
+// énumération et taille des valeurs fournies, puis règles des champs modifiés.
+// Le contexte des règles contient les nouvelles valeurs et les valeurs actuelles
+// déchiffrées ; les champs hachés non modifiés valent :x.
+const valider_update = (modele, ligne_brute, donnees) =>
+{
+    for (const [nom, valeur] of Object.entries(donnees))
+    {
+        const champ = trouver_champ(modele, nom)
+        if (champ && !est_expression_update(modele, valeur))
+            verifier_valeur_champ(champ, valeur)
+    }
+
+    const ligne = decrypter_ligne(modele, ligne_brute)
+    const contexte = {}
+    for (const champ of modele.fields)
+    {
+        if (Object.prototype.hasOwnProperty.call(donnees, champ.name) && !est_expression_update(modele, donnees[champ.name]))
+            contexte[`$${champ.name}`] = donnees[champ.name] ?? ERREUR_AUGURE
+        else if (champ.treatment === 'hashing' || champ.treatment === 'deterministic_hashing')
+            contexte[`$${champ.name}`] = ERREUR_AUGURE
+        else
+            contexte[`$${champ.name}`] = ligne[champ.name] ?? ERREUR_AUGURE
+    }
+
+    for (const nom of Object.keys(donnees))
+    {
+        const champ = trouver_champ(modele, nom)
+        if (!champ || est_expression_update(modele, donnees[nom]))
+            continue
+        if (!valider_regle(champ, contexte))
+            throw Object.assign(
+                new Error(`Valeur invalide pour le champ "${champ.name}"`),
+                { code: 'RULE_VIOLATION', champ: champ.name }
+            )
+    }
+}
+
+const mettre_a_jour_lignes = async (modele, lignes, donnees) =>
+{
+    for (const ligne of lignes)
+        valider_update(modele, ligne, donnees)
+
+    const { clause: set_clause, valeurs: set_valeurs } = await construire_set_update(modele, donnees)
+    const clause_pk = modele.primary.map(c => `\`${c}\` = ?`).join(' AND ')
+    let mises_a_jour = 0
+
+    for (const ligne of lignes)
+    {
+        const [resultat] = await pool().query(
+            `UPDATE \`${modele.name}\` ${set_clause} WHERE ${clause_pk}`,
+            [...set_valeurs, ...modele.primary.map(c => ligne[c])]
+        )
+        mises_a_jour += Number(resultat?.affectedRows || 0)
+    }
+
+    return mises_a_jour
+}
+
 // Supprimer une ligne par sa clef primaire
 const supprimer_par_pk = async (modele, ligne) =>
 {
@@ -1881,49 +1020,25 @@ const supprimer_par_pk = async (modele, ligne) =>
     await pool().query(`DELETE FROM \`${modele.name}\` WHERE ${clause}`, valeurs)
 }
 
+const contexte_enforce_de = (options_norm, contexte_norm) =>
+    options_norm.enforce_rules
+        ? { context: contexte_norm?.$context ?? {}, request: contexte_norm?.$request ?? {} }
+        : null
+
 // ─── $search_one ─────────────────────────────────────────────────────────────
 
 const creer_search_one = (schemas) => async (nom_modele, condition, contexte_condition = {}, options = undefined) =>
 {
     const modele = trouver_modele_entree(schemas, nom_modele)
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
-    const condition_norm = normaliser_condition(condition)
-    const contexte_norm  = normaliser_contexte_condition(contexte_condition)
-    const options_norm   = normaliser_options_liste(modele, options)
+    const options_norm = normaliser_options_liste(modele, options)
 
-    const preparation = preparer_condition_recherche(schemas, modele, condition_norm, contexte_norm)
-    const preparation_aux = preparer_aux_conditions_recherche(schemas, modele, options_norm.aux_conditions, contexte_norm)
+    const lignes = await lire_lignes(schemas, modele, condition, contexte_condition, 'search_one', options_norm.aux_conditions)
+    const choisies = appliquer_options_liste(lignes.map(l => decrypter_ligne(modele, l)), { ...options_norm, limit: 1 }, (ligne, nom) => ligne[nom])
+    if (!choisies.length)
+        return null
 
-    const joins = dedoublonner_joins_recherche([...preparation.joins, ...preparation_aux.joins])
-    const clauses_select = preparation_aux.clauses_select
-    const valeurs = [...preparation_aux.valeurs, ...preparation.valeurs]
-    const besoin_post = Object.keys(preparation.post).length > 0
-
-    const requete  = construire_requete_recherche(modele, joins, preparation.clause, clauses_select)
-    console.log('[search_one] SQL:', rendre_requete_sql_debug(requete, valeurs))
-    if (valeurs.length) console.log('[search_one] Valeurs:', valeurs)
-    const [lignes] = await pool().query(requete, valeurs)
-
-    const now = new Date()
-
-    for (const ligne of lignes)
-    {
-        const post_ok = besoin_post ? await verifier_post(modele, ligne, preparation.post) : true
-        if (!post_ok)
-            continue
-
-        const ligne_decryptee = decrypter_ligne(modele, ligne)
-        const condition_ok = respecter_condition(modele, ligne_decryptee, condition_norm, now, contexte_norm, preparation.criteres)
-
-        if (!condition_ok)
-            continue
-
-        const contexte_enforce = options_norm.enforce_rules
-            ? { context: contexte_norm.$context ?? {}, request: contexte_norm.$request ?? {} }
-            : null
-        return await projeter_ligne_select(schemas, modele, ligne_decryptee, options_norm.select, contexte_enforce)
-    }
-    return null
+    return await projeter_ligne_select(schemas, modele, choisies[0], options_norm.select, contexte_enforce_de(options_norm, contexte_condition))
 }
 
 // ─── $search_all ─────────────────────────────────────────────────────────────
@@ -1932,42 +1047,12 @@ const creer_search_all = (schemas) => async (nom_modele, condition, contexte_con
 {
     const modele = trouver_modele_table(schemas, nom_modele)
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
-    const condition_norm = normaliser_condition(condition)
-    const contexte_norm  = normaliser_contexte_condition(contexte_condition)
-    const options_norm   = normaliser_options_liste(modele, options)
+    const options_norm = normaliser_options_liste(modele, options)
 
-    const preparation = preparer_condition_recherche(schemas, modele, condition_norm, contexte_norm)
-    const preparation_aux = preparer_aux_conditions_recherche(schemas, modele, options_norm.aux_conditions, contexte_norm)
+    const lignes = await lire_lignes(schemas, modele, condition, contexte_condition, 'search_all', options_norm.aux_conditions)
+    const resultats = appliquer_options_liste(lignes.map(l => decrypter_ligne(modele, l)), options_norm, (ligne, nom) => ligne[nom])
 
-    const joins = dedoublonner_joins_recherche([...preparation.joins, ...preparation_aux.joins])
-    const clauses_select = preparation_aux.clauses_select
-    const valeurs = [...preparation_aux.valeurs, ...preparation.valeurs]
-    const besoin_post = Object.keys(preparation.post).length > 0
-
-    const requete = construire_requete_recherche(modele, joins, preparation.clause, clauses_select)
-    console.log('[search_all] SQL:', rendre_requete_sql_debug(requete, valeurs))
-    if (valeurs.length) console.log('[search_all] Valeurs:', valeurs)
-    const [lignes] = await pool().query(requete, valeurs)
-
-    const now = new Date()
-    const resultats = []
-    for (const ligne of lignes)
-    {
-        if (besoin_post && !await verifier_post(modele, ligne, preparation.post))
-            continue
-
-        const ligne_decryptee = decrypter_ligne(modele, ligne)
-        if (!respecter_condition(modele, ligne_decryptee, condition_norm, now, contexte_norm, preparation.criteres))
-            continue
-
-        resultats.push(ligne_decryptee)
-    }
-
-    const resultats_paginees = appliquer_options_liste(resultats, options_norm, (ligne, nom) => ligne[nom])
-    const contexte_enforce = options_norm.enforce_rules
-        ? { context: contexte_norm.$context ?? {}, request: contexte_norm.$request ?? {} }
-        : null
-    return await projeter_lignes_select(schemas, modele, resultats_paginees, options_norm.select, contexte_enforce)
+    return await projeter_lignes_select(schemas, modele, resultats, options_norm.select, contexte_enforce_de(options_norm, contexte_condition))
 }
 
 // ─── $delete_one ─────────────────────────────────────────────────────────────
@@ -1976,36 +1061,13 @@ const creer_delete_one = (schemas) => async (nom_modele, condition, contexte_con
 {
     const modele = trouver_modele_entree(schemas, nom_modele)
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
-    const condition_norm = normaliser_condition(condition)
-    const contexte_norm  = normaliser_contexte_condition(contexte_condition)
 
-    const { joins, condition_avec_joins } = analyser_condition_pour_joins(schemas, modele, condition_norm, contexte_norm)
-    
-    const criteres = extraire_criteres_depuis_condition(modele, condition_avec_joins, contexte_norm)
-    const filtres_comparaison_sql = extraire_filtres_comparaison_sql(modele, condition_avec_joins, contexte_norm)
-    const filtres_relation_sql = extraire_filtres_relation_sql(condition_avec_joins, contexte_norm)
+    const lignes = await lire_lignes(schemas, modele, condition, contexte_condition, 'delete_one')
+    if (!lignes.length)
+        return 0
 
-    const { sql, post }       = separer_criteres(modele, criteres)
-    const { clause, valeurs } = construire_where(sql, [...filtres_comparaison_sql, ...filtres_relation_sql])
-    const besoin_post         = Object.keys(post).length > 0
-
-    const requete = construire_requete_recherche(modele, joins, clause)
-    console.log('[delete_one] SQL:', rendre_requete_sql_debug(requete, valeurs))
-    if (valeurs.length) console.log('[delete_one] Valeurs:', valeurs)
-    const [lignes] = await pool().query(requete, valeurs)
-    const now = new Date()
-    for (const ligne of lignes)
-    {
-        if (besoin_post && !await verifier_post(modele, ligne, post))
-            continue
-
-        const ligne_decryptee = decrypter_ligne(modele, ligne)
-        if (!respecter_condition(modele, ligne_decryptee, condition_norm, now, contexte_norm, criteres))
-            continue
-
-        await supprimer_par_pk(modele, ligne)
-        return
-    }
+    await supprimer_par_pk(modele, lignes[0])
+    return 1
 }
 
 // ─── $delete_all ─────────────────────────────────────────────────────────────
@@ -2014,103 +1076,31 @@ const creer_delete_all = (schemas) => async (nom_modele, condition, contexte_con
 {
     const modele = trouver_modele_table(schemas, nom_modele)
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
-    const condition_norm = normaliser_condition(condition)
-    const contexte_norm  = normaliser_contexte_condition(contexte_condition)
-    const options_norm   = normaliser_options_liste(modele, options)
+    const options_norm = normaliser_options_liste(modele, options)
 
-    const { joins, condition_avec_joins } = analyser_condition_pour_joins(schemas, modele, condition_norm, contexte_norm)
-    
-    const criteres = extraire_criteres_depuis_condition(modele, condition_avec_joins, contexte_norm)
-    const filtres_comparaison_sql = extraire_filtres_comparaison_sql(modele, condition_avec_joins, contexte_norm)
-    const filtres_relation_sql = extraire_filtres_relation_sql(condition_avec_joins, contexte_norm)
-
-    const { sql, post }       = separer_criteres(modele, criteres)
-    const { clause, valeurs } = construire_where(sql, [...filtres_comparaison_sql, ...filtres_relation_sql])
-    const besoin_post         = Object.keys(post).length > 0
-
-    const requete = construire_requete_recherche(modele, joins, clause)
-    console.log('[delete_all] SQL:', rendre_requete_sql_debug(requete, valeurs))
-    if (valeurs.length) console.log('[delete_all] Valeurs:', valeurs)
-    const [lignes] = await pool().query(requete, valeurs)
-    const now = new Date()
-    const a_supprimer = []
-    for (const ligne of lignes)
-    {
-        if (besoin_post && !await verifier_post(modele, ligne, post))
-            continue
-
-        const ligne_decryptee = decrypter_ligne(modele, ligne)
-        if (!respecter_condition(modele, ligne_decryptee, condition_norm, now, contexte_norm, criteres))
-            continue
-
-        a_supprimer.push({ brute: ligne, decryptee: ligne_decryptee })
-    }
-
-    const cibles = appliquer_options_liste(
-        a_supprimer,
-        { ...options_norm, select: null },
-        (element, nom) => element.decryptee[nom]
-    )
+    const lignes = await lire_lignes(schemas, modele, condition, contexte_condition, 'delete_all')
+    const elements = lignes.map(brute => ({ brute, decryptee: decrypter_ligne(modele, brute) }))
+    const cibles = appliquer_options_liste(elements, { ...options_norm, select: null }, (element, nom) => element.decryptee[nom])
 
     for (const element of cibles)
         await supprimer_par_pk(modele, element.brute)
+
+    return cibles.length
 }
 
-// ─── $update_all ─────────────────────────────────────────────────────────────
+// ─── $update_one ─────────────────────────────────────────────────────────────
 
 const creer_update_one = (schemas) => async (nom_modele, condition, donnees, contexte_condition = {}) =>
 {
     const modele = trouver_modele_entree(schemas, nom_modele)
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
+    const donnees_norm = normaliser_donnees_update(donnees)
 
-    const condition_norm = normaliser_condition(condition)
-    const donnees_norm   = normaliser_donnees_update(donnees)
-    const contexte_norm  = normaliser_contexte_condition(contexte_condition)
-
-    const { joins, condition_avec_joins } = analyser_condition_pour_joins(schemas, modele, condition_norm, contexte_norm)
-    
-    const criteres = extraire_criteres_depuis_condition(modele, condition_avec_joins, contexte_norm)
-    const filtres_comparaison_sql = extraire_filtres_comparaison_sql(modele, condition_avec_joins, contexte_norm)
-    const filtres_relation_sql = extraire_filtres_relation_sql(condition_avec_joins, contexte_norm)
-
-    const { sql, post }       = separer_criteres(modele, criteres)
-    const { clause, valeurs } = construire_where(sql, [...filtres_comparaison_sql, ...filtres_relation_sql])
-    const besoin_post         = Object.keys(post).length > 0
-
-    const requete = construire_requete_recherche(modele, joins, clause)
-    console.log('[update_one] SQL:', rendre_requete_sql_debug(requete, valeurs))
-    if (valeurs.length) console.log('[update_one] Valeurs:', valeurs)
-    const [lignes] = await pool().query(requete, valeurs)
-
-    const now = new Date()
-    let cible = null
-
-    for (const ligne of lignes)
-    {
-        if (besoin_post && !await verifier_post(modele, ligne, post))
-            continue
-
-        const ligne_decryptee = decrypter_ligne(modele, ligne)
-        if (!respecter_condition(modele, ligne_decryptee, condition_norm, now, contexte_norm, criteres))
-            continue
-
-        cible = ligne
-        break
-    }
-
-    if (!cible)
+    const lignes = await lire_lignes(schemas, modele, condition, contexte_condition, 'update_one')
+    if (!lignes.length)
         return 0
 
-    const { clause: set_clause, valeurs: set_valeurs } = await construire_set_update(modele, donnees_norm)
-    const clause_pk  = modele.primary.map(c => `\`${c}\` = ?`).join(' AND ')
-    const valeurs_pk = modele.primary.map(c => cible[c])
-
-    const [resultat] = await pool().query(
-        `UPDATE \`${modele.name}\` ${set_clause} WHERE ${clause_pk}`,
-        [...set_valeurs, ...valeurs_pk]
-    )
-
-    return Number(resultat?.affectedRows || 0)
+    return mettre_a_jour_lignes(modele, [lignes[0]], donnees_norm)
 }
 
 // ─── $update_all ─────────────────────────────────────────────────────────────
@@ -2119,60 +1109,13 @@ const creer_update_all = (schemas) => async (nom_modele, condition, donnees, con
 {
     const modele = trouver_modele_table(schemas, nom_modele)
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
+    const donnees_norm = normaliser_donnees_update(donnees)
 
-    const condition_norm = normaliser_condition(condition)
-    const donnees_norm   = normaliser_donnees_update(donnees)
-    const contexte_norm  = normaliser_contexte_condition(contexte_condition)
-
-    const { joins, condition_avec_joins } = analyser_condition_pour_joins(schemas, modele, condition_norm, contexte_norm)
-    
-    const criteres = extraire_criteres_depuis_condition(modele, condition_avec_joins, contexte_norm)
-    const filtres_comparaison_sql = extraire_filtres_comparaison_sql(modele, condition_avec_joins, contexte_norm)
-    const filtres_relation_sql = extraire_filtres_relation_sql(condition_avec_joins, contexte_norm)
-
-    const { sql, post }       = separer_criteres(modele, criteres)
-    const { clause, valeurs } = construire_where(sql, [...filtres_comparaison_sql, ...filtres_relation_sql])
-    const besoin_post         = Object.keys(post).length > 0
-
-    const requete = construire_requete_recherche(modele, joins, clause)
-    console.log('[update_all] SQL:', rendre_requete_sql_debug(requete, valeurs))
-    if (valeurs.length) console.log('[update_all] Valeurs:', valeurs)
-    const [lignes] = await pool().query(requete, valeurs)
-
-    const now = new Date()
-    const cibles = []
-    for (const ligne of lignes)
-    {
-        if (besoin_post && !await verifier_post(modele, ligne, post))
-            continue
-
-        const ligne_decryptee = decrypter_ligne(modele, ligne)
-        if (!respecter_condition(modele, ligne_decryptee, condition_norm, now, contexte_norm, criteres))
-            continue
-
-        cibles.push(ligne)
-    }
-
-    if (!cibles.length)
+    const lignes = await lire_lignes(schemas, modele, condition, contexte_condition, 'update_all')
+    if (!lignes.length)
         return 0
 
-    const { clause: set_clause, valeurs: set_valeurs } = await construire_set_update(modele, donnees_norm)
-    let mises_a_jour = 0
-
-    for (const ligne of cibles)
-    {
-        const clause_pk  = modele.primary.map(c => `\`${c}\` = ?`).join(' AND ')
-        const valeurs_pk = modele.primary.map(c => ligne[c])
-
-        const [resultat] = await pool().query(
-            `UPDATE \`${modele.name}\` ${set_clause} WHERE ${clause_pk}`,
-            [...set_valeurs, ...valeurs_pk]
-        )
-
-        mises_a_jour += Number(resultat?.affectedRows || 0)
-    }
-
-    return mises_a_jour
+    return mettre_a_jour_lignes(modele, lignes, donnees_norm)
 }
 
 // ─── Logique d'insertion (partagée par $create_one et $create_all) ────────────
@@ -2296,11 +1239,7 @@ const inserer_batch = async (modele, tableau) =>
         {
             const valeur = insertions[i][champ.name]
 
-            if (valeur !== undefined && champ.values && !champ.values.includes(String(valeur)))
-                throw Object.assign(
-                    new Error(`Valeur "${valeur}" non autorisée pour le champ "${champ.name}" (valeurs : ${champ.values.join(', ')})`),
-                    { code: 'ENUM_VIOLATION', champ: champ.name, index: i }
-                )
+            verifier_valeur_champ(champ, valeur, i)
 
             if (!valider_regle(champ, contexte))
                 throw Object.assign(

@@ -52,7 +52,7 @@ const html_vers_texte = (html) =>
 
 // ─── $envoyer_email ───────────────────────────────────────────────────────────
 
-export const envoyer_email = async ({ to, subject, content, texte }) =>
+export const envoyer_email = async ({ to, subject, content, text }) =>
 {
     if (!to || !subject || !content)
         throw new Error('$send_email : to, subject et content sont requis')
@@ -62,7 +62,7 @@ export const envoyer_email = async ({ to, subject, content, texte }) =>
         to,
         subject,
         html   : content,
-        text   : texte ?? html_vers_texte(content)
+        text   : text ?? html_vers_texte(content)
     })
 }
 

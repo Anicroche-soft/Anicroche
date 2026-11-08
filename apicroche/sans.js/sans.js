@@ -273,7 +273,9 @@ const serveur = http.createServer(async (req, rep) =>
                     if (est_reponse_deja(erreur))
                         return
 
-                    throw erreur
+                    console.log(`/!\\ erreur ${methode} ${url} : ${erreur?.message ?? erreur}`)
+                    if (!rep.headersSent)
+                        repondre_json(rep, 500, "Erreur interne")
                 }
                 return
             }
@@ -281,13 +283,18 @@ const serveur = http.createServer(async (req, rep) =>
 
         for (const prefixe in composants)
         {
-            if (req.url.startsWith(`${prefixe}/`))
+            if (url.startsWith(`${prefixe}/`))
             {
                 const infos = composants[prefixe]
-                const chemin = path.join("./", `${infos.chemin}${req.url.slice(prefixe.length)}`)
+                const chemin = path.join("./", `${infos.chemin}${decodeURIComponent(url.slice(prefixe.length))}`)
+                if (!path.resolve(chemin).startsWith(path.resolve(infos.chemin) + path.sep))
+                {
+                    repondre_json(rep, 404, "Fichier introuvable")
+                    return
+                }
                 const dossier = path.dirname(chemin)
                 const fichier = path.basename(chemin)
-                const chemin_reel = rechercher_fichier(dossier, fichier, infos.recursif)
+                const chemin_reel = fs.existsSync(dossier) && rechercher_fichier(dossier, fichier, infos.recursif)
 
                 if (chemin_reel)
                 {
@@ -320,7 +327,13 @@ const serveur = http.createServer(async (req, rep) =>
             return
         }
 
-        repondre_json(rep, 200, `Bienvenue sur l'API ${adn.nom || "sans.js"}`)
+        if (url === '/')
+        {
+            repondre_json(rep, 200, `Bienvenue sur l'API ${adn.nom || "sans.js"}`)
+            return
+        }
+
+        repondre_json(rep, 404, "Route introuvable")
     }
 )
 

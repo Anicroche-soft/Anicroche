@@ -1,4 +1,5 @@
 import mysql from "mysql2/promise"
+import { createHash } from "crypto"
 
 // ─── Types SQL ────────────────────────────────────────────────────────────────
 
@@ -34,9 +35,13 @@ const parser_default_now = (valeur) =>
     return null
 }
 
+// Valeurs par défaut calculées par le cadriciel (et non par la base)
+const est_default_cadriciel = (valeur) =>
+    valeur === 'auto' || (typeof valeur === 'string' && valeur.startsWith('$'))
+
 const default_sql = (champ) =>
 {
-    if (!champ.default) return ''
+    if (!champ.default || est_default_cadriciel(champ.default)) return ''
     const now = parser_default_now(champ.default)
     if (now)
     {
@@ -50,11 +55,11 @@ const default_sql = (champ) =>
 // Valeur telle que MySQL la stocke dans INFORMATION_SCHEMA.COLUMN_DEFAULT
 const normaliser_default = (champ) =>
 {
-    if (!champ.default) return null
+    if (!champ.default || est_default_cadriciel(champ.default)) return null
     const now = parser_default_now(champ.default)
     if (now)
     {
-        if (champ.type === 'date') return 'current_date()'
+        if (champ.type === 'date') return 'curdate()'
         if (!now.interval)        return 'CURRENT_TIMESTAMP'
         return `(now() + interval ${now.interval.valeur} ${now.interval.unite.toLowerCase()})`
     }
@@ -340,6 +345,132 @@ const descripteur_jonction = (nom, table_source, table_cible) =>
     }
 }
 
+// ─── Clefs étrangères ─────────────────────────────────────────────────────────
+
+const nommer_clef_etrangere = (table, colonne) =>
+{
+    const nom = `fk_${table}_${colonne}`
+    if (nom.length <= 64)
+        return nom
+    return `fk_${createHash('sha1').update(`${table}.${colonne}`).digest('hex').slice(0, 40)}`
+}
+
+// Liste des clefs étrangères attendues d'après les relations du schéma :
+// - relation x-N : colonne id_<entrée source> de la table cible → table source
+// - relation 0-1 / 1-1 : colonne id_<entrée cible> de la table source → table cible
+// - relation N-N : les deux colonnes de la table de jonction (suppression en cascade)
+const lister_clefs_etrangeres = (tables, relations) =>
+{
+    const index = Object.fromEntries(tables.map(t => [t.name, t]))
+    const attendues = []
+
+    const ajouter = (table, colonne, table_ref, on_delete) =>
+    {
+        const cible = index[table_ref]
+        if (!cible || cible.primary.length !== 1)
+        {
+            console.log(`/!\\ clef étrangère \`${table}.${colonne}\` ignorée : \`${table_ref}\` doit avoir une clef primaire simple`)
+            return
+        }
+        attendues.push({
+            nom        : nommer_clef_etrangere(table, colonne),
+            table,
+            colonne,
+            table_ref,
+            colonne_ref: cible.primary[0],
+            on_delete
+        })
+    }
+
+    for (const rel of relations)
+    {
+        if (rel.table_jonction)
+        {
+            const source = index[rel.table_source]
+            const cible  = index[rel.table_cible]
+            const col_source = `id_${source.entry_name ?? source.name}`
+            const col_cible  = `id_${cible.entry_name ?? cible.name}`
+            if (col_source === col_cible)
+            {
+                console.log(`/!\\ jonction \`${rel.table_jonction}\` : relation d'une table vers elle-même non prise en charge`)
+                continue
+            }
+            ajouter(rel.table_jonction, col_source, rel.table_source, 'CASCADE')
+            ajouter(rel.table_jonction, col_cible, rel.table_cible, 'CASCADE')
+        }
+        else if (rel.cle_etrangere)
+            ajouter(rel.table_cible, rel.cle_etrangere, rel.table_source, 'RESTRICT')
+        else if (rel.cle_locale)
+            ajouter(rel.table_source, rel.cle_locale, rel.table_cible, 'RESTRICT')
+    }
+
+    return attendues
+}
+
+const synchro_clefs_etrangeres = async (connexion, attendues) =>
+{
+    const [rows] = await connexion.query(
+        `SELECT rc.CONSTRAINT_NAME, rc.TABLE_NAME, rc.DELETE_RULE,
+                kcu.COLUMN_NAME, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME
+         FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
+         JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+           ON  kcu.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
+           AND kcu.CONSTRAINT_NAME   = rc.CONSTRAINT_NAME
+           AND kcu.TABLE_NAME        = rc.TABLE_NAME
+         WHERE rc.CONSTRAINT_SCHEMA = DATABASE()`
+    )
+
+    const existantes = new Map(rows.map(r => [r.CONSTRAINT_NAME, r]))
+    const par_nom    = new Map(attendues.map(fk => [fk.nom, fk]))
+
+    const identique = (r, fk) =>
+        r.TABLE_NAME === fk.table
+     && r.COLUMN_NAME === fk.colonne
+     && r.REFERENCED_TABLE_NAME === fk.table_ref
+     && r.REFERENCED_COLUMN_NAME === fk.colonne_ref
+     && r.DELETE_RULE === fk.on_delete
+
+    // Supprimer les clefs gérées par sans.js (préfixe fk_) devenues inutiles ou différentes
+    for (const [nom, r] of existantes)
+    {
+        if (!nom.startsWith('fk_'))
+            continue
+        const fk = par_nom.get(nom)
+        if (fk && identique(r, fk))
+            continue
+
+        try
+        {
+            await connexion.query(`ALTER TABLE \`${r.TABLE_NAME}\` DROP FOREIGN KEY \`${nom}\``)
+            console.log(`  ALTER TABLE \`${r.TABLE_NAME}\` DROP FOREIGN KEY \`${nom}\``)
+            existantes.delete(nom)
+        }
+        catch (err)
+        {
+            console.log(`/!\\ erreur suppression clef étrangère \`${nom}\` : ${err.message}`)
+        }
+    }
+
+    for (const fk of attendues)
+    {
+        if (existantes.has(fk.nom))
+            continue
+
+        try
+        {
+            await connexion.query(
+                `ALTER TABLE \`${fk.table}\` ADD CONSTRAINT \`${fk.nom}\` FOREIGN KEY (\`${fk.colonne}\`)
+                 REFERENCES \`${fk.table_ref}\` (\`${fk.colonne_ref}\`) ON DELETE ${fk.on_delete} ON UPDATE CASCADE`
+            )
+            console.log(`  ALTER TABLE \`${fk.table}\` ADD FOREIGN KEY (${fk.colonne}) → ${fk.table_ref}.${fk.colonne_ref}`)
+        }
+        catch (err)
+        {
+            console.log(`/!\\ erreur ajout clef étrangère \`${fk.table}.${fk.colonne}\` : ${err.message}`)
+        }
+    }
+}
+
 // ─── Point d'entrée ───────────────────────────────────────────────────────────
 
 export const construire_base = async (schemas) =>
@@ -381,8 +512,11 @@ export const construire_base = async (schemas) =>
             await mettre_a_jour_table(connexion, desc, mode_dev, suppression_schema_activee)
     }
 
+    await synchro_clefs_etrangeres(connexion, lister_clefs_etrangeres(tables, relations))
+
     if (mode_dev && suppression_schema_activee)
     {
+        await connexion.query('SET FOREIGN_KEY_CHECKS = 0')
         const noms_schema = new Set([
             ...tables.map(t => t.name),
             ...jonctions.map(r => r.table_jonction),
@@ -403,6 +537,7 @@ export const construire_base = async (schemas) =>
                 }
             }
         }
+        await connexion.query('SET FOREIGN_KEY_CHECKS = 1')
     }
 
     await connexion.end()

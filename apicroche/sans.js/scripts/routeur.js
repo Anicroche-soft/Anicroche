@@ -77,6 +77,11 @@ const valider_regles_modele = (modele, valeurs) =>
         if (typeof champ.rule !== 'string' || !champ.rule.trim())
             continue
 
+        // Un champ facultatif sans valeur n'a pas de règle à respecter
+        const valeur = contexte[`$${champ.name}`]
+        if (champ.nullable && (valeur === null || valeur === ERREUR_AUGURE))
+            continue
+
         try
         {
             if (!evaluer(champ.rule, contexte))
@@ -332,8 +337,8 @@ const creer_set_cookie = (rep) => (name, value, options = {}) =>
 
     const max_age = convertir_duree_en_secondes(options?.lifetime, '30d')
     const http_only = options?.httpOnly ?? true
-    const secure = options?.secure ?? (process.env.NODE_ENV === 'production')
-    const same_site = options?.sameSite ?? (process.env.NODE_ENV === 'production' ? 'None' : 'Lax')
+    const secure = options?.secure ?? (mode === 'prod')
+    const same_site = options?.sameSite ?? (mode === 'prod' ? 'None' : 'Lax')
     const path = options?.path ?? '/'
 
     const morceaux = [
@@ -470,20 +475,19 @@ const normaliser_projection_recherche = (table, projection) =>
     return { physiques, select: tokens_select.join(';') }
 }
 
-const construire_condition_pk_recherche = (table) =>
-    table.primary.map(clef => `$${clef} = $params.${clef}`).join(' & ')
 
-const executer_hook_script = async ({
-    action_brut,
-    etiquette,
-    fonctions,
-    rep,
-    $indicate,
-    $body,
-    $request,
-    $context,
-    $results
-}) =>
+// Condition désignant une entrée par sa clef primaire (paramètres de l'URL)
+const construire_condition_pk = (table) =>
+    table.primary.map(clef => `#${clef} = $params.${clef}`).join(' & ')
+
+// Ajouter une restriction déclarée dans @rules à une condition
+const restreindre = (condition, restriction) =>
+    restriction ? `(${condition}) & (${restriction})` : condition
+
+// Exécuter un hook `$fonction($arg, …)` déclaré dans un modèle.
+// `valeurs` associe chaque argument reconnu ($body, $request, $context, $values, $results…) à sa valeur.
+// Retourne vrai si une réponse a été envoyée (le traitement doit alors s'arrêter).
+const executer_hook_script = async ({ action_brut, etiquette, fonctions, rep, $indicate, valeurs }) =>
 {
     if (typeof action_brut !== 'string' || !action_brut.trim())
         return false
@@ -495,25 +499,16 @@ const executer_hook_script = async ({
         return false
     }
 
-    const fn = fonctions[action.nom]
+    const fn = fonctions?.[action.nom]
     if (typeof fn !== 'function')
     {
         console.log(`/!\\ ${etiquette} ignoré : fonction introuvable ${action.nom}`)
         return false
     }
 
-    const valeurs_args = action.args.map(arg =>
-    {
-        if (arg === '$body') return $body
-        if (arg === '$request') return $request
-        if (arg === '$context') return $context
-        if (arg === '$results') return $results
-        return undefined
-    })
-
     try
     {
-        await fn(...valeurs_args)
+        await fn(...action.args.map(arg => valeurs[arg]))
     }
     catch (err)
     {
@@ -523,10 +518,29 @@ const executer_hook_script = async ({
         console.log(`/!\\ erreur ${etiquette} ${action_brut} : ${err.message}`)
         if (!rep.headersSent)
             $indicate(500, 'Erreur interne')
-        return rep.headersSent
+        return true
     }
 
     return rep.headersSent
+}
+
+// Exécuter une liste de hooks ; retourne vrai si le traitement doit s'arrêter
+const executer_hooks = async (hooks, parametres) =>
+{
+    for (const { action_brut, etiquette } of hooks)
+    {
+        if (await executer_hook_script({ ...parametres, action_brut, etiquette }))
+            return true
+    }
+    return false
+}
+
+const repondre_erreur_interne = (rep) =>
+{
+    if (rep.headersSent)
+        return
+    rep.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' })
+    rep.end(JSON.stringify({ code: 500, error: 'Erreur interne', data: {} }))
 }
 
 const executer_prior_respond = async (index, contexte, rep, $body, $request, $context, $indicate) =>
@@ -689,12 +703,10 @@ const executer_post_respond = async (index, contexte, rep, $body, $request, $con
     return { interrompu: rep.headersSent, fonctions }
 }
 
-// ─── Variables injectées dans les handlers ────────────────────────────────────
-// $body → corps JSON de la requête (sera fourni au moment de l'appel)
-
-const VARIABLES_HANDLER = ['$body', '$request']
 
 // ─── Construction des routes ──────────────────────────────────────────────────
+
+const CODES_VALIDATION = new Set(['RULE_VIOLATION', 'ENUM_VIOLATION', 'SIZE_VIOLATION'])
 
 export const construire_routes = (schemas, index = null) =>
 {
@@ -704,9 +716,145 @@ export const construire_routes = (schemas, index = null) =>
     const routes            = []
     let premiere_route      = true
 
-    const ajouter_routes_modele = (table, script_source) =>
+    const enregistrer_route = (methode, chemin, handler, description) =>
     {
-        if (!table.routes?.length || !script_source)
+        routes.push({ methode, chemin, handler })
+        if (premiere_route)
+        {
+            console.log('\nRoutes :')
+            premiere_route = false
+        }
+        console.log(`  ${methode.padEnd(6)} ${chemin}  →  ${description}`)
+    }
+
+    // Préparer le contexte commun d'une requête puis exécuter les prior_respond.
+    // Retourne null si une réponse a déjà été envoyée.
+    const ouvrir_requete = async (req, rep) =>
+    {
+        appliquer_cors(req, rep)
+
+        const $body         = await lire_corps(req)
+        const $request      = construire_request(req)
+        const $context      = {}
+        const $params       = req.params ?? {}
+        const data_reponse  = {}
+        const reponse_extra = {}
+
+        let contexte_script       = null
+        let post_respond_execute  = false
+        let post_respond_en_cours = false
+
+        const executer_post_respond_safe = async () =>
+        {
+            if (post_respond_execute || post_respond_en_cours || !contexte_script)
+                return
+
+            post_respond_en_cours = true
+            let post_respond = null
+            try
+            {
+                post_respond = await executer_post_respond(index_routes, contexte_script, rep, $body, $request, $context, $indicate_brut)
+            }
+            finally
+            {
+                post_respond_en_cours = false
+            }
+
+            if (post_respond.interrompu)
+                return
+
+            Object.assign(contexte_script, post_respond.fonctions)
+            post_respond_execute = true
+        }
+
+        const $indicate_brut = creer_indicate(rep, data_reponse, reponse_extra)
+        const indiquer       = creer_indicate(rep, data_reponse, reponse_extra, executer_post_respond_safe)
+        const etat           = { reponse_demandee: false }
+        const $indicate      = (...args) =>
+        {
+            etat.reponse_demandee = true
+            return indiquer(...args)
+        }
+        const magasin        = construire_fonctions_magasin_requete(fonctions_magasin, { $body, $params })
+
+        contexte_script = {
+            ...magasin,
+            ...fonctions_mailer,
+            $indicate,
+            $add_to_data   : creer_add_to_data(data_reponse),
+            $add_to_respond: creer_add_to_respond(reponse_extra),
+            $body,
+            $request,
+            $context,
+            $sign_token    : creer_sign_token(),
+            $verify_token  : creer_verify_token(),
+            $set_cookie    : creer_set_cookie(rep),
+            $q             : citer_condition
+        }
+
+        const prior_respond = await executer_prior_respond(index_routes, contexte_script, rep, $body, $request, $context, $indicate)
+        if (prior_respond.interrompu)
+            return null
+
+        Object.assign(contexte_script, prior_respond.fonctions)
+        return { $body, $request, $context, $params, $indicate, contexte_script, magasin, etat }
+    }
+
+    // Envelopper un handler : toute erreur imprévue donne une réponse 500
+    const proteger = (etiquette, traitement) => async (req, rep) =>
+    {
+        let $indicate = null
+        try
+        {
+            const requete = await ouvrir_requete(req, rep)
+            if (!requete)
+                return
+            $indicate = requete.$indicate
+            await traitement(requete, req, rep)
+        }
+        catch (err)
+        {
+            if (est_reponse_deja(err) || rep.headersSent)
+                return
+
+            if (CODES_VALIDATION.has(err.code))
+            {
+                try { $indicate?.(422, err.message) } catch {}
+                return
+            }
+
+            // Clef étrangère vers une entrée inexistante / entrée encore référencée
+            if (err.code === 'ER_NO_REFERENCED_ROW_2' || err.code === 'ER_NO_REFERENCED_ROW')
+            {
+                try { $indicate?.(422, 'Référence vers une entrée inexistante') } catch {}
+                return
+            }
+            if (err.code === 'ER_ROW_IS_REFERENCED_2' || err.code === 'ER_ROW_IS_REFERENCED')
+            {
+                try { $indicate?.(409, 'Entrée encore référencée par d\'autres données') } catch {}
+                return
+            }
+
+            console.log(`/!\\ erreur ${etiquette} : ${err.message}`)
+            try
+            {
+                if ($indicate)
+                    $indicate(500, 'Erreur interne')
+                else
+                    repondre_erreur_interne(rep)
+            }
+            catch {}
+        }
+    }
+
+    const compiler_script_modele = (table, contexte_script, necessaire) =>
+        necessaire && table.script ? compiler_script(table.script, contexte_script) : null
+
+    // ─── Routes déclarées dans @routes ────────────────────────────────────────
+
+    const ajouter_routes_modele = (table) =>
+    {
+        if (!table.routes?.length || !table.script)
             return
 
         for (const route of table.routes)
@@ -721,632 +869,223 @@ export const construire_routes = (schemas, index = null) =>
                 continue
             }
 
-            const chemin  = route.path
             const methode = (route.method ?? 'POST').toUpperCase()
 
-            const handler = async (req, rep) =>
+            const handler = proteger(`${methode} ${route.path}`, async ({ $body, $request, $context, $indicate, contexte_script, etat }, req, rep) =>
             {
-                appliquer_cors(req, rep)
-
-                const $body     = await lire_corps(req)
-                const $request  = construire_request(req)
-                const $context  = {}
-                const data_reponse = {}
-                const reponse_extra = {}
-                const $add_to_data = creer_add_to_data(data_reponse)
-                const $add_to_respond = creer_add_to_respond(reponse_extra)
-                let contexte_script = null
-                let post_respond_execute = false
-                let post_respond_en_cours = false
-                const executer_post_respond_safe = async () =>
-                {
-                    if (post_respond_execute || post_respond_en_cours || !contexte_script)
-                        return
-
-                    post_respond_en_cours = true
-                    let post_respond = null
-                    try
-                    {
-                        post_respond = await executer_post_respond(index_routes, contexte_script, rep, $body, $request, $context, $indicate_brut)
-                    }
-                    finally
-                    {
-                        post_respond_en_cours = false
-                    }
-
-                    if (post_respond.interrompu)
-                        return
-
-                    Object.assign(contexte_script, post_respond.fonctions)
-                    post_respond_execute = true
-                }
-                const $indicate_brut = creer_indicate(rep, data_reponse, reponse_extra)
-                const $indicate = creer_indicate(rep, data_reponse, reponse_extra, executer_post_respond_safe)
-                const $q        = citer_condition
-                const $sign_token = creer_sign_token()
-                const $verify_token = creer_verify_token()
-                const $set_cookie = creer_set_cookie(rep)
-
-                const contexte_condition = { $body }
-                const fonctions_magasin_requete = construire_fonctions_magasin_requete(fonctions_magasin, contexte_condition)
-                contexte_script = {
-                    ...fonctions_magasin_requete,
-                    ...fonctions_mailer,
-                    $indicate,
-                    $add_to_data,
-                    $add_to_respond,
-                    $body,
-                    $request,
-                    $context,
-                    $sign_token,
-                    $verify_token,
-                    $set_cookie,
-                    $q
-                }
-
-                const prior_respond = await executer_prior_respond(index_routes, contexte_script, rep, $body, $request, $context, $indicate)
-                if (prior_respond.interrompu)
-                    return
-
-                Object.assign(contexte_script, prior_respond.fonctions)
-
                 // Compiler le script à chaque requête pour lier $indicate à cette réponse
-                const fonctions = compiler_script(script_source, contexte_script)
-
+                const fonctions = compiler_script(table.script, contexte_script)
                 const fn = fonctions[action.nom]
                 if (typeof fn !== 'function')
                 {
+                    console.log(`/!\\ route ${route.path} : fonction introuvable ${action.nom}`)
                     $indicate(500, 'Erreur interne')
                     return
                 }
 
-                const valeurs_args = action.args.map(arg =>
-                {
-                    if (arg === '$body') return $body
-                    if (arg === '$request') return $request
-                    return undefined
-                })
+                const valeurs = { $body, $request, $context }
+                await fn(...action.args.map(arg => valeurs[arg]))
 
-                try
+                if (!etat.reponse_demandee)
                 {
-                    await fn(...valeurs_args)
+                    console.log(`/!\\ route ${methode} ${route.path} : ${action.nom} s'est terminée sans appeler $indicate`)
+                    $indicate(500, 'Aucune réponse')
                 }
-                catch (err)
-                {
-                    if (est_reponse_deja(err))
-                        return
+            })
 
-                    console.log(`/!\\ erreur dans ${action.nom} : ${err.message}`)
-                    if (!rep.headersSent)
-                        $indicate(500, 'Erreur interne')
-                }
-            }
-
-            routes.push({ methode, chemin, handler })
-            if (premiere_route)
-            {
-                console.log('\nRoutes :')
-                premiere_route = false
-            }
-            console.log(`  ${methode.padEnd(6)} ${chemin}  →  ${action.nom}`)
+            enregistrer_route(methode, route.path, handler, action.nom)
         }
     }
 
     for (const table of schemas.tables)
-    {
-        ajouter_routes_modele(table, table.script)
-    }
-
+        ajouter_routes_modele(table)
     if (index_routes)
-        ajouter_routes_modele(index_routes, index_routes.script)
+        ajouter_routes_modele(index_routes)
+
+    // ─── Routes automatiques ──────────────────────────────────────────────────
 
     for (const table of schemas.tables)
     {
-        // ─── Routes POST automatiques (can_create) ────────────────────────────
-        const champs_can_create = table.fields.filter(f => f.can_create != null)
-        if (!champs_can_create.length) continue
+        const nom_entree   = table.entry_name ?? table.name
+        const a_une_pk     = Array.isArray(table.primary) && table.primary.length > 0
+        const chemin_pk    = `/${nom_entree}/${table.primary.map(clef => `:${clef}`).join('/')}`
+        const condition_pk = construire_condition_pk(table)
 
-        const nom_entree = table.entry_name ?? table.name
-        const chemin     = `/${nom_entree}`
-        const methode    = 'POST'
-
-        const handler = async (req, rep) =>
+        // Lire les champs du corps (sous leur nom `alt` s'il est défini)
+        const lire_champs_corps = (champs, $body) =>
         {
-                appliquer_cors(req, rep)
-
-            const $body     = await lire_corps(req)
-            const $request  = construire_request(req)
-            const $context  = {}
-            const data_reponse = {}
-            const reponse_extra = {}
-            const $add_to_data = creer_add_to_data(data_reponse)
-            const $add_to_respond = creer_add_to_respond(reponse_extra)
-            let contexte_script = null
-            let post_respond_execute = false
-            let post_respond_en_cours = false
-            const executer_post_respond_safe = async () =>
+            const donnees = {}
+            for (const champ of champs)
             {
-                if (post_respond_execute || post_respond_en_cours || !contexte_script)
-                    return
-
-                post_respond_en_cours = true
-                let post_respond = null
-                try
-                {
-                    post_respond = await executer_post_respond(index_routes, contexte_script, rep, $body, $request, $context, $indicate_brut)
-                }
-                finally
-                {
-                    post_respond_en_cours = false
-                }
-
-                if (post_respond.interrompu)
-                    return
-
-                Object.assign(contexte_script, post_respond.fonctions)
-                post_respond_execute = true
+                const valeur = $body[champ.alt ?? champ.name]
+                if (valeur !== undefined)
+                    donnees[champ.name] = valeur
             }
-            const $indicate_brut = creer_indicate(rep, data_reponse, reponse_extra)
-            const $indicate = creer_indicate(rep, data_reponse, reponse_extra, executer_post_respond_safe)
-            const $sign_token = creer_sign_token()
-            const $verify_token = creer_verify_token()
-            const $set_cookie = creer_set_cookie(rep)
-            const contexte_condition = { $body }
-            const fonctions_magasin_requete = construire_fonctions_magasin_requete(fonctions_magasin, contexte_condition)
-            contexte_script = {
-                ...fonctions_magasin_requete,
-                ...fonctions_mailer,
-                $indicate,
-                $add_to_data,
-                $add_to_respond,
-                $body,
-                $request,
-                $context,
-                $sign_token,
-                $verify_token,
-                $set_cookie,
-                $q: citer_condition
-            }
+            return donnees
+        }
 
-            const prior_respond = await executer_prior_respond(index_routes, contexte_script, rep, $body, $request, $context, $indicate)
-            if (prior_respond.interrompu)
-                return
-
-            Object.assign(contexte_script, prior_respond.fonctions)
-
-            // Construire le contexte augure depuis le corps de la requête
-            // (lire avec le nom alt si défini, stocker sous le nom interne)
-            const contexte = {}
+        // Contexte des conditions can_create / can_update : champs du corps + requête
+        const contexte_corps = ($body, $request, $context, $params) =>
+        {
+            const contexte = { $request, $context, $params }
             for (const champ of table.fields)
                 contexte[`$${champ.name}`] = $body[champ.alt ?? champ.name] ?? ERREUR_AUGURE
-
-            // Vérifier toutes les conditions can_create
-            for (const champ of champs_can_create)
-            {
-                if (!evaluer(champ.can_create, contexte))
-                {
-                    $indicate(403, 'Accès refusé')
-                    return
-                }
-            }
-
-            // Filtrer le corps : seulement les champs autorisés
-            const donnees = {}
-            for (const champ of champs_can_create)
-            {
-                const valeur_body = $body[champ.alt ?? champ.name]
-                if (valeur_body !== undefined)
-                    donnees[champ.name] = valeur_body
-            }
-
-            // Pré-générer les valeurs auto pour les rendre disponibles dans prior_create
-            const $values = preparer_donnees(table, donnees)
-
-            // Vérifier les règles avant les hooks de création.
-            const validation_regles = valider_regles_modele(table, $values)
-            if (!validation_regles.ok)
-            {
-                if (validation_regles.erreur)
-                    console.log(`/!\ erreur validation règle ${validation_regles.champ} : ${validation_regles.erreur.message}`)
-                $indicate(422, `Valeur invalide pour le champ "${validation_regles.champ}"`)
-                return
-            }
-
-            const champs_prior_create = table.fields.filter(f => f.prior_create != null)
-            const champs_post_create  = table.fields.filter(f => f.post_create != null)
-
-            let fonctions = null
-            if ((champs_prior_create.length || champs_post_create.length) && table.script)
-            {
-                fonctions = compiler_script(table.script, contexte_script)
-            }
-
-            // Exécuter les prior_create avant l'insertion (tous les champs, pas seulement can_create)
-            if (champs_prior_create.length && fonctions)
-            {
-                for (const champ of champs_prior_create)
-                {
-                    const action = analyser_action(champ.prior_create)
-                    if (!action) continue
-                    const fn = fonctions[action.nom]
-                    if (typeof fn !== 'function')
-                    {
-                        console.log(`/!\ prior_create ignoré : fonction introuvable ${action.nom}`)
-                        continue
-                    }
-                    const valeurs_args = action.args.map(arg =>
-                    {
-                        if (arg === '$body')   return $body
-                        if (arg === '$request') return $request
-                        if (arg === '$values') return $values
-                        return undefined
-                    })
-                    try
-                    {
-                        await fn(...valeurs_args)
-                    }
-                    catch (err)
-                    {
-                        if (est_reponse_deja(err))
-                            return
-
-                        console.log(`/!\ erreur prior_create ${champ.prior_create} : ${err.message}`)
-                        if (!rep.headersSent) $indicate(500, 'Erreur interne')
-                        return
-                    }
-                }
-            }
-
-            try
-            {
-                const valeurs_creees = await fonctions_magasin.$create_one(nom_entree, $values)
-                Object.assign($values, valeurs_creees)
-
-                // Exécuter les post_create après l'insertion SQL
-                if (champs_post_create.length && fonctions)
-                {
-                    for (const champ of champs_post_create)
-                    {
-                        const action = analyser_action(champ.post_create)
-                        if (!action) continue
-                        const fn = fonctions[action.nom]
-                        if (typeof fn !== 'function')
-                        {
-                            console.log(`/!\ post_create ignoré : fonction introuvable ${action.nom}`)
-                            continue
-                        }
-                        const valeurs_args = action.args.map(arg =>
-                        {
-                            if (arg === '$body')   return $body
-                            if (arg === '$request') return $request
-                            if (arg === '$values') return $values
-                            return undefined
-                        })
-                        try
-                        {
-                            await fn(...valeurs_args)
-                        }
-                        catch (err)
-                        {
-                            if (est_reponse_deja(err))
-                                return
-
-                            console.log(`/!\ erreur post_create ${champ.post_create} : ${err.message}`)
-                            if (!rep.headersSent) $indicate(500, 'Erreur interne')
-                            return
-                        }
-                    }
-                }
-
-                if (!rep.headersSent)
-                    $indicate(201, 'Créé')
-            }
-            catch (err)
-            {
-                if (est_reponse_deja(err))
-                    return
-
-                if (err.code === 'RULE_VIOLATION' || err.code === 'ENUM_VIOLATION')
-                {
-                    $indicate(422, err.message)
-                    return
-                }
-                console.log(`/!\ erreur POST /${nom_entree} : ${err.message}`)
-                if (!rep.headersSent)
-                    $indicate(500, 'Erreur interne')
-            }
+            return contexte
         }
 
-        routes.push({ methode, chemin, handler })
-        if (premiere_route)
-        {
-            console.log('\nRoutes :')
-            premiere_route = false
-        }
-        console.log(`  ${methode.padEnd(6)} ${chemin}  →  can_create [${champs_can_create.map(f => f.name).join(', ')}]`)
-    }
+        // ─── POST /<entrée> (champs can_create) ──────────────────────────────
 
-    for (const table of schemas.tables)
-    {
-        const nom_entree = table.entry_name ?? table.name
-        const routes_recherche = [
+        const champs_can_create = table.fields.filter(f => f.can_create != null)
+        if (champs_can_create.length)
+        {
+            const handler = proteger(`POST /${nom_entree}`, async ({ $body, $request, $context, $params, $indicate, contexte_script }, req, rep) =>
             {
-                is_one: false,
-                methode: 'GET',
-                chemin: `/${table.name}`,
-                action: 'search_all'
-            }
-        ]
-
-        if (Array.isArray(table.primary) && table.primary.length > 0)
-        {
-            routes_recherche.push({
-                is_one: true,
-                methode: 'GET',
-                chemin: `/${nom_entree}/${table.primary.map(clef => `:${clef}`).join('/')}`,
-                action: 'search_one'
-            })
-        }
-
-        for (const route_recherche of routes_recherche)
-        {
-            const handler = async (req, rep) =>
-            {
-                appliquer_cors(req, rep)
-
-                const $body     = await lire_corps(req)
-                const $request  = construire_request(req)
-                const $context  = {}
-                const data_reponse = {}
-                const reponse_extra = {}
-                const $add_to_data = creer_add_to_data(data_reponse)
-                const $add_to_respond = creer_add_to_respond(reponse_extra)
-                let contexte_script = null
-                let post_respond_execute = false
-                let post_respond_en_cours = false
-                const executer_post_respond_safe = async () =>
+                const contexte = contexte_corps($body, $request, $context, $params)
+                for (const champ of champs_can_create)
                 {
-                    if (post_respond_execute || post_respond_en_cours || !contexte_script)
-                        return
-
-                    post_respond_en_cours = true
-                    let post_respond = null
-                    try
-                    {
-                        post_respond = await executer_post_respond(index_routes, contexte_script, rep, $body, $request, $context, $indicate_brut)
-                    }
-                    finally
-                    {
-                        post_respond_en_cours = false
-                    }
-
-                    if (post_respond.interrompu)
-                        return
-
-                    Object.assign(contexte_script, post_respond.fonctions)
-                    post_respond_execute = true
-                }
-                const $indicate_brut = creer_indicate(rep, data_reponse, reponse_extra)
-                const $indicate = creer_indicate(rep, data_reponse, reponse_extra, executer_post_respond_safe)
-                const $sign_token = creer_sign_token()
-                const $verify_token = creer_verify_token()
-                const $set_cookie = creer_set_cookie(rep)
-
-                const contexte_condition = { $body, $params: req.params ?? {} }
-                const fonctions_magasin_requete = construire_fonctions_magasin_requete(fonctions_magasin, contexte_condition)
-                contexte_script = {
-                    ...fonctions_magasin_requete,
-                    ...fonctions_mailer,
-                    $indicate,
-                    $add_to_data,
-                    $add_to_respond,
-                    $body,
-                    $request,
-                    $context,
-                    $sign_token,
-                    $verify_token,
-                    $set_cookie,
-                    $q: citer_condition
-                }
-
-                const prior_respond = await executer_prior_respond(index_routes, contexte_script, rep, $body, $request, $context, $indicate)
-                if (prior_respond.interrompu)
-                    return
-
-                Object.assign(contexte_script, prior_respond.fonctions)
-
-                if (table.rules?.can_search != null)
-                {
-                    if (!evaluer(table.rules.can_search, { $request, $context }))
+                    if (!evaluer(champ.can_create, contexte))
                     {
                         $indicate(403, 'Accès refusé')
                         return
                     }
                 }
 
-                const projection = new URL(req.url, 'http://localhost').searchParams.get('projection')
-                const { physiques: projection_physique, select: projection_select } = normaliser_projection_recherche(table, projection)
-                const contexte_can_search = { $request, $context }
-                const champs_retenus = []
-                const aux_conditions = {}
+                // Pré-générer les valeurs auto pour les rendre disponibles dans prior_create
+                const $values = preparer_donnees(table, lire_champs_corps(champs_can_create, $body))
 
-                for (const nom_champ of projection_physique)
+                const validation_regles = valider_regles_modele(table, $values)
+                if (!validation_regles.ok)
                 {
-                    const champ = table.fields.find(f => f.name === nom_champ)
-                    if (!champ)
-                        continue
-
-                    if (typeof champ.can_search !== 'string' || !champ.can_search.trim())
-                        continue
-
-                    if (!evaluer(champ.can_search, contexte_can_search))
-                        continue
-
-                    champs_retenus.push(nom_champ)
-                    if (typeof champ.restrict_search === 'string' && champ.restrict_search.trim())
-                        aux_conditions[`_can_${champ.name}`] = champ.restrict_search
+                    if (validation_regles.erreur)
+                        console.log(`/!\\ erreur validation règle ${validation_regles.champ} : ${validation_regles.erreur.message}`)
+                    $indicate(422, `Valeur invalide pour le champ "${validation_regles.champ}"`)
+                    return
                 }
 
-                if (champs_retenus.length === 0)
+                const hooks_prior = table.fields.filter(f => f.prior_create).map(f => ({ action_brut: f.prior_create, etiquette: `prior_create ${f.name}` }))
+                const hooks_post  = table.fields.filter(f => f.post_create).map(f => ({ action_brut: f.post_create, etiquette: `post_create ${f.name}` }))
+                const fonctions   = compiler_script_modele(table, contexte_script, hooks_prior.length || hooks_post.length)
+                const parametres  = { fonctions, rep, $indicate, valeurs: { $body, $request, $context, $values } }
+
+                if (await executer_hooks(hooks_prior, parametres))
+                    return
+
+                Object.assign($values, await fonctions_magasin.$create_one(nom_entree, $values))
+
+                if (await executer_hooks(hooks_post, parametres))
+                    return
+
+                $indicate(201, 'Créé')
+            })
+
+            enregistrer_route('POST', `/${nom_entree}`, handler, `can_create [${champs_can_create.map(f => f.name).join(', ')}]`)
+        }
+
+        // ─── GET /<table> et GET /<entrée>/:pk (champs can_search) ──────────
+
+        const routes_recherche = [{ is_one: false, chemin: `/${table.name}`, action: 'search_all' }]
+        if (a_une_pk)
+            routes_recherche.push({ is_one: true, chemin: chemin_pk, action: 'search_one' })
+
+        for (const route_recherche of routes_recherche)
+        {
+            const handler = proteger(`GET ${route_recherche.chemin}`, async ({ $body, $request, $context, $params, $indicate, contexte_script, magasin }, req, rep) =>
+            {
+                const contexte_regles = { $request, $context, $params }
+
+                if (table.rules?.can_search != null && !evaluer(table.rules.can_search, contexte_regles))
                 {
                     $indicate(403, 'Accès refusé')
                     return
                 }
 
-                // Construire le select final : champs physiques retenus + reste de la projection (relations, imbriqués)
-                const select_physiques = champs_retenus.join(';')
-                const select_final = projection_select
-                    ? [select_physiques, ...projection_select.split(';').map(t => t.trim()).filter(t => t && !projection_physique.includes(t.split('.')[0].split(',').pop().trim()))].filter(Boolean).join(';')
-                    : select_physiques
+                const projection = new URL(req.url, 'http://localhost').searchParams.get('projection')
+                const { physiques: projection_physique, select: projection_select } = normaliser_projection_recherche(table, projection)
 
+                const champs_retenus = []
+                const aux_conditions = {}
+                for (const nom_champ of projection_physique)
+                {
+                    const champ = table.fields.find(f => f.name === nom_champ)
+                    if (!champ?.can_search?.trim() || !evaluer(champ.can_search, contexte_regles))
+                        continue
+
+                    champs_retenus.push(nom_champ)
+                    if (champ.restrict_search?.trim())
+                        aux_conditions[`_can_${champ.name}`] = champ.restrict_search
+                }
+
+                if (!champs_retenus.length)
+                {
+                    $indicate(403, 'Accès refusé')
+                    return
+                }
+
+                // Select final : champs physiques retenus + reste de la projection (relations, imbriqués)
+                const reste_projection = projection_select
+                    ? projection_select.split(';').map(t => t.trim()).filter(t => t && !projection_physique.includes(t.split('.')[0].split(',').pop().trim()))
+                    : []
                 const options_recherche = {
-                    select        : select_final,
+                    select        : [champs_retenus.join(';'), ...reste_projection].filter(Boolean).join(';'),
                     aux_conditions,
                     enforce_rules : true
                 }
 
-                const nom_modele = route_recherche.is_one ? (table.entry_name ?? table.name) : table.name
-                const condition_base = table.rules?.restrict_search != null ? table.rules.restrict_search : ':)'
-                const condition_recherche = route_recherche.is_one
-                    ? [condition_base, construire_condition_pk_recherche(table, req.params ?? {})].filter(Boolean).join(' & ')
-                    : condition_base
+                const condition_base = table.rules?.restrict_search ?? ':)'
+                const condition = route_recherche.is_one ? restreindre(condition_pk, table.rules?.restrict_search) : condition_base
 
-                const a_des_hooks_recherche = Boolean(table.rules?.prior_search || table.rules?.post_search)
-                    || table.fields.some(champ => champ.prior_search != null || champ.post_search != null)
+                const champs_hooks = table.fields.filter(f => champs_retenus.includes(f.name))
+                const hooks_prior = [
+                    ...(table.rules?.prior_search ? [{ action_brut: table.rules.prior_search, etiquette: 'prior_search modèle' }] : []),
+                    ...champs_hooks.filter(f => f.prior_search).map(f => ({ action_brut: f.prior_search, etiquette: `prior_search ${f.name}` }))
+                ]
+                const hooks_post = [
+                    ...champs_hooks.filter(f => f.post_search).map(f => ({ action_brut: f.post_search, etiquette: `post_search ${f.name}` })),
+                    ...(table.rules?.post_search ? [{ action_brut: table.rules.post_search, etiquette: 'post_search modèle' }] : [])
+                ]
+                const fonctions  = compiler_script_modele(table, contexte_script, hooks_prior.length || hooks_post.length)
+                const parametres = { fonctions, rep, $indicate, valeurs: { $body, $request, $context } }
 
-                let fonctions = null
-                if (a_des_hooks_recherche && table.script)
-                {
-                    fonctions = compiler_script(table.script, contexte_script)
-                }
-
-                if (table.rules?.prior_search && fonctions)
-                {
-                    const interrompu = await executer_hook_script({
-                        action_brut: table.rules.prior_search,
-                        etiquette: 'prior_search modèle',
-                        fonctions,
-                        rep,
-                        $indicate,
-                        $body,
-                        $request,
-                        $context
-                    })
-                    if (interrompu)
-                        return
-                }
-
-                for (const champ of table.fields)
-                {
-                    if (typeof champ.can_search !== 'string' || !champ.can_search.trim())
-                        continue
-                    if (!champs_retenus.includes(champ.name))
-                        continue
-
-                    if (typeof champ.prior_search !== 'string' || !champ.prior_search.trim())
-                        continue
-
-                    const interrompu = await executer_hook_script({
-                        action_brut: champ.prior_search,
-                        etiquette: `prior_search ${champ.name}`,
-                        fonctions,
-                        rep,
-                        $indicate,
-                        $body,
-                        $request,
-                        $context
-                    })
-                    if (interrompu)
-                        return
-                }
+                if (await executer_hooks(hooks_prior, parametres))
+                    return
 
                 let resultats
-                    try
+                try
+                {
+                    const contexte_recherche = { $params, $context, $request }
+                    resultats = route_recherche.is_one
+                        ? await magasin.$search_one(nom_entree, condition, contexte_recherche, options_recherche)
+                        : await magasin.$search_all(table.name, condition, contexte_recherche, options_recherche)
+                }
+                catch (err)
+                {
+                    if (err.code === 'RELATION_FORBIDDEN')
                     {
-                        resultats = route_recherche.is_one
-                            ? await fonctions_magasin_requete.$search_one(nom_modele, condition_recherche, { $params: req.params ?? {}, $context, $request }, options_recherche)
-                            : await fonctions_magasin_requete.$search_all(nom_modele, condition_recherche, { $params: req.params ?? {}, $context, $request }, options_recherche)
-                    }
-                    catch (err)
-                    {
-                        if (est_reponse_deja(err))
-                            return
-
-                        if (err.code === 'RELATION_FORBIDDEN')
-                        {
-                            $indicate(403, err.message)
-                            return
-                        }
-
-                        console.log(`/!\\ erreur GET ${route_recherche.chemin} : ${err.message}`)
-                        if (!rep.headersSent)
-                            $indicate(500, 'Erreur interne')
+                        $indicate(403, err.message)
                         return
                     }
+                    throw err
+                }
 
                 if (route_recherche.is_one)
                     resultats = resultats ? [resultats] : []
 
+                // Retirer les champs dont la restriction n'est pas respectée sur la ligne
                 for (const ligne of resultats)
                 {
-                    for (const champ of table.fields)
+                    for (const nom of Object.keys(aux_conditions))
                     {
-                        if (!champs_retenus.includes(champ.name))
-                            continue
-
-                        if (typeof champ.restrict_search !== 'string' || !champ.restrict_search.trim())
-                            continue
-
-                        const cle_aux = `_can_${champ.name}`
-                        if (!ligne[cle_aux])
-                            delete ligne[champ.name]
-                        delete ligne[cle_aux]
+                        const nom_champ = nom.slice('_can_'.length)
+                        if (Number(ligne[nom]) !== 1)
+                            delete ligne[nom_champ]
+                        delete ligne[nom]
                     }
                 }
-
                 resultats = resultats.filter(ligne => Object.keys(ligne).length > 0)
 
-                for (const champ of table.fields)
-                {
-                    if (typeof champ.can_search !== 'string' || !champ.can_search.trim())
-                        continue
-                    if (!champs_retenus.includes(champ.name))
-                        continue
-
-                    if (typeof champ.post_search !== 'string' || !champ.post_search.trim())
-                        continue
-
-                    const interrompu = await executer_hook_script({
-                        action_brut: champ.post_search,
-                        etiquette: `post_search ${champ.name}`,
-                        fonctions,
-                        rep,
-                        $indicate,
-                        $body,
-                        $request,
-                        $context,
-                        $results: resultats
-                    })
-                    if (interrompu)
-                        return
-                }
-
-                if (table.rules?.post_search && fonctions)
-                {
-                    const interrompu = await executer_hook_script({
-                        action_brut: table.rules.post_search,
-                        etiquette: 'post_search modèle',
-                        fonctions,
-                        rep,
-                        $indicate,
-                        $body,
-                        $request,
-                        $context,
-                        $results: resultats
-                    })
-                    if (interrompu)
-                        return
-                }
+                parametres.valeurs.$results = resultats
+                if (await executer_hooks(hooks_post, parametres))
+                    return
 
                 if (route_recherche.is_one && !resultats.length)
                 {
@@ -1355,15 +1094,104 @@ export const construire_routes = (schemas, index = null) =>
                 }
 
                 $indicate(200, 'OK', route_recherche.is_one ? resultats[0] : resultats)
-            }
+            })
 
-            routes.push({ methode: route_recherche.methode, chemin: route_recherche.chemin, handler })
-            if (premiere_route)
+            enregistrer_route('GET', route_recherche.chemin, handler, route_recherche.action)
+        }
+
+        if (!a_une_pk)
+            continue
+
+        // ─── PATCH /<entrée>/:pk (champs can_update) ─────────────────────────
+
+        const champs_can_update = table.fields.filter(f => f.can_update != null)
+        if (champs_can_update.length)
+        {
+            const handler = proteger(`PATCH ${chemin_pk}`, async ({ $body, $request, $context, $params, $indicate, contexte_script, magasin }, req, rep) =>
             {
-                console.log('\nRoutes :')
-                premiere_route = false
-            }
-            console.log(`  ${route_recherche.methode.padEnd(6)} ${route_recherche.chemin}  →  ${route_recherche.action}`)
+                const $values = lire_champs_corps(champs_can_update, $body)
+                if (!Object.keys($values).length)
+                {
+                    $indicate(400, 'Aucun champ modifiable fourni')
+                    return
+                }
+
+                const contexte = contexte_corps($body, $request, $context, $params)
+                for (const champ of champs_can_update)
+                {
+                    if ($values[champ.name] !== undefined && !evaluer(champ.can_update, contexte))
+                    {
+                        $indicate(403, 'Accès refusé')
+                        return
+                    }
+                }
+
+                const condition = restreindre(condition_pk, table.rules?.restrict_update)
+                const contexte_recherche = { $params, $context, $request }
+                const cible = await magasin.$search_one(nom_entree, condition, contexte_recherche)
+                if (!cible)
+                {
+                    $indicate(404, 'Introuvable')
+                    return
+                }
+
+                const hooks_prior = table.fields.filter(f => f.prior_update).map(f => ({ action_brut: f.prior_update, etiquette: `prior_update ${f.name}` }))
+                const hooks_post  = table.fields.filter(f => f.post_update).map(f => ({ action_brut: f.post_update, etiquette: `post_update ${f.name}` }))
+                const fonctions   = compiler_script_modele(table, contexte_script, hooks_prior.length || hooks_post.length)
+                const parametres  = { fonctions, rep, $indicate, valeurs: { $body, $request, $context, $values } }
+
+                if (await executer_hooks(hooks_prior, parametres))
+                    return
+
+                await magasin.$update_one(nom_entree, condition_pk, $values, contexte_recherche)
+
+                if (await executer_hooks(hooks_post, parametres))
+                    return
+
+                $indicate(200, 'Modifié')
+            })
+
+            enregistrer_route('PATCH', chemin_pk, handler, `can_update [${champs_can_update.map(f => f.name).join(', ')}]`)
+        }
+
+        // ─── DELETE /<entrée>/:pk (@rules can_delete) ────────────────────────
+
+        if (table.rules?.can_delete != null)
+        {
+            const handler = proteger(`DELETE ${chemin_pk}`, async ({ $body, $request, $context, $params, $indicate, contexte_script, magasin }, req, rep) =>
+            {
+                if (!evaluer(table.rules.can_delete, { $request, $context, $params }))
+                {
+                    $indicate(403, 'Accès refusé')
+                    return
+                }
+
+                const condition = restreindre(condition_pk, table.rules.restrict_delete)
+                const contexte_recherche = { $params, $context, $request }
+                const $values = await magasin.$search_one(nom_entree, condition, contexte_recherche)
+                if (!$values)
+                {
+                    $indicate(404, 'Introuvable')
+                    return
+                }
+
+                const hooks_prior = table.rules.prior_delete ? [{ action_brut: table.rules.prior_delete, etiquette: 'prior_delete' }] : []
+                const hooks_post  = table.rules.post_delete  ? [{ action_brut: table.rules.post_delete,  etiquette: 'post_delete' }]  : []
+                const fonctions   = compiler_script_modele(table, contexte_script, hooks_prior.length || hooks_post.length)
+                const parametres  = { fonctions, rep, $indicate, valeurs: { $body, $request, $context, $values } }
+
+                if (await executer_hooks(hooks_prior, parametres))
+                    return
+
+                await magasin.$delete_one(nom_entree, condition_pk, contexte_recherche)
+
+                if (await executer_hooks(hooks_post, parametres))
+                    return
+
+                $indicate(200, 'Supprimé')
+            })
+
+            enregistrer_route('DELETE', chemin_pk, handler, 'can_delete')
         }
     }
 

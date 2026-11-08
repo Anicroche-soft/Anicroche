@@ -118,10 +118,23 @@ const lire_valeur = (str, pos) =>
     if (pos >= str.length)
         return { valeur: "invalide", pos }
     if (str[pos] == '[')
-        return lire_liste(str, pos)
+        return est_dict_entre_crochets(str, pos) ? lire_dict(str, pos, ']') : lire_liste(str, pos)
     if (str[pos] == '{')
         return lire_dict(str, pos)
     return lire_scalaire(str, pos)
+}
+
+// `[ clef : valeur ]` est accepté comme dictionnaire (ex. `@rules [ can_search : ... ]`)
+const est_dict_entre_crochets = (str, pos) =>
+{
+    pos = passer_separateurs(str, pos + 1)
+    if (pos >= str.length || /^[\[\]{}]$/.test(str[pos]))
+        return false
+    const res = lire_scalaire(str, pos)
+    if (res.valeur === "invalide")
+        return false
+    pos = passer_blancs(str, res.pos)
+    return str[pos] === ':'
 }
 
 const lire_liste = (str, pos) =>
@@ -143,7 +156,7 @@ const lire_liste = (str, pos) =>
     }
 }
 
-const lire_dict = (str, pos) =>
+const lire_dict = (str, pos, fermant = '}') =>
 {
     pos++
     const dict = {}
@@ -152,7 +165,7 @@ const lire_dict = (str, pos) =>
         pos = passer_separateurs(str, pos)
         if (pos >= str.length)
             return { valeur: "invalide", pos }
-        if (str[pos] == '}')
+        if (str[pos] == fermant)
             return { valeur: dict, pos: pos + 1 }
         const res_cle = lire_scalaire(str, pos)
         if (res_cle.valeur === "invalide")
@@ -304,12 +317,10 @@ const resoudre_type_sql = (type_sans, taille, est_deterministe) =>
                     max,
                     treatment: est_deterministe ? 'deterministic_hashing' : 'hashing'
                 }
-            return {
-                type     : 'char',
-                min      : 64,
-                max      : 64,
-                treatment: est_deterministe ? 'deterministic_hashing' : 'hashing'
-            }
+            // HMAC-SHA256 : 64 caractères hexadécimaux ; argon2 : longueur variable (~97 caractères)
+            return est_deterministe
+                ? { type: 'char', min: 64, max: 64, treatment: 'deterministic_hashing' }
+                : { type: 'varchar', min: null, max: 255, treatment: 'hashing' }
 
         case 'crypt':
             return {
@@ -347,6 +358,9 @@ const transformer_champ = (champ_brut, champs_dans_unique) =>
     const rev_restrict_search = lire_chaine_optionnelle(champ_brut, 'rev_restrict_search')
     const prior_create  = lire_chaine_optionnelle(champ_brut, 'prior_create')
     const post_create   = lire_chaine_optionnelle(champ_brut, 'post_create')
+    const can_update    = lire_chaine_optionnelle(champ_brut, 'can_update')
+    const prior_update  = lire_chaine_optionnelle(champ_brut, 'prior_update')
+    const post_update   = lire_chaine_optionnelle(champ_brut, 'post_update')
     const prior_search  = lire_chaine_optionnelle(champ_brut, 'prior_search')
     const post_search   = lire_chaine_optionnelle(champ_brut, 'post_search')
     const alt           = lire_chaine_optionnelle(champ_brut, 'alt')
@@ -364,6 +378,7 @@ const transformer_champ = (champ_brut, champs_dans_unique) =>
         min      : type_res.min,
         max      : type_res.max,
         nullable,
+        size     : champ_brut.size !== undefined && champ_brut.size !== null ? analyser_taille(champ_brut.size) : null,
         default  : champ_brut.default ?? null,
         chars,
         length,
@@ -376,6 +391,9 @@ const transformer_champ = (champ_brut, champs_dans_unique) =>
         rev_restrict_search,
         prior_create,
         post_create,
+        can_update,
+        prior_update,
+        post_update,
         prior_search,
         post_search,
         alt
@@ -407,10 +425,15 @@ const transformer_modele = (annotations, nom_fichier) =>
     const relations = []
     const rules     = rules_brutes && typeof rules_brutes === 'object' && !Array.isArray(rules_brutes)
         ? {
-            can_search    : lire_chaine_optionnelle(rules_brutes, 'can_search'),
-            restrict_search: lire_chaine_optionnelle(rules_brutes, 'restrict_search'),
-            prior_search   : lire_chaine_optionnelle(rules_brutes, 'prior_search'),
-            post_search    : lire_chaine_optionnelle(rules_brutes, 'post_search')
+            can_search      : lire_chaine_optionnelle(rules_brutes, 'can_search'),
+            restrict_search : lire_chaine_optionnelle(rules_brutes, 'restrict_search'),
+            prior_search    : lire_chaine_optionnelle(rules_brutes, 'prior_search'),
+            post_search     : lire_chaine_optionnelle(rules_brutes, 'post_search'),
+            restrict_update : lire_chaine_optionnelle(rules_brutes, 'restrict_update'),
+            can_delete      : lire_chaine_optionnelle(rules_brutes, 'can_delete'),
+            restrict_delete : lire_chaine_optionnelle(rules_brutes, 'restrict_delete'),
+            prior_delete    : lire_chaine_optionnelle(rules_brutes, 'prior_delete'),
+            post_delete     : lire_chaine_optionnelle(rules_brutes, 'post_delete')
         }
         : null
 
@@ -532,6 +555,28 @@ const resoudre_relations = (tables) =>
                             treatment: null
                         })
                     relation.cle_etrangere = nom_fk
+                }
+            }
+            else
+            {
+                // Relation 0-1 / 1-1 : clef étrangère dans la table source
+                const pk_cible = trouver_champ_pk(table_cible)
+                if (pk_cible)
+                {
+                    const nom_fk = `id_${rel.entry ?? table_cible.entry_name ?? table_cible.name}`
+                    // Un champ déclaré sous ce nom (par exemple pour lui donner can_create)
+                    // est réutilisé comme clef étrangère
+                    const existant = table.fields.find(f => f.name == nom_fk)
+                    if (!existant)
+                        table.fields.push({
+                            name     : nom_fk,
+                            type     : pk_cible.type,
+                            min      : pk_cible.min,
+                            max      : pk_cible.max,
+                            nullable : rel.min === 0,
+                            treatment: null
+                        })
+                    relation.cle_locale = nom_fk
                 }
             }
 
