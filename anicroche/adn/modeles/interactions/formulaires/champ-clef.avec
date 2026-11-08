@@ -1,10 +1,6 @@
 @script [
-    // Les cases (.chiffre) portent la saisie ; le champ caché (.cache), seul à être nommé,
-    // porte la valeur transmise avec le formulaire et sa validation.
-    //
-    // $node et $event sont partagés par le scope et réécrits par les gestionnaires imbriqués
-    // (un .focus() déclenche aussitôt le @focus d’une autre case) : chaque gestionnaire
-    // les copie donc avant tout appel, et les fonctions internes ne les utilisent pas.
+    // $node et $event sont réécrits par les gestionnaires imbriqués (un .focus() déclenche
+    // aussitôt un autre @focus) : chaque gestionnaire les copie avant tout appel.
 
     const taille_clef = 9
 
@@ -21,8 +17,7 @@
 
     const est_modifiable = ({ chiffres }) => chiffres.length > 0 && !chiffres[0].readOnly
 
-    // La valeur d’une case est conservée dans data-chiffre : la propriété value d’un champ
-    // de type nombre vaut ’’ dès que son contenu n’est pas un nombre valide.
+    // value vaut ’’ dès que le contenu d’un champ nombre est invalide.
     const lire_chiffre = (case_clef) => case_clef.dataset.chiffre ?? ''
 
     const ecrire_chiffre = (case_clef, chiffre) =>
@@ -48,10 +43,8 @@
     {
         const { cache, chiffres } = elements
 
-        // Une case vide au milieu raccourcit la valeur, qui ne respecte alors plus le motif.
         cache.value = chiffres.map(lire_chiffre).join('')
 
-        // Seule la case à atteindre est accessible par tabulation.
         const cible      = case_a_atteindre(elements)
         const modifiable = est_modifiable(elements)
         chiffres.forEach((case_clef, index) =>
@@ -60,12 +53,11 @@
         })
     }
 
-    // Plusieurs chiffres d’un coup : s’il y a assez de cases vides, les premières d’entre elles
-    // sont remplies ; sinon ce sont les n dernières cases.
+    // Les derniers chiffres sont gardés pour ignorer un indicatif (+33) ajouté par la messagerie.
     const coller = (elements, texte) =>
     {
         const { chiffres } = elements
-        const collage      = extraire_chiffres(texte).slice(0, taille_clef)
+        const collage      = extraire_chiffres(texte).slice(-taille_clef)
         if (!collage)
             return
 
@@ -93,7 +85,6 @@
         atteindre_case(elements, index + 1)
     }
 
-    // Efface la case courante si elle est remplie ; sinon, en reculant, efface la précédente et y retourne.
     const effacer = (elements, index, reculer) =>
     {
         const { chiffres } = elements
@@ -122,8 +113,6 @@
         synchroniser(elements)
     }
 
-    // Toute prise de focus (clic, tabulation, étiquette, validation du formulaire) mène à la
-    // première case vide ; une fois la clef complète, chaque case peut être corrigée.
     $focus_champ_clef = () =>
     {
         const noeud    = $node
@@ -182,8 +171,7 @@
         }
     }
 
-    // Les claviers virtuels n’indiquent souvent pas la touche dans keydown : la saisie et
-    // l’effacement sont donc traités ici, avant toute modification du contenu de la case.
+    // Les claviers virtuels n’indiquent souvent pas la touche dans keydown.
     $avant_saisie_champ_clef = () =>
     {
         const noeud     = $node
@@ -207,8 +195,7 @@
         }
     }
 
-    // Repli pour les modifications que beforeinput n’a pas pu empêcher (composition,
-    // remplissage automatique du code reçu…).
+    // Repli pour ce que beforeinput n’a pas pu empêcher (composition, remplissage automatique).
     $saisie_champ_clef = () =>
     {
         const noeud = $node
@@ -228,7 +215,6 @@
         if (!saisie)
             return effacer(elements, index, false)
 
-        // Un chiffre tapé à côté de celui déjà présent : seul le nouveau est retenu.
         const nouveau = saisie.length === 2 && ancien && saisie.includes(ancien)
             ? saisie.replace(ancien, '')
             : saisie

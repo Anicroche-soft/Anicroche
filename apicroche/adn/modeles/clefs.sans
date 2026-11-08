@@ -107,7 +107,8 @@
 
     $envoyer_clef = async ($values) =>
     {
-        const clef_affichee = String($values.clef).replace(/(\d{3})(?=\d)/g, '$1 ')
+        // Empêche la détection d’un numéro de téléphone par les messageries.
+        const clef_affichee = String($values.clef).replace(/(\d{3})(?=\d)/g, '$1&#8203;-&#8203;')
 
         const coordonnee_existante = await $search_one('coordonnee',
             `
