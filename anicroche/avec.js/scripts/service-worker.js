@@ -3,7 +3,7 @@
  * Gère le caching et le mode hors-ligne
  */
 
-const VERSION = 'v1'
+const VERSION = 'v2'
 const CACHE_ASSETS = `${VERSION}-assets`
 const CACHE_API = `${VERSION}-api`
 
@@ -76,6 +76,12 @@ self.addEventListener('fetch', event => {
 
     // Ignorer les requêtes non-GET
     if (request.method !== 'GET') {
+        return
+    }
+
+    // Ignorer les requêtes vers une autre origine (l'API notamment) :
+    // leurs réponses dépendent de la session et ne doivent pas être mises en cache
+    if (url.origin !== self.location.origin) {
         return
     }
 

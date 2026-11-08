@@ -114,10 +114,14 @@ const serveur = http.createServer(async (req, rep) =>
         }
         if (delai > 0 && infos?.composant)
             await new Promise(r => setTimeout(r, delai * 1000))
-        const chemin_complet = path.join("./", chemin)
+        const chemin_complet = path.join("./", decodeURIComponent(chemin.split('?')[0]))
         const dossier = path.dirname(chemin_complet)
         const fichier = path.basename(chemin_complet)
-        const chemin_reel = rechercher_fichier(dossier, fichier, infos?.recursif)
+        const racine  = path.resolve(infos?.chemin ?? chemin)
+        const autorise = !infos
+            || path.resolve(chemin_complet) === racine
+            || path.resolve(chemin_complet).startsWith(racine + path.sep)
+        const chemin_reel = autorise && fs.existsSync(dossier) && rechercher_fichier(dossier, fichier, infos?.recursif)
 
         if (chemin_reel)
         {
