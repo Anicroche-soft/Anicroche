@@ -42,8 +42,12 @@ Si une variable n'existe dans aucun parent, l'affectation crée la variable dans
 | `$navigate_prev` | fonction | Reproduit la flèche "retour" du navigateur (`$navigate_prev()`) |
 | `$navigate_post` | fonction | Reproduit la flèche "suivant" du navigateur (`$navigate_post()`) |
 | `$history` | fonction | Retourne une entrée de l'historique interne (`$history()`, `$history(1)`, `$history(2)`) |
+| `$app` | dictionnaire | Configuration de `app.adn` (voir [Démarrage](demarrage.md#le-fichier-appadn)) |
+| `$<clef>` | selon la clef | Chaque clef de `app.adn` (ex. `$nom`), ainsi que `$api_url` |
+| `$create`, `$search`, `$update`, `$delete` | fonctions | Requêtes vers l'API (voir [Requêtes vers l'API](api.md)) |
+| `$add_action` | fonction | Actions exécutées autour des requêtes vers l'API (voir [Requêtes vers l'API](api.md#actions-autour-des-requêtes--add_action)) |
 
-Ces variables sont mises à jour à chaque navigation sans rechargement de page.
+`$path`, `$params` et `$hash` sont mis à jour à chaque navigation sans rechargement de page.
 
 Précisions :
 
@@ -199,6 +203,20 @@ Ces opérateurs vérifient si une valeur est présente dans une liste, ou si une
 ### Correspondance de motif (`~=`)
 
 L'opérateur `~=` vérifie si un texte correspond à un motif. Il peut capturer des segments du texte dans des variables réactives.
+
+**Expression rationnelle :**
+
+Le membre droit peut être une expression rationnelle JavaScript, écrite entre barres obliques et suivie de drapeaux éventuels (`g`, `i`, `m`, `s`, `u`, `y`) :
+
+```
+@if [$courriel ~= /^[^@\s]+@[^@\s]+\.[^@\s]+$/]
+    "Adresse valide"
+
+@if [$nom ~= /^dupont$/i]
+    "Bonjour M. Dupont"
+```
+
+Le résultat est vrai si l'expression trouve une correspondance dans le texte (converti en texte au besoin). Une expression rationnelle ne capture pas de variables.
 
 **Correspondance simple :**
 

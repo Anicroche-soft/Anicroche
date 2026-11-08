@@ -13,6 +13,7 @@
 
 ## Table des matières
 
-- [Démarrage](demarrage.md) — structure du projet, configuration
+- [Démarrage](demarrage.md) — structure du projet, configuration, serveur, service worker
 - [Modèles](modeles.md) — écrire des fichiers `.avec`
 - [Expressions](expressions.md) — variables, opérateurs, correspondances de motifs
+- [Requêtes vers l'API](api.md) — `$create`, `$search`, `$update`, `$delete`, `$add_action`

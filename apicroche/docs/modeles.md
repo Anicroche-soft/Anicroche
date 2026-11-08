@@ -1,231 +1,67 @@
 # Modèles — fichiers `.sans`
 
-Un fichier `.sans` décrit la structure d'une table : ses champs, leurs types, leurs contraintes et ses relations avec d'autres tables. Le cadriciel génère automatiquement la table correspondante en base de données.
-
-Les **commentaires** commencent par `#` et s'étendent jusqu'à la fin de la ligne.
+Un fichier `.sans` décrit une table : ses champs, leurs types, leurs contraintes, ses relations avec d'autres tables, ses règles d'accès et ses scripts. Le cadriciel crée et met à jour la table correspondante en base de données.
 
 ---
 
-## Structure d'un modèle
+## Syntaxe
 
-Un modèle est composé d'**annotations** (commençant par `@`) et d'une liste de champs :
+Un modèle est une suite d'**annotations** commençant par `@`, suivies d'une valeur :
 
 ```
-@primary [ id ]
+@name [ comptes, compte ]
 
-@unique [
-    [ email ]
-]
+@primary [ id ]
 
 @fields [
     {
-        name : zid
-        type : char
-        size : 12
-    }
-
-    {
-        name  : email
-        type  : char
-        size  : 0-256
-        count : 0-1
+        name    : id
+        type    : char
+        size    : 12
+        default : auto
     }
 ]
 ```
 
----
+- Une **liste** s'écrit entre crochets `[ … ]`, un **dictionnaire** (paires `clef : valeur`) entre accolades `{ … }`. Un dictionnaire peut aussi s'écrire entre crochets : `@rules [ can_search : ':)' ]`.
+- Les éléments sont séparés par des retours à la ligne, des espaces ou des virgules.
+- Une valeur contenant des espaces ou des caractères spéciaux (`:`, `#`, `[`, `{`, `,`…) s'écrit entre guillemets `"…"`, `'…'` ou `` `…` ``.
+- Les **commentaires** commencent par `#` et s'étendent jusqu'à la fin de la ligne.
+- Le contenu de `@script [ … ]` est du JavaScript, recopié tel quel.
 
-## Options de recherche
+### Annotations
 
-Les fonctions `$search_all()` et `$search_one()` acceptent un paramètre `options` (quatrième paramètre) permettant de configurer la projection, le tri et la pagination.
-
-### `select` — Projection de champs
-
-Permet de spécifier quels champs et relations retourner pour chaque résultat.
-
-#### Format
-
-`select` doit être **une chaîne de caractères** avec champs séparés par `;`.
-
-#### Syntaxe
-
-- Les **champs physiques** sont nommés directement : `id`, `pseudonyme`, `date_inscription`
-- Les **relations** sont nommées directement : `coordonnees`, `gerants`
-- Les **relations imbriquées** utilisent la notation pointée : `relation.champ`
-- Les **virgules `,` sont utilisées pour rester au même niveau** d'une relation
-- Les **points `.` descendent d'un niveau** d'une relation
-
-#### Exemples
-
-```javascript
-// Champs simples
-{ select: 'id ; pseudonyme ; date_inscription' }
-
-// Relation simple
-{ select: 'id ; coordonnees' }
-
-// Relation imbriquée — comptes avec leurs coordonnées, montrant seulement type et coordonnee
-{ select: 'id ; coordonnees.type ; coordonnees.coordonnee' }
-
-// Relation multi-niveaux — coordonnées avec compte.id et les profils dont il est gérant
-// (pseudonyme et identifiant du profil seulement)
-{ select: 'is_coordonnee_of_compte.id,is_gerant_of_profils.pseudonyme,identifiant' }
-```
-
-#### Algorithme de parsing
-
-Pour un token comme `is_coordonnee_of_compte.id,is_gerant_of_profils.pseudonyme,identifiant` :
-
-1. Détecte le premier `.` (après `is_coordonnee_of_compte`)
-2. Extrait ce qui est avant (`is_coordonnee_of_compte`) → relation à descendre
-3. Extrait ce qui est avant le premier `.` du reste (`id,is_gerant_of_profils`)
-4. Cherche la **dernière virgule** avant ce point → `id` (traité au niveau courant)
-5. Entre virgule et point → `is_gerant_of_profils` (relation à descendre)
-6. Après le point → `pseudonyme,identifiant` (passe au niveau enfant)
-
-#### Restrictions sur relations
-
-Les paramètres `condition` de `$search_all()`, `$search_one()`, `$delete_one()`, `$delete_all()`, `$update_one()` et `$update_all()` peuvent cibler des champs de relations imbriquées.
-
-Exemple :
-
-```javascript
-restriction : '#is_coordonnee_of_compte.is_gerant_of_profils.id = 0GWGVSSCJYWJQLP'
-```
-
-Le moteur génère alors les JOINs nécessaires et traduit la comparaison en SQL sur l’alias de la table cible. La même valeur est aussi réutilisée dans le filtrage applicatif final lorsque c’est nécessaire.
-
-#### Log SQL
-
-Les requêtes construites par le moteur sont affichées dans les logs avec leurs valeurs interpolées, afin de faciliter le débogage.
-
-Exemple :
-
-```text
-[search_all] SQL: SELECT DISTINCT `coordonnees`.* FROM `coordonnees` JOIN ... WHERE `profils_2`.`id` = '0GWGVSSCJYWJQLP'
-```
-
-### Syntaxe des conditions
-
-Les conditions passées aux fonctions du magasin (`$search_all()`, `$search_one()`, `$delete_one()`, `$delete_all()`, `$update_one()`, `$update_all()`) et à la propriété `restrict_search` distinguent trois types de termes :
-
-| Syntaxe | Signification | Traitement |
-|---|---|---|
-| `#champ` | Champ physique du modèle | Traduit en colonne SQL |
-| `#relation.champ` | Champ d'une relation imbriquée | Génère les JOINs nécessaires et traduit en colonne SQL |
-| `$variable` | Variable du contexte | Évaluée en JS au moment de la requête |
-| `$variable.attribut` | Attribut d'une variable du contexte | Évaluée en JS au moment de la requête |
-| `"valeur"` / `'valeur'` | Valeur brute littérale | Injectée directement dans la requête |
-
-#### Exemples
-
-```javascript
-// Champ du modèle comparé à une variable du contexte
-await $search_one('session',
-    `#id = $id_session & #date_validite > now`,
-    { $id_session: id_session }
-)
-
-// Champ d'une relation imbriquée
-await $search_all('profils',
-    `#gerants.id = $context.compte.id`,
-    { $context: $context }
-)
-
-// Valeur brute littérale
-await $search_all('comptes',
-    `#actif = true`
-)
-```
-
-> **Note :** cette syntaxe `#` / `$` s'applique uniquement dans les conditions des fonctions du magasin et dans `restrict_search`. Les expressions `can_search`, `can_create` et `rule` n'acceptent que des variables `$`, car elles sont évaluées hors du contexte d'une ligne de base de données.
-
-### `order` — Tri
-
-Permet de trier les résultats par un champ.
-
-```javascript
-{ order: 'date_inscription' }        // croissant (défaut)
-{ order: 'date_inscription', dir: 'DESC' }  // décroissant
-```
-
-### `dir` — Direction du tri
-
-Peut valoir `'ASC'` (croissant, défaut) ou `'DESC'` (décroissant).
-
-### `limit` — Nombre maximum de résultats
-
-```javascript
-{ limit: 10 }   // retourne au maximum 10 résultats
-{ limit: null } // pas de limite (défaut)
-```
-
-### `offset` — Décalage (pour pagination)
-
-```javascript
-{ offset: 0 }    // début (défaut)
-{ offset: 20 }   // décale de 20 résultats
-```
-
-#### Exemple complet avec pagination
-
-```javascript
-const resultats = await $search_all('profils',
-    `#date_creation > $depuis`,
-    { $depuis: new Date('2025-01-01') },
-    {
-        select: 'id ; pseudonyme ; gerants.id',
-        order: 'date_creation',
-        dir: 'DESC',
-        limit: 50,
-        offset: 100
-    }
-)
-```
-
-### `enforce_rules` — Vérification des règles d'accès sur les relations
-
-Quand cette option est activée, le moteur vérifie les règles d'accès pour chaque relation demandée dans la projection `select`, récursivement à chaque niveau d'imbrication.
-
-Pour chaque relation rencontrée, le moteur vérifie dans l'ordre :
-
-1. Le `can_search` du champ de relation (ou `rev_can_search` pour le sens inverse) — lève une erreur si absent ou faux.
-2. Le `can_search` global du modèle d'arrivée — lève une erreur si faux.
-3. Le `restrict_search` du champ de relation et le `restrict_search` global du modèle d'arrivée sont fusionnés et appliqués comme conditions supplémentaires sur les lignes récupérées.
-
-```javascript
-const resultats = await $search_all('profils',
-    ':)',
-    { $context, $request },
-    {
-        select       : 'id ; pseudonyme ; gerants',
-        enforce_rules: true
-    }
-)
-```
-
-> **Note :** `enforce_rules` est activé automatiquement sur les routes `GET` auto-générées. Quand une vérification échoue, une exception avec le code `RELATION_FORBIDDEN` est levée — la route autogénérée la traduit en réponse `403`.
->
-> Le contexte doit contenir `$context` et `$request` pour que les conditions `can_search` et `restrict_search` puissent être évaluées correctement.
+| Annotation | Description |
+|---|---|
+| [`@name`](#name) | Nom de la table et nom d'entrée |
+| [`@primary`](#primary) | Clef primaire |
+| [`@unique`](#unique) | Contraintes d'unicité |
+| [`@fields`](#fields) | Champs et relations |
+| [`@rules`](routes.md#règles-du-modèle--rules) | Règles d'accès et hooks des routes automatiques |
+| [`@routes`](routes.md#routes-déclarées--routes) | Routes sur mesure |
+| [`@script`](scripts.md) | Fonctions JavaScript du modèle |
+| [`@actions`](scripts.md#indexsans-et-actions) | Actions globales (uniquement dans `index.sans`) |
 
 ---
 
-## Annotations
+## `@name`
 
-### `@name`
-
-Permet de définir le nom de la table en base de données et, optionnellement, un **nom d'entrée** (utilisé pour nommer les clefs étrangères qui pointent vers cette table).
+Définit le nom de la table et, optionnellement, son **nom d'entrée** (le nom au singulier d'une ligne de la table).
 
 ```
 @name [ comptes, compte ]
 ```
 
-- Le premier élément est le nom de la table.
-- Le second (optionnel) est le nom d'entrée : les clefs étrangères seront nommées `id_<nom_entree>` (ex. `id_compte`).
+- Le premier élément est le nom de la table. Si `@name` est absent, le nom du fichier `.sans` (sans extension) est utilisé.
+- Le second élément est le nom d'entrée. S'il est absent, le nom de la table est utilisé.
 
-Si `@name` est absent, le nom du fichier `.sans` (sans extension) est utilisé comme nom de table.
+Le nom d'entrée sert à nommer :
 
-### `@primary`
+- les clefs étrangères qui pointent vers cette table : `id_<entrée>` (ex. `id_compte`) ;
+- les routes portant sur une seule entrée : `POST /compte`, `GET /compte/:id` ;
+- le premier paramètre des fonctions `$search_one`, `$create_one`, `$update_one` et `$delete_one` (voir [Magasin](magasin.md#nom-dentrée-et-nom-de-table)).
+
+## `@primary`
 
 Déclare la clef primaire de la table. Prend une liste de noms de champs.
 
@@ -233,9 +69,11 @@ Déclare la clef primaire de la table. Prend une liste de noms de champs.
 @primary [ id ]
 ```
 
-### `@unique`
+> **Note :** les relations, les routes `/<entrée>/:clef` et les clefs étrangères utilisent le premier champ de la clef primaire. Un modèle référencé par une relation doit avoir une clef primaire simple.
 
-Déclare une ou plusieurs contraintes d'unicité. Chaque contrainte est une liste de champs (une contrainte composite peut porter sur plusieurs champs à la fois).
+## `@unique`
+
+Déclare une ou plusieurs contraintes d'unicité. Chaque contrainte est une liste de champs (une contrainte composite porte sur plusieurs champs à la fois).
 
 ```
 @unique [
@@ -244,222 +82,239 @@ Déclare une ou plusieurs contraintes d'unicité. Chaque contrainte est une list
 ]
 ```
 
-> **Note :** lorsqu'un champ de type `hash` fait partie d'une contrainte `@unique`, un algorithme de hachage déterministe est utilisé afin qu'une même valeur produise toujours le même hash, permettant la comparaison.
+## `@fields`
 
-### `@fields`
-
-Déclare la liste des champs de la table. Chaque champ est un bloc `{ }` contenant ses propriétés.
+Déclare la liste des champs de la table. Chaque champ est un dictionnaire `{ }` contenant ses propriétés. Un champ sans `type` mais avec un `count` est une [relation](#relations).
 
 ---
 
 ## Propriétés d'un champ
 
-| Propriété | Obligatoire | Description |
-|---|---|---|
-| `name` | oui | Nom du champ (et de la colonne en base) |
-| `type` | oui (sauf relation) | Type du champ |
-| `size` | non | Taille ou longueur maximale |
-| `count` | non | Cardinalité — défaut : `1-1` |
-| `ref` | non | Nom de la table liée (si différent de `name`) |
-| `can_search` | non | Condition augure pour autoriser le champ dans les routes de recherche |
-| `restrict_search` | non | Condition relationnelle utilisée pour filtrer l'accès à la valeur du champ |
-| `prior_search` | non | Appel de fonction du bloc `@script` avant la recherche |
-| `post_search` | non | Appel de fonction du bloc `@script` après la recherche |
-| `can_search` (relation) | non | Condition augure pour autoriser la récupération de la relation dans les routes de recherche (sens direct). Si absent, la relation n'est pas récupérable. |
-| `restrict_search` (relation) | non | Condition SQL appliquée comme filtre sur les lignes de la relation (sens direct) |
-| `rev_can_search` | non | Condition augure pour le sens inverse de la relation. Prioritaire sur `can_search` pour le sens inverse. Si ni `rev_can_search` ni `can_search` n'est présent, la relation inverse n'est pas récupérable. |
-| `rev_restrict_search` | non | Condition SQL pour le sens inverse de la relation. Prioritaire sur `restrict_search` pour le sens inverse. |
+| Propriété | Description |
+|---|---|
+| `name` | Nom du champ (et de la colonne). **Obligatoire** |
+| `type` | [Type](#type) du champ. **Obligatoire**, sauf pour une relation |
+| `size` | [Taille](#size) ou longueur autorisée |
+| `count` | [Cardinalité](#count) : `1-1` par défaut |
+| `default` | [Valeur par défaut](#default) |
+| `chars` | Caractères utilisés par `default : auto` |
+| `length` | Longueur générée par `default : auto` |
+| `rule` | [Règle de validation](#rule) de la valeur |
+| `alt` | [Nom alternatif](#alt) du champ dans les corps de requête et les résultats de création |
+| `ref`, `entry` | Table cible et nom d'entrée d'une [relation](#relations) |
+| `can_create`, `prior_create`, `post_create` | Route automatique `POST` (voir [Routes](routes.md#post-entrée--création)) |
+| `can_update`, `prior_update`, `post_update` | Route automatique `PATCH` (voir [Routes](routes.md#patch-entréeclef--modification)) |
+| `can_search`, `restrict_search`, `prior_search`, `post_search` | Routes automatiques `GET` (voir [Routes](routes.md#get-table-et-get-entréeclef--recherche)) |
+| `rev_can_search`, `rev_restrict_search` | Accès à une relation dans le sens inverse (voir [Routes](routes.md#accès-aux-relations)) |
 
 ### `type`
 
-Détermine le type de la colonne en base de données :
-
-| Type | Description | Équivalent SQL |
+| Type | Description | Type SQL |
 |---|---|---|
-| `char` | Texte à longueur fixe ou variable (selon `size`) | `CHAR` / `VARCHAR` |
+| `char` | Texte, de longueur fixe ou variable selon `size` | `CHAR(n)` si la taille est fixe, sinon `VARCHAR(max)` (`VARCHAR(255)` sans `size`) |
 | `text` | Texte long | `TEXT` |
-| `int` | Nombre entier | `INTEGER` |
+| `int` | Nombre entier | `INT` |
+| `tinyint` | Petit nombre entier (-128 à 127) | `TINYINT` |
 | `date` | Date seule | `DATE` |
 | `datetime` | Date et heure | `DATETIME` |
-| `boolean` | Valeur vraie ou fausse | `BOOLEAN` |
-| `hash` | Valeur hachée (non réversible) | `CHAR` / `BINARY(32)` |
-| `crypt` | Valeur chiffrée (réversible) | `BINARY` / `VARBINARY` |
-| `a/b/c` | Type énuméré — valeur stockée directement, validée par le cadriciel | `VARCHAR` |
+| `boolean` | Valeur vraie ou fausse | `TINYINT(1)` |
+| `hash` | Valeur hachée (non réversible) | voir ci-dessous |
+| `crypt` | Valeur chiffrée en AES-256-GCM (réversible) | `BINARY(n)` si la taille est fixe, sinon `VARBINARY(max)` (`VARBINARY(255)` sans `size`) |
+| `a/b/c` | Type énuméré : la valeur doit être l'une des valeurs listées | `VARCHAR` (longueur de la plus longue valeur par défaut) |
+
+Une valeur hors énumération est refusée (code `ENUM_VIOLATION`, réponse `422`).
+
+#### Champs `hash`
+
+Le hachage dépend de la présence du champ dans `@primary` ou `@unique` :
+
+| Champ | Algorithme | Type SQL sans `size` | Comparaison |
+|---|---|---|---|
+| Dans `@primary` ou `@unique` | HMAC-SHA256 (déterministe : une même valeur donne toujours le même hash, ce qui permet l'unicité) | `CHAR(64)` | `=`, `!=`, `-{`, `!-{` traduits en SQL |
+| Ailleurs | argon2 (non déterministe, adapté aux mots de passe) | `VARCHAR(255)` | `=`, `!=`, `-{`, `!-{` vérifiés ligne par ligne |
+
+Avec `size`, le type SQL suit la même règle que `char` (la taille porte alors sur la valeur hachée stockée). Une valeur hachée n'est jamais renvoyée en clair.
+
+#### Champs `crypt`
+
+La valeur est chiffrée avant l'écriture et déchiffrée automatiquement à la lecture. Toutes les comparaisons sont possibles dans une condition, mais elles sont vérifiées ligne par ligne après lecture (elles ne peuvent pas être traduites en SQL).
 
 ### `size`
 
-Indique la taille du champ.
+Indique la taille du champ :
 
-- Une valeur fixe (`size : 12`) produit un type à longueur fixe (ex. `CHAR(12)`).
-- Une valeur préfixée par `0-` (`size : 0-256`) produit un type à longueur variable (ex. `VARCHAR(256)`), signifiant que le contenu peut être vide.
+| Valeur | Type SQL | Valeur acceptée |
+|---|---|---|
+| `size : 12` | longueur fixe (`CHAR(12)`) | exactement 12 caractères au minimum et au maximum |
+| `size : 1-64` | longueur variable (`VARCHAR(64)`) | de 1 à 64 caractères |
+| `size : 0-256` | longueur variable (`VARCHAR(256)`) | de 0 à 256 caractères (texte vide autorisé) |
+
+La longueur des valeurs est vérifiée à chaque écriture (création et mise à jour) ; une valeur hors limites est refusée (code `SIZE_VIOLATION`, réponse `422`) :
+
+- la **longueur minimale** est vérifiée sur la valeur brute, pour tous les champs (y compris `hash` et `crypt`) ;
+- la **longueur maximale** n'est vérifiée que pour les champs non traités, car pour `hash` et `crypt` elle porte sur la valeur stockée.
+
+La longueur est comptée en caractères (points de code Unicode).
 
 ### `count`
 
 Indique la cardinalité du champ ou de la relation :
 
-| `count` | Signification |
-|---|---|
-| `1-1` | Valeur obligatoire — une et une seule *(défaut)* |
-| `0-1` | Valeur optionnelle — zéro ou une |
-| `1-N` | Relation obligatoire — une au minimum |
-| `0-N` | Relation optionnelle — zéro ou plusieurs |
-| `N-N` | Relation many-to-many — table de jonction générée automatiquement (voir ci-dessous) |
-
-### Tables de jonction (relation `N-N`)
-
-Lorsqu'une relation `N-N` est déclarée, sans.js génère automatiquement une **table de jonction** nommée :
-
-```
-<name_du_champ>_<entree_de_la_table_cible>
-```
-
-C'est le `name` du champ de relation (pas le nom de la table source) qui sert de préfixe, ce qui permet d'avoir plusieurs relations N-N vers la même table cible sans collision.
-
-Cette table contient deux colonnes :
-
-| Colonne | Type | Description |
+| `count` | Champ | Relation |
 |---|---|---|
-| `id_<entree_source>` | même type que la PK source | Référence vers l'entrée source |
-| `id_<entree_cible>` | même type que la PK cible | Référence vers l'entrée cible |
+| `1-1` *(défaut)* | Valeur obligatoire (`NOT NULL`) | Une entrée liée obligatoire |
+| `0-1` | Valeur optionnelle (`NULL` autorisé) | Zéro ou une entrée liée |
+| `0-N` | — | Zéro ou plusieurs entrées liées |
+| `1-N` | — | Une ou plusieurs entrées liées (le minimum n'est pas vérifié) |
+| `N-N` | — | Relation plusieurs-à-plusieurs, avec table de jonction |
 
-La **clef primaire composite** porte sur les deux colonnes.
+### `default`
+
+| Valeur | Effet |
+|---|---|
+| `auto` | Identifiant aléatoire généré par le cadriciel (voir `chars` et `length`). Si le champ est dans `@primary` ou `@unique`, l'unicité est vérifiée en base |
+| `now` | Date ou date-heure courante (valeur par défaut SQL) |
+| `now+30d`, `now + 15m` | Date-heure courante décalée (unités `s`, `m`, `h`, `d`) |
+| `$autre_champ` | Copie de la valeur brute d'un autre champ, avant hachage ou chiffrement |
+| autre valeur | Valeur par défaut SQL littérale (ex. `default : 6`) |
+
+`auto` et `$autre_champ` sont calculés par le cadriciel lors de l'insertion : ils ne sont pas inscrits dans la base.
+
+### `chars` et `length`
+
+Pour `default : auto`, `chars` liste les caractères utilisés (avec des plages `A-Z`) et `length` la longueur générée :
 
 ```
-# modèle articles — deux relations N-N vers profils (entry_name: profil)
-{ name: auteurs   ref: profils   count: N-N }  →  table auteurs_profil
-{ name: lecteurs  ref: profils   count: N-N }  →  table lecteurs_profil
+{
+    name    : clef
+    type    : hash
+    size    : 1-256
+    chars   : [0-9]
+    length  : 9
+    default : auto
+}
 ```
 
-### `ref`
+Par défaut, les caractères sont `A-Z0-9` et la longueur est la taille maximale du champ (`size`), ou 12.
 
-Dans le cas d'une relation, permet de nommer le champ différemment de la table qu'il référence.
+### `rule`
+
+Une expression [augure](magasin.md#expressions-augure) que la valeur doit vérifier à chaque écriture. Les valeurs des champs sont accessibles par `$<nom_du_champ>` (valeurs brutes, avant hachage ou chiffrement ; un champ absent vaut `:x`).
+
+```
+{
+    name : identifiant
+    type : char
+    size : 1-65
+    rule : "$identifiant ~= /^[a-z0-9-]+$/"
+}
+```
+
+- En création, toutes les règles du modèle sont vérifiées.
+- En mise à jour, seules les règles des champs modifiés sont vérifiées ; les autres champs ont leur valeur actuelle (les champs hachés non modifiés valent `:x`).
+- La règle d'un champ facultatif (`count : 0-1`) sans valeur n'est pas vérifiée.
+
+Une valeur qui ne respecte pas sa règle est refusée (code `RULE_VIOLATION`, réponse `422`).
+
+### `alt`
+
+Nom sous lequel le champ est lu dans le corps des requêtes `POST` et `PATCH` automatiques et dans les données passées à `$create_one`. Il est aussi utilisé pour renvoyer, dans le résultat de la création, la valeur brute d'un champ haché :
+
+```
+{
+    alt     : jeton
+    name    : hachage_jeton
+    type    : hash
+    size    : 1-256
+    default : auto
+}
+```
+
+`$create_one('session', { … })` renvoie alors `jeton` (la valeur générée, en clair) en plus de `hachage_jeton` (la valeur stockée).
+
+---
+
+## Relations
+
+Un champ sans `type` et avec un `count` déclare une relation vers un autre modèle :
 
 ```
 @fields [
     {
-        name  : contacts
-        ref   : coordonnees
+        name  : contacts      # nom de la relation
+        ref   : coordonnees   # table cible (par défaut : le name)
+        entry : contact       # nom de l'entrée liée (optionnel)
         count : 0-N
     }
 ]
 ```
 
-Ici, le champ s'appelle `contacts` mais pointe vers la table `coordonnees`. Sans `ref`, le `name` est utilisé directement pour résoudre la table liée.
-
-### `@rules`
-
-Déclare les règles de recherche du modèle. Le bloc est optionnel.
-
-```
-@rules [
-    can_search      : "$est_connecte"
-    restrict_search : "#gerants.id = $context.compte.id"
-    prior_search    : $verifier_acces_recherche()
-    post_search     : $journaliser_recherche()
-]
-```
-
-| Propriété | Moment d'exécution | Description |
-|---|---|---|
-| `can_search` | avant la recherche | Condition augure à valider (`403` si faux). Si elle est absente, la route de recherche reste accessible. |
-| `restrict_search` | dans la requête SQL | Condition relationnelle transmise à `$search_all()` / `$search_one()` |
-| `prior_search` | juste avant la requête SQL | Appel d'une fonction du bloc `@script` |
-| `post_search` | juste après le filtrage des résultats | Appel d'une fonction du bloc `@script` |
-
-Les fonctions appelées par `prior_search` et `post_search` doivent être déclarées dans `@script`.
-
-Les arguments reconnus sont les mêmes qu'en création pour `prior_search` et diffèrent pour `post_search` :
-
-| Argument | Valeur |
+| Propriété | Description |
 |---|---|
-| `$body` | Corps JSON brut de la requête |
-| `$request` | Objet requête construit par le cadriciel |
-| `$context` | Contexte applicatif fourni à la requête |
-| `$results` | Résultats de recherche après filtrage des champs et des restrictions |
+| `name` | Nom de la relation, utilisé dans les projections (`select`) et les conditions (`#contacts.type`) |
+| `ref` | Nom de la table cible. Sans `ref`, le `name` est utilisé |
+| `entry` | Nom de l'entrée liée : nomme la clef étrangère d'une relation `0-1`/`1-1`, l'entrée de la table de jonction d'une relation `N-N`, et la relation inverse |
+| `count` | Cardinalité, qui détermine la structure générée (voir ci-dessous) |
 
----
+### Structure générée
 
-## Hooks de création
-
-Pour les routes `POST` automatiques générées par sans.js, un champ peut définir des hooks :
-
-| Propriété | Moment d'exécution | Description |
+| `count` | Structure | Clef étrangère |
 |---|---|---|
-| `can_create` | avant insertion | Condition augure à valider (`403` si faux) |
-| `prior_create` | juste avant l'`INSERT` SQL | Appel d'une fonction du bloc `@script` |
-| `post_create` | juste après l'`INSERT` SQL | Appel d'une fonction du bloc `@script` |
+| `0-N`, `1-N` | Colonne `id_<entrée source>` ajoutée dans la **table cible** | `ON DELETE RESTRICT` |
+| `0-1`, `1-1` | Colonne `id_<entry ou entrée cible>` ajoutée dans la **table source** (`NULL` autorisé si `0-1`) | `ON DELETE RESTRICT` |
+| `N-N` | Table de jonction | `ON DELETE CASCADE` |
 
-Exemple :
+Les clefs étrangères sont de vraies contraintes en base (`ON UPDATE CASCADE`) :
+
+- `RESTRICT` : une entrée encore référencée ne peut pas être supprimée (réponse `409` sur les routes automatiques) ;
+- `CASCADE` : la suppression d'une entrée supprime ses lignes dans les tables de jonction ;
+- une référence vers une entrée inexistante est refusée (réponse `422` sur les routes automatiques).
+
+La colonne d'une relation peut être déclarée explicitement dans `@fields` sous le même nom (par exemple pour lui donner `can_create`) : elle est alors réutilisée comme clef étrangère.
+
+### Tables de jonction (relation `N-N`)
+
+Une relation `N-N` génère une table de jonction :
+
+| Élément | Nom |
+|---|---|
+| Table | `<name de la relation>_<table source>` |
+| Entrée | `<entry ou entrée cible>_<entrée source>` |
+| Colonnes | `id_<entrée source>` et `id_<entrée cible>`, de même type que les clefs primaires correspondantes |
+| Clef primaire | composite, sur les deux colonnes |
 
 ```
+# modèle profils (entrée : profil)
 {
-    name         : code
-    type         : hash
-    can_create   : "$type = authentification"
-    prior_create : $preparer_code($values)
-    post_create  : $notifier_creation($values)
+    name  : gerants
+    entry : gerant
+    ref   : comptes      # entrée : compte
+    count : N-N
 }
 ```
 
-Les fonctions appelées par `prior_create` et `post_create` doivent être déclarées dans `@script`.
+génère la table `gerants_profils` (entrée `gerant_profil`) avec les colonnes `id_profil` et `id_compte`. Elle s'utilise avec les fonctions du magasin comme n'importe quel modèle :
 
-Dans ces scripts, le cadriciel injecte aussi `$add_to_data(key, value)` :
+```javascript
+await $create_one('gerant_profil', { id_profil: profil.id, id_compte: compte.id })
+```
 
-- Cela ajoute `value` à la clef `key` de l'objet `data` de la réponse API.
-- Cela fonctionne aussi bien avec une réponse explicite via `$indicate(...)` qu'avec la réponse automatique `201 Créé`.
+> **Note :** une relation `N-N` d'une table vers elle-même n'est pas prise en charge (les deux colonnes auraient le même nom).
 
-Les arguments reconnus sont :
+### Nommage des relations
 
-| Argument | Valeur |
-|---|---|
-| `$body` | Corps JSON brut de la requête |
-| `$values` | Valeurs prêtes à être insérées (et, en `post_create`, enrichies avec les valeurs auto générées lors de la création, comme l'identifiant primaire) |
+Une relation est accessible des deux côtés, dans les projections (`select`) et les conditions :
 
-## Hooks de recherche
-
-Pour les routes `GET` automatiques générées par sans.js, les mêmes hooks peuvent être définis au niveau d'un champ :
-
-| Propriété | Moment d'exécution | Description |
+| Sens | Nom | Exemple (depuis `profils.gerants` vers `comptes`) |
 |---|---|---|
-| `can_search` | avant projection | Condition augure à valider. Si elle est absente, le champ n'est pas exposé par la route de recherche. |
-| `restrict_search` | après lecture SQL | Condition relationnelle traduite en colonne auxiliaire `_can_<champ>` pour autoriser ou retirer le champ ligne par ligne |
-| `prior_search` | juste avant la requête SQL | Appel d'une fonction du bloc `@script` |
-| `post_search` | après filtrage des résultats | Appel d'une fonction du bloc `@script` |
+| Direct (depuis la table source) | `name` de la relation | `gerants` depuis `profils` |
+| Inverse (depuis la table cible) | `is_<entry ou entrée cible>_of_<table source ou entrée source>` | `is_gerant_of_profils` ou `is_gerant_of_profil` depuis `comptes` |
 
-Les fonctions appelées par `prior_search` et `post_search` doivent être déclarées dans `@script`.
-
-Les arguments reconnus sont :
-
-| Argument | Valeur |
-|---|---|
-| `$body` | Corps JSON brut de la requête |
-| `$request` | Objet requête construit par le cadriciel |
-| `$context` | Contexte applicatif fourni à la requête |
-| `$results` | Résultats de recherche après filtrage des champs et des restrictions |
-
-### Exemple avec relation
-
-Pour contrôler l'accès à une relation dans les routes de recherche, les mêmes propriétés s'appliquent sur les champs de type relation :
-
-```
-{
-    name            : gerants
-    entry           : gerant
-    ref             : comptes
-    count           : N-N
-    can_search      : "$context.compte != null"
-    restrict_search : "#gerants.id = $context.compte.id"
-    rev_can_search  : "$context.compte != null"
-}
-```
-
-Dans cet exemple, la relation `gerants` n'est récupérable que si un compte est connecté (`can_search`), et uniquement les profils dont le compte connecté est gérant sont retournés (`restrict_search`). Le `rev_can_search` s'applique quand on accède à cette relation depuis le sens inverse — par exemple `is_gerant_of_profils` depuis le modèle `comptes`.
+Le résultat d'une projection est une liste, sauf pour le sens direct d'une relation `0-1`/`1-1` et le sens inverse d'une relation `0-N`/`1-N`, qui donnent une entrée unique (ou `null`).
 
 ---
 
 ## Exemple complet
-
-Exemple basé sur `profils.sans`, avec les règles et hooks de recherche ajoutés :
 
 ```
 @name [ profils, profil ]
@@ -467,67 +322,82 @@ Exemple basé sur `profils.sans`, avec les règles et hooks de recherche ajouté
 @primary [ id ]
 
 @unique [
-    [ hachage_coordonnee ]
+    [ identifiant ]
 ]
 
 @fields [
     {
-        name : id
-        type : char
-        size : 15
+        name       : id
+        type       : char
+        size       : 15
+        chars      : [A-Z0-9]
+        default    : auto
         can_search : ':)'
     }
 
     {
-        name : type
-        type : courriel/telephone
-        size : 0-16
+        name         : identifiant
+        type         : char
+        size         : 1-32
+        rule         : "$identifiant ~= /^[a-z0-9-]+$/"
+        can_create   : ':)'
+        can_search   : ':)'
+        prior_create : $verifier_identifiant($values)
+    }
+
+    {
+        name       : pseudonyme
+        type       : char
+        size       : 1-64
+        can_create : ':)'
+        can_update : ':)'
         can_search : ':)'
     }
 
     {
-        name : coordonnee
-        type : crypt
-        size : 0-512
+        name       : date_creation
+        type       : date
+        default    : now
         can_search : ':)'
     }
 
     {
-        name : hachage_coordonnee
-        type : hash
-        can_search : ':)'
-    }
-
-    {
-        name : est_principale
-        type : boolean
-        can_search : ':)'
-    }
-
-    {
-        name  : gerants
-        entry : gerant
-        ref   : comptes
-        count : N-N
+        name           : gerants
+        entry          : gerant
+        ref            : comptes
+        count          : N-N
+        rev_can_search : "$context.compte"
     }
 ]
 
 @rules [
-    can_search      : "$est_connecte"
+    can_search      : "$context.compte"
     restrict_search : "#gerants.id = $context.compte.id"
-    prior_search    : $preparer_recherche_profils($body, $request, $context)
-    post_search     : $journaliser_recherche_profils($results)
+    restrict_update : "#gerants.id = $context.compte.id"
+    can_delete      : "$context.compte"
+    restrict_delete : "#gerants.id = $context.compte.id"
+    post_search     : $journaliser_recherche($results)
 ]
 
 @script [
-    $preparer_recherche_profils = async ($body, $request, $context) =>
+    $verifier_identifiant = async ($values) =>
     {
-        // Exemple de préparation avant recherche
+        const existant = await $search_one('profil', `#identifiant = $values.identifiant`, { $values })
+        if (existant)
+            return $indicate(409, 'Identifiant déjà utilisé')
     }
 
-    $journaliser_recherche_profils = async ($results) =>
+    $journaliser_recherche = ($results) =>
     {
-        // Exemple de journalisation après recherche
+        console.log(`${$results.length} profil(s) renvoyé(s)`)
     }
 ]
 ```
+
+Avec ce modèle :
+
+- `GET /profils` et `GET /profil/:id` ne répondent qu'à un utilisateur connecté (`$context.compte` est rempli par une action `prior_respond`, voir [Scripts](scripts.md#indexsans-et-actions)) et ne renvoient que les profils qu'il gère ;
+- `POST /profil` crée un profil à partir de `identifiant` et `pseudonyme` ;
+- `PATCH /profil/:id` modifie le `pseudonyme` d'un profil géré par l'utilisateur ;
+- `DELETE /profil/:id` supprime un profil géré par l'utilisateur (ses lignes de `gerants_profils` sont supprimées en cascade) ;
+- depuis `comptes`, la relation inverse `is_gerant_of_profils` est accessible à un utilisateur connecté.
