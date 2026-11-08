@@ -1,3 +1,4 @@
 Liste de tâches :
 - permettre la définition de l'ordre de récupération dans les modèles .sans du cadriciel d'API
 - améliorer le modèle de champ de clef
+- déplacer dans app.adn les éléments propres à Anicroche présents dans avec.js/index.html (titre, lang, canonical, description, couleurs de thème, nom pour Apple) ; la clef `langue` de app.adn n'est pas utilisée
