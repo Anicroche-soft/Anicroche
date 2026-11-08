@@ -688,7 +688,7 @@ const construire_enfants = (bloc, donnees) =>
             case `@repeat`:
                 if (enfant.args.length > 1)
                 {
-                    const limite = +evaluer(decapsuler(enfant.args[1]), donnees)
+                    const limite = +evaluer_valeur(decapsuler(enfant.args[1]), donnees)
                     for (let j = 0; j < limite; j++)
                     {
                         enfants.push(...construire_bloc(enfant, donnees))

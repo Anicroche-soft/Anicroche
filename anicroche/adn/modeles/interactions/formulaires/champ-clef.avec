@@ -1,294 +1,249 @@
 @script [
-    const nettoyer_clef = (valeur) =>
+    // Les cases (.chiffre) portent la saisie ; le champ caché (.cache), seul à être nommé,
+    // porte la valeur transmise avec le formulaire et sa validation.
+    //
+    // $node et $event sont partagés par le scope et réécrits par les gestionnaires imbriqués
+    // (un .focus() déclenche aussitôt le @focus d’une autre case) : chaque gestionnaire
+    // les copie donc avant tout appel, et les fonctions internes ne les utilisent pas.
+
+    const taille_clef = 9
+
+    const extraire_chiffres = (texte) => `${texte ?? ''}`.replace(/\D/g, '')
+
+    const elements_champ_clef = (noeud) =>
     {
-        return `${valeur ?? ''}`.replace(/\D/g, '').slice(0, 9)
+        const racine = noeud.closest('.champ-clef')
+        return {
+            cache    : racine.querySelector('.cache'),
+            chiffres : Array.from(racine.querySelectorAll('.chiffre'))
+        }
     }
 
-    const racine_champ_clef = () =>
+    const est_modifiable = ({ chiffres }) => chiffres.length > 0 && !chiffres[0].readOnly
+
+    // La valeur d’une case est conservée dans data-chiffre : la propriété value d’un champ
+    // de type nombre vaut ’’ dès que son contenu n’est pas un nombre valide.
+    const lire_chiffre = (case_clef) => case_clef.dataset.chiffre ?? ''
+
+    const ecrire_chiffre = (case_clef, chiffre) =>
     {
-        return $node?.closest?.('.champ-clef') ?? $node
+        case_clef.value           = chiffre
+        case_clef.dataset.chiffre = chiffre
     }
 
-    const infos_champ_clef = () =>
+    const premiere_case_vide = ({ chiffres }) => chiffres.findIndex((case_clef) => lire_chiffre(case_clef) === '')
+
+    const case_a_atteindre = (elements) =>
     {
-        const racine = racine_champ_clef()
-        const $cache = racine?.querySelector('.cache')
-        const $chiffres = Array.from(racine?.querySelectorAll('.chiffre') ?? [])
-        return { $cache, $chiffres }
+        const index = premiere_case_vide(elements)
+        return index < 0 ? elements.chiffres.length - 1 : index
     }
 
-    const valeur_visible_champ_clef = ($chiffres) =>
+    const atteindre_case = ({ chiffres }, index) =>
     {
-        let valeur = ''
-        for (const $champ of $chiffres)
-            valeur += $champ.value || ''
-        return valeur
+        chiffres[Math.max(0, Math.min(chiffres.length - 1, index))].focus()
     }
 
-    const index_focus_champ_clef = ($chiffres) =>
+    const synchroniser = (elements) =>
     {
-        const premier_vide = $chiffres.findIndex(($champ) => !$champ.value)
-        return premier_vide >= 0 ? premier_vide : $chiffres.length - 1
-    }
+        const { cache, chiffres } = elements
 
-    const synchroniser_champ_clef = () =>
-    {
-        const { $cache, $chiffres } = infos_champ_clef()
-        if (!$cache || !$chiffres.length)
-            return
+        // Une case vide au milieu raccourcit la valeur, qui ne respecte alors plus le motif.
+        cache.value = chiffres.map(lire_chiffre).join('')
 
-        const nettoyage = nettoyer_clef($cache.value)
-        $cache.value = nettoyage
-
-        for (let i = 0; i < $chiffres.length; i++)
-            $chiffres[i].value = nettoyage[i] ?? ''
-
-        const focusable = index_focus_champ_clef($chiffres)
-        const modifiable = $cache.dataset.modifiable === true
-
-        for (let i = 0; i < $chiffres.length; i++)
-            $chiffres[i].tabIndex = modifiable && i === focusable ? 0 : -1
-    }
-
-    const definir_clef = ($valeur) =>
-    {
-        const { $cache } = infos_champ_clef()
-        if (!$cache)
-            return
-
-        $cache.value = nettoyer_clef($valeur)
-        synchroniser_champ_clef()
-    }
-
-    const focuser_index_clef = ($index) =>
-    {
-        const { $chiffres } = infos_champ_clef()
-        if (!$chiffres.length)
-            return
-        const cible = Math.max(0, Math.min($chiffres.length - 1, $index))
-        $chiffres[cible].focus()
-    }
-
-    const focuser_premier_disponible = () =>
-    {
-        const { $chiffres } = infos_champ_clef()
-        if (!$chiffres.length)
-            return
-        focuser_index_clef(index_focus_champ_clef($chiffres))
-    }
-
-    const remplir_depuis_index = ($index_depart, $texte) =>
-    {
-        const { $cache } = infos_champ_clef()
-        if (!$cache)
-            return
-
-        const base = ($cache.value || '').split('')
-        while (base.length < 9)
-            base.push('')
-
-        const chiffres = nettoyer_clef($texte).split('')
-        let index = $index_depart
-        for (const chiffre of chiffres)
+        // Seule la case à atteindre est accessible par tabulation.
+        const cible      = case_a_atteindre(elements)
+        const modifiable = est_modifiable(elements)
+        chiffres.forEach((case_clef, index) =>
         {
-            if (index >= 9)
-                break
-            base[index] = chiffre
-            index++
+            case_clef.tabIndex = modifiable && index === cible ? 0 : -1
+        })
+    }
+
+    // Plusieurs chiffres d’un coup : s’il y a assez de cases vides, les premières d’entre elles
+    // sont remplies ; sinon ce sont les n dernières cases.
+    const coller = (elements, texte) =>
+    {
+        const { chiffres } = elements
+        const collage      = extraire_chiffres(texte).slice(0, taille_clef)
+        if (!collage)
+            return
+
+        const vides = chiffres.filter((case_clef) => lire_chiffre(case_clef) === '')
+        const cases = collage.length <= vides.length
+            ? vides.slice(0, collage.length)
+            : chiffres.slice(-collage.length)
+
+        cases.forEach((case_clef, rang) => ecrire_chiffre(case_clef, collage[rang]))
+        synchroniser(elements)
+        atteindre_case(elements, case_a_atteindre(elements))
+    }
+
+    const saisir = (elements, index, texte) =>
+    {
+        const saisie = extraire_chiffres(texte)
+        if (!saisie)
+            return
+
+        if (saisie.length > 1)
+            return coller(elements, saisie)
+
+        ecrire_chiffre(elements.chiffres[index], saisie)
+        synchroniser(elements)
+        atteindre_case(elements, index + 1)
+    }
+
+    // Efface la case courante si elle est remplie ; sinon, en reculant, efface la précédente et y retourne.
+    const effacer = (elements, index, reculer) =>
+    {
+        const { chiffres } = elements
+
+        if (lire_chiffre(chiffres[index]) !== '')
+        {
+            ecrire_chiffre(chiffres[index], '')
+            synchroniser(elements)
+            return
         }
 
-        $cache.value = base.join('')
-        synchroniser_champ_clef()
-
-        if (index < 9)
-            focuser_index_clef(index)
-        else
-            focuser_premier_disponible()
-    }
-
-    const effacer_precedent = ($index) =>
-    {
-        if ($index <= 0)
+        if (!reculer || index === 0)
             return
 
-        const { $cache } = infos_champ_clef()
-        if (!$cache)
-            return
-
-        const base = ($cache.value || '').split('')
-        while (base.length < 9)
-            base.push('')
-
-        base[$index - 1] = ''
-        $cache.value = base.join('')
-        synchroniser_champ_clef()
-        focuser_index_clef($index - 1)
-    }
-
-    const effacer_courant = ($index) =>
-    {
-        const { $cache } = infos_champ_clef()
-        if (!$cache)
-            return
-
-        const base = ($cache.value || '').split('')
-        while (base.length < 9)
-            base.push('')
-
-        base[$index] = ''
-        $cache.value = base.join('')
-        synchroniser_champ_clef()
-        focuser_index_clef($index)
+        ecrire_chiffre(chiffres[index - 1], '')
+        synchroniser(elements)
+        atteindre_case(elements, index - 1)
     }
 
     $monter_champ_clef = () =>
     {
-        $vars.redirection_focus = false
-        synchroniser_champ_clef()
+        const elements = elements_champ_clef($node)
+        const valeur   = extraire_chiffres(elements.cache.value).slice(0, taille_clef)
+
+        elements.chiffres.forEach((case_clef, index) => ecrire_chiffre(case_clef, valeur[index] ?? ''))
+        synchroniser(elements)
     }
 
-    $focus_champ_clef = ($index) =>
+    // Toute prise de focus (clic, tabulation, étiquette, validation du formulaire) mène à la
+    // première case vide ; une fois la clef complète, chaque case peut être corrigée.
+    $focus_champ_clef = () =>
     {
-        if ($event?.target?.readOnly)
+        const noeud    = $node
+        const elements = elements_champ_clef(noeud)
+        if (!est_modifiable(elements))
             return
 
-        if ($vars.redirection_focus)
+        if (noeud === elements.cache)
+            return atteindre_case(elements, case_a_atteindre(elements))
+
+        const vide = premiere_case_vide(elements)
+        if (vide >= 0 && elements.chiffres.indexOf(noeud) !== vide)
+            atteindre_case(elements, vide)
+    }
+
+    $clic_champ_clef = () =>
+    {
+        const evenement = $event
+        const elements  = elements_champ_clef($node)
+        if (!est_modifiable(elements) || evenement.target.classList.contains('chiffre'))
             return
 
-        const { $chiffres } = infos_champ_clef()
-        if (!$chiffres.length)
+        atteindre_case(elements, case_a_atteindre(elements))
+    }
+
+    $clavier_champ_clef = () =>
+    {
+        const noeud     = $node
+        const evenement = $event
+        if (noeud.readOnly)
             return
 
-        const cible = index_focus_champ_clef($chiffres)
-        if ($index !== cible)
+        const elements = elements_champ_clef(noeud)
+        const index    = elements.chiffres.indexOf(noeud)
+
+        switch (evenement.key)
         {
-            $vars.redirection_focus = true
-            focuser_index_clef(cible)
-            $vars.redirection_focus = false
+        case 'Backspace':
+        case 'Delete':
+            evenement.preventDefault()
+            effacer(elements, index, evenement.key === 'Backspace')
+            break
+        case 'ArrowLeft':
+            evenement.preventDefault()
+            atteindre_case(elements, index - 1)
+            break
+        case 'ArrowRight':
+            evenement.preventDefault()
+            atteindre_case(elements, index + 1)
+            break
+        case 'ArrowUp':
+        case 'ArrowDown':
+            // Empêche l’incrémentation propre aux champs de type nombre.
+            evenement.preventDefault()
+            break
         }
     }
 
-    $saisie_champ_clef = ($index) =>
+    // Les claviers virtuels n’indiquent souvent pas la touche dans keydown : la saisie et
+    // l’effacement sont donc traités ici, avant toute modification du contenu de la case.
+    $avant_saisie_champ_clef = () =>
     {
-        if ($event?.target?.readOnly)
+        const noeud     = $node
+        const evenement = $event
+        if (noeud.readOnly || !evenement.cancelable)
             return
 
-        const saisie = nettoyer_clef($event?.target?.value ?? '')
+        const elements = elements_champ_clef(noeud)
+        const index    = elements.chiffres.indexOf(noeud)
+        const type     = evenement.inputType ?? ''
+
+        if (type.startsWith('insert'))
+        {
+            evenement.preventDefault()
+            saisir(elements, index, evenement.data ?? evenement.dataTransfer?.getData('text') ?? '')
+        }
+        else if (type.startsWith('delete'))
+        {
+            evenement.preventDefault()
+            effacer(elements, index, type.endsWith('Backward'))
+        }
+    }
+
+    // Repli pour les modifications que beforeinput n’a pas pu empêcher (composition,
+    // remplissage automatique du code reçu…).
+    $saisie_champ_clef = () =>
+    {
+        const noeud = $node
+        if (noeud.readOnly)
+            return
+
+        const elements = elements_champ_clef(noeud)
+        const index    = elements.chiffres.indexOf(noeud)
+        const ancien   = lire_chiffre(noeud)
+        const saisie   = noeud.validity.badInput ? null : extraire_chiffres(noeud.value)
+
+        noeud.value = ancien
+
+        if (saisie === null)
+            return
+
         if (!saisie)
-        {
-            effacer_courant($index)
-            return
-        }
+            return effacer(elements, index, false)
 
-        remplir_depuis_index($index, saisie)
+        // Un chiffre tapé à côté de celui déjà présent : seul le nouveau est retenu.
+        const nouveau = saisie.length === 2 && ancien && saisie.includes(ancien)
+            ? saisie.replace(ancien, '')
+            : saisie
+        saisir(elements, index, nouveau)
     }
 
-    $clavier_champ_clef = ($index) =>
+    $coller_champ_clef = () =>
     {
-        if ($event?.target?.readOnly)
+        const noeud     = $node
+        const evenement = $event
+        if (noeud.readOnly)
             return
 
-        if ($event.key === 'ArrowUp' || $event.key === 'ArrowDown')
-        {
-            $event.preventDefault()
-            return
-        }
-
-        const touches_autorisees = 'Backspace,Delete,Tab,ArrowLeft,ArrowRight,Home,End,Enter'.split(',')
-        if ($event.key.length === 1 && !/^\d$/.test($event.key))
-        {
-            $event.preventDefault()
-            return
-        }
-        if ('+-.eE'.includes($event.key))
-        {
-            $event.preventDefault()
-            return
-        }
-        if (!touches_autorisees.includes($event.key) && $event.key.length > 1)
-            return
-
-        if (($event.key === 'Backspace' || $event.key === 'Delete') && $event.target.value)
-        {
-            $event.preventDefault()
-            effacer_courant($index)
-            return
-        }
-
-        if ($event.key === 'Backspace' && !$event.target.value)
-        {
-            $event.preventDefault()
-            effacer_precedent($index)
-        }
-    }
-
-    $coller_champ_clef = ($index) =>
-    {
-        if ($event?.target?.readOnly)
-            return
-
-        $event.preventDefault()
-        const texte = $event.clipboardData?.getData('text') ?? ''
-        remplir_depuis_index($index, texte)
-    }
-
-    $clic_cases_champ_clef = () =>
-    {
-        const racine = racine_champ_clef()
-        const { $cache } = infos_champ_clef()
-        if (!$cache || $cache.dataset.modifiable !== true)
-            return
-
-        if ($event?.target?.classList?.contains('chiffre'))
-            return
-
-        focuser_premier_disponible(racine)
-    }
-
-    $avant_saisie_cache_champ_clef = () =>
-    {
-        const racine = racine_champ_clef()
-        const { $cache, $chiffres } = infos_champ_clef()
-        if (!$cache || !$chiffres.length || $cache.dataset.modifiable !== true)
-            return
-
-        const type = $event?.inputType || ''
-        const texte = nettoyer_clef($event?.data || '')
-        if (!type.startsWith('insert') || !texte)
-            return
-
-        $event.preventDefault()
-
-        // Annuler toute edition du champ cache et reporter la saisie sur les champs visibles.
-        $cache.value = valeur_visible_champ_clef($chiffres)
-        remplir_depuis_index(index_focus_champ_clef($chiffres), texte)
-    }
-
-    $clavier_cache_champ_clef = () =>
-    {
-        const racine = racine_champ_clef()
-        const { $cache, $chiffres } = infos_champ_clef()
-        if (!$cache || !$chiffres.length || $cache.dataset.modifiable !== true)
-            return
-
-        if ($event.key !== 'Backspace' && $event.key !== 'Delete')
-            return
-
-        $event.preventDefault()
-        $cache.value = valeur_visible_champ_clef($chiffres)
-
-        const index = index_focus_champ_clef($chiffres)
-        if ($event.key === 'Backspace')
-        {
-            if (!$chiffres[index].value && index > 0)
-                effacer_precedent(index)
-            else
-                effacer_courant(index)
-        }
-        else
-        {
-            effacer_courant(index)
-        }
+        evenement.preventDefault()
+        coller(elements_champ_clef(noeud), evenement.clipboardData?.getData('text') ?? '')
     }
 ]
 
@@ -357,6 +312,9 @@
         caret-color: transparent;
         user-select: none;
         outline-color: transparent;
+
+        -moz-appearance: textfield;
+        appearance: textfield;
     }
 
     .champ-clef .chiffre:focus,
@@ -381,11 +339,6 @@
         margin: 0;
     }
 
-    .champ-clef .chiffre[type=text] {
-        -moz-appearance: textfield;
-        appearance: textfield;
-    }
-
     .champ-clef .cache {
         position: absolute;
         inset: 0;
@@ -402,7 +355,7 @@
     for="champ-$nom"
 >
     "$etiquette"
-    <div @mount="$monter_champ_clef()" @click="$clic_cases_champ_clef()">
+    <div @mount="$monter_champ_clef()" @click="$clic_champ_clef()">
         <input
             #champ-$nom
             .cache
@@ -411,151 +364,27 @@
             value="$valeur"
             tabindex="-1"
             autocomplete="off"
-            data-requis="$requis"
-            data-modifiable="$modifiable"
-            @beforeinput="$avant_saisie_cache_champ_clef()"
-            @keydown="$clavier_cache_champ_clef()"
-            [$requis] ? required
             pattern="[0-9]{9}|"
+            @focus="$focus_champ_clef()"
+            [$requis] ? required
         >
 
-        <div>
-            <input
-                .chiffre
-                type="text"
-                placeholder="x"
-                maxlength="1"
-                min="0"
-                max="9"
-                step="1"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                @focus="$focus_champ_clef(0)"
-                @input="$saisie_champ_clef(0)"
-                @keydown="$clavier_champ_clef(0)"
-                @paste="$coller_champ_clef(0)" [! $modifiable] ? readonly
-            >
-            <input
-                .chiffre
-                type="text"
-                placeholder="x"
-                maxlength="1"
-                min="0"
-                max="9"
-                step="1"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                @focus="$focus_champ_clef(1)"
-                @input="$saisie_champ_clef(1)"
-                @keydown="$clavier_champ_clef(1)"
-                @paste="$coller_champ_clef(1)" [! $modifiable] ? readonly
-            >
-            <input
-                .chiffre
-                type="text"
-                placeholder="x"
-                maxlength="1"
-                min="0"
-                max="9"
-                step="1"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                @focus="$focus_champ_clef(2)"
-                @input="$saisie_champ_clef(2)"
-                @keydown="$clavier_champ_clef(2)"
-                @paste="$coller_champ_clef(2)" [! $modifiable] ? readonly
-            >
-
-        <div>
-            <input
-                .chiffre
-                type="text"
-                placeholder="x"
-                maxlength="1"
-                min="0"
-                max="9"
-                step="1"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                @focus="$focus_champ_clef(3)"
-                @input="$saisie_champ_clef(3)"
-                @keydown="$clavier_champ_clef(3)"
-                @paste="$coller_champ_clef(3)" [! $modifiable] ? readonly
-            >
-            <input
-                .chiffre
-                type="text"
-                placeholder="x"
-                maxlength="1"
-                min="0"
-                max="9"
-                step="1"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                @focus="$focus_champ_clef(4)"
-                @input="$saisie_champ_clef(4)"
-                @keydown="$clavier_champ_clef(4)"
-                @paste="$coller_champ_clef(4)" [! $modifiable] ? readonly
-            >
-            <input
-                .chiffre
-                type="text"
-                placeholder="x"
-                maxlength="1"
-                min="0"
-                max="9"
-                step="1"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                @focus="$focus_champ_clef(5)"
-                @input="$saisie_champ_clef(5)"
-                @keydown="$clavier_champ_clef(5)"
-                @paste="$coller_champ_clef(5)" [! $modifiable] ? readonly
-            >
-
-        <div>
-            <input
-                .chiffre
-                type="text"
-                placeholder="x"
-                maxlength="1"
-                min="0"
-                max="9"
-                step="1"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                @focus="$focus_champ_clef(6)"
-                @input="$saisie_champ_clef(6)"
-                @keydown="$clavier_champ_clef(6)"
-                @paste="$coller_champ_clef(6)" [! $modifiable] ? readonly
-            >
-            <input
-                .chiffre
-                type="text"
-                placeholder="x"
-                maxlength="1"
-                min="0"
-                max="9"
-                step="1"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                @focus="$focus_champ_clef(7)"
-                @input="$saisie_champ_clef(7)"
-                @keydown="$clavier_champ_clef(7)"
-                @paste="$coller_champ_clef(7)" [! $modifiable] ? readonly
-            >
-            <input
-                .chiffre
-                type="text"
-                placeholder="x"
-                maxlength="1"
-                min="0"
-                max="9"
-                step="1"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                @focus="$focus_champ_clef(8)"
-                @input="$saisie_champ_clef(8)"
-                @keydown="$clavier_champ_clef(8)"
-                @paste="$coller_champ_clef(8)" [! $modifiable] ? readonly
-            >
+        @repeat [3]
+            <div>
+                @repeat [3]
+                    <input
+                        .chiffre
+                        type="number"
+                        inputmode="numeric"
+                        min="0"
+                        max="9"
+                        step="1"
+                        placeholder="x"
+                        autocomplete="one-time-code"
+                        @focus="$focus_champ_clef()"
+                        @keydown="$clavier_champ_clef()"
+                        @beforeinput="$avant_saisie_champ_clef()"
+                        @input="$saisie_champ_clef()"
+                        @paste="$coller_champ_clef()"
+                        [! $modifiable] ? readonly
+                    >
