@@ -1,5 +1,7 @@
 # Démarrage
 
+sans.js nécessite **Node 24.7 ou plus récent** : le hachage argon2 des champs `hash` utilise `crypto.argon2`, intégré à Node. Avec une version plus ancienne, le démarrage s'arrête sur une erreur explicite.
+
 ## Structure du projet
 
 Un projet sans.js suit la structure suivante :

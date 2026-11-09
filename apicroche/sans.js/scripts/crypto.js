@@ -1,5 +1,8 @@
-import crypto from 'node:crypto'
-import argon2 from 'argon2'
+import crypto        from 'node:crypto'
+import { promisify } from 'node:util'
+
+if (typeof crypto.argon2 !== 'function')
+    throw new Error(`sans.js nécessite Node 24.7 ou plus récent pour argon2 (version actuelle : ${process.version})`)
 
 // ─── Clefs ────────────────────────────────────────────────────────────────────
 
@@ -32,14 +35,41 @@ export const hacher_hmac = (valeur) =>
 
 // ─── Argon2id (non déterministe) ─────────────────────────────────────────────
 
-export const hacher_argon2 = (valeur) =>
-    argon2.hash(String(valeur), { type: argon2.argon2id })
+// Paramètres et format PHC du paquet npm argon2, utilisé auparavant : les anciens hachages restent vérifiables
+const deriver_argon2    = promisify(crypto.argon2)
+const parametres_argon2 = { memory: 65536, passes: 3, parallelism: 4, tagLength: 32 }
+const format_phc        = /^\$(argon2(?:id|i|d))\$v=19\$m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)$/
+
+const base64_phc = (tampon) =>
+    tampon.toString('base64').replace(/=+$/, '')
+
+export const hacher_argon2 = async (valeur) =>
+{
+    const { memory, passes, parallelism } = parametres_argon2
+    const nonce   = crypto.randomBytes(16)
+    const hachage = await deriver_argon2('argon2id', { ...parametres_argon2, message: String(valeur), nonce })
+    return `$argon2id$v=19$m=${memory},t=${passes},p=${parallelism}$${base64_phc(nonce)}$${base64_phc(hachage)}`
+}
 
 export const verifier_argon2 = async (hachage, valeur) =>
 {
+    const morceaux = String(hachage).match(format_phc)
+    if (!morceaux)
+        return false
+
+    const [, algorithme, memory, passes, parallelism, nonce, attendu] = morceaux
+    const empreinte = Buffer.from(attendu, 'base64')
     try
     {
-        return await argon2.verify(hachage, String(valeur))
+        const obtenue = await deriver_argon2(algorithme, {
+            message     : String(valeur),
+            nonce       : Buffer.from(nonce, 'base64'),
+            memory      : Number(memory),
+            passes      : Number(passes),
+            parallelism : Number(parallelism),
+            tagLength   : empreinte.length
+        })
+        return crypto.timingSafeEqual(obtenue, empreinte)
     }
     catch
     {
