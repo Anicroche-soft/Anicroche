@@ -9,14 +9,14 @@ module.exports = {
             cwd    : path.join(__dirname, "anicroche"),
             script : "npm",
             args   : "start",
-            env    : { PORT: 4000 }
+            env    : { PORT: 4004 }
         },
         {
             name   : "apicroche",
             cwd    : path.join(__dirname, "apicroche"),
             script : "npm",
             args   : "start",
-            env    : { PORT: 4001 }
+            env    : { PORT: 4005 }
         }
     ]
 }

@@ -4,18 +4,13 @@ set -eu
 
 cd "$(dirname "$0")"
 
-# En SSH non interactif, le Node installé par nvm n'est pas dans le PATH
-if ! command -v npm >/dev/null 2>&1 && [ -s "$HOME/.nvm/nvm.sh" ]
+# Le Node du système peut être trop ancien, et nvm n'est pas chargé en SSH non interactif
+if [ -s "$HOME/.nvm/nvm.sh" ]
 then
     set +u
     . "$HOME/.nvm/nvm.sh"
     set -u
 fi
-
-lire_env()
-{
-    [ -f .env ] && sed -n "s/^$1=//p" .env | tail -n 1
-}
 
 avant=$(git rev-parse HEAD)
 git pull --ff-only
@@ -29,16 +24,12 @@ fi
 
 for dossier in apicroche anicroche
 do
+    [ -f "$dossier/package-lock.json" ] || continue
     if [ ! -d "$dossier/node_modules" ] || [ "${1:-}" = "--force" ] \
     || [ -n "$(git diff --name-only "$avant" "$apres" -- "$dossier/package.json" "$dossier/package-lock.json")" ]
     then
         echo "Installation des dépendances de $dossier"
-        if [ -f "$dossier/package-lock.json" ]
-        then
-            (cd "$dossier" && npm ci --omit=dev)
-        else
-            (cd "$dossier" && npm install --omit=dev)
-        fi
+        (cd "$dossier" && npm ci --omit=dev)
     fi
 done
 
@@ -49,13 +40,7 @@ then
     echo "/!\\ anicroche a changé mais pas la VERSION du service worker : les visiteurs garderont l'ancien cache"
 fi
 
-redemarrage=$(lire_env commande_redemarrage || true)
-if [ -n "$redemarrage" ]
-then
-    echo "Redémarrage : $redemarrage"
-    sh -c "$redemarrage"
-else
-    echo "Pensez à redémarrer anicroche et apicroche (commande_redemarrage absente de .env)"
-fi
+pm2 startOrReload ecosystem.config.cjs
+pm2 save
 
 echo "Déployé : $(git log -1 --format='%h %s')"
