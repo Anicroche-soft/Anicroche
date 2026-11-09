@@ -52,18 +52,34 @@ const default_sql = (champ) =>
     return `DEFAULT '${champ.default}'`
 }
 
-// Valeur telle que MySQL la stocke dans INFORMATION_SCHEMA.COLUMN_DEFAULT
+// MySQL note CURRENT_TIMESTAMP et (now() + interval 1 day), MariaDB current_timestamp() et current_timestamp() + interval 1 day
+const forme_expression = (valeur) =>
+    valeur.toLowerCase().replace(/current_timestamp(\(\))?|now\(\)/g, 'now').replace(/[\s()]/g, '')
+
 const normaliser_default = (champ) =>
 {
     if (!champ.default || est_default_cadriciel(champ.default)) return null
     const now = parser_default_now(champ.default)
     if (now)
     {
-        if (champ.type === 'date') return 'curdate()'
-        if (!now.interval)        return 'CURRENT_TIMESTAMP'
-        return `(now() + interval ${now.interval.valeur} ${now.interval.unite.toLowerCase()})`
+        if (champ.type === 'date') return 'curdate'
+        if (!now.interval)        return 'now'
+        return forme_expression(`now() + interval ${now.interval.valeur} ${now.interval.unite}`)
     }
     return String(champ.default)
+}
+
+// MariaDB écrit NULL en toutes lettres et met les littéraux entre apostrophes, contrairement à MySQL
+const lire_default = (valeur) =>
+{
+    if (valeur === null || valeur === undefined || valeur === 'NULL')
+        return null
+    const litteral = /^'(.*)'$/s.exec(valeur)
+    if (litteral)
+        return litteral[1].replace(/''/g, "'")
+    if (/current_timestamp|now\(\)|curdate\(\)/i.test(valeur))
+        return forme_expression(valeur)
+    return valeur
 }
 
 // ─── Connexion ────────────────────────────────────────────────────────────────
@@ -264,7 +280,7 @@ const mettre_a_jour_table = async (connexion, table, mode_dev, suppression_schem
         {
             const type_actuel     = normaliser_type(existante.COLUMN_TYPE)
             const nullable_actuel = existante.IS_NULLABLE === 'YES'
-            const default_actuel  = existante.COLUMN_DEFAULT ?? null
+            const default_actuel  = lire_default(existante.COLUMN_DEFAULT)
             const default_cible   = normaliser_default(champ)
             if (type_actuel !== normaliser_type(type_cible) || nullable_actuel !== champ.nullable || default_actuel !== default_cible)
             {
