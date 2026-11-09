@@ -1,8 +1,16 @@
-#!/bin/sh
+#!/bin/bash
 # Mise à jour du site sur un hébergement sans Docker : ./deployer.sh [--force]
 set -eu
 
 cd "$(dirname "$0")"
+
+# En SSH non interactif, le Node installé par nvm n'est pas dans le PATH
+if ! command -v npm >/dev/null 2>&1 && [ -s "$HOME/.nvm/nvm.sh" ]
+then
+    set +u
+    . "$HOME/.nvm/nvm.sh"
+    set -u
+fi
 
 lire_env()
 {

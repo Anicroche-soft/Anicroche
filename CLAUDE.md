@@ -52,7 +52,7 @@ En mode dev, les dossiers `adn/` et du moteur sont montés dans les conteneurs :
 
 ## Déploiement (hébergement sans Docker)
 
-En production, chaque partie tourne directement avec Node (`npm start` dans `anicroche/` et `apicroche/`). Le `.env` à la racine du dépôt est lu par les cadriciels eux-mêmes. Sur le serveur, `./deployer.sh` fait un `git pull`, réinstalle les dépendances si `package*.json` a changé, puis exécute `commande_redemarrage` (définie dans `.env`). Penser à changer la `VERSION` de `avec.js/scripts/service-worker.js` quand anicroche change.
+En production, chaque partie tourne directement avec Node (`npm start` dans `anicroche/` et `apicroche/`). Le `.env` à la racine du dépôt est lu par les cadriciels eux-mêmes. Sur le serveur, `./deployer.sh` fait un `git pull`, réinstalle les dépendances si `package*.json` a changé, puis exécute `commande_redemarrage` (définie dans `.env`, en général `pm2 startOrReload ecosystem.config.cjs && pm2 save`). `ecosystem.config.cjs` fixe les ports (4000 pour anicroche, 4001 pour apicroche) : un site Apache proxifie chaque domaine vers son port. Penser à changer la `VERSION` de `avec.js/scripts/service-worker.js` quand anicroche change.
 
 ## Conventions de code
 
