@@ -85,8 +85,7 @@
     $inscrire_compte = async ($body) =>
     {
         if (
-            !$body.type_coordonnee
-         || !$body.coordonnee
+            !$body.coordonnee
          || !$body.clef
          || !$body.mot_de_passe
          || !Array.isArray($body.ids)
@@ -116,13 +115,22 @@
             hachage_mot_de_passe : $body.mot_de_passe
         })
 
-        await $create_one('coordonnee', {
-            type               : $body.type_coordonnee,
-            coordonnee         : $body.coordonnee,
-            hachage_coordonnee : $body.coordonnee,
-            est_principale     : true,
-            id_compte          : compte.id
-        })
+        // Les codes ne sont envoyés que par courriel ; deux inscriptions simultanées peuvent passer la vérification de la clef
+        try
+        {
+            await $create_one('coordonnee', {
+                type               : 'courriel',
+                coordonnee         : $body.coordonnee,
+                hachage_coordonnee : $body.coordonnee,
+                est_principale     : true,
+                id_compte          : compte.id
+            })
+        }
+        catch (erreur)
+        {
+            await $delete_one('compte', `#id = $compte.id`, { $compte: compte })
+            throw erreur
+        }
 
         return $indicate(201, "Inscription réussie")
     }
