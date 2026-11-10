@@ -4,6 +4,7 @@ import { evaluer, ERREUR as ERREUR_AUGURE } from './augure.js'
 import { SignJWT, jwtVerify } from 'jose'
 import { randomUUID, webcrypto } from 'crypto'
 import { verifier_argon2 } from './crypto.js'
+import { lire_ip, regrouper_ip, analyser_quota, consommer } from './limiteur.js'
 
 if (!globalThis.crypto)
     globalThis.crypto = webcrypto
@@ -221,13 +222,43 @@ const creer_indicate = (rep, data_reponse, reponse_extra, executer_post_respond 
 
 // ─── Lecture du corps JSON ────────────────────────────────────────────────────
 
-const lire_corps = (req) => new Promise((resolve) =>
+const CORPS_TROP_GRAND = Symbol('corps_trop_grand')
+const TAILLE_CORPS_DEFAUT = 1024 * 1024
+
+const UNITES_TAILLE = { b: 1, kb: 1024, mb: 1024 * 1024 }
+
+const analyser_taille_corps = (valeur) =>
 {
-    let data = ''
-    req.on('data', chunk => data += chunk)
+    if (valeur === undefined || valeur === null || valeur === '')
+        return TAILLE_CORPS_DEFAUT
+    const morceaux = /^\s*(\d+)\s*(b|kb|mb)?\s*$/i.exec(String(valeur))
+    if (!morceaux)
+    {
+        console.log(`/!\\ body_limit invalide (${valeur}) : ${TAILLE_CORPS_DEFAUT} octets utilisés`)
+        return TAILLE_CORPS_DEFAUT
+    }
+    return Number(morceaux[1]) * UNITES_TAILLE[(morceaux[2] ?? 'b').toLowerCase()]
+}
+
+const lire_corps = (req, taille_max) => new Promise((resolve) =>
+{
+    if (Number(req.headers['content-length'] ?? 0) > taille_max)
+        return resolve(CORPS_TROP_GRAND)
+
+    const morceaux = []
+    let taille     = 0
+    req.on('data', (morceau) =>
+    {
+        taille += morceau.length
+        if (taille > taille_max)
+            return resolve(CORPS_TROP_GRAND)
+        morceaux.push(morceau)
+    })
     req.on('end', () =>
     {
-        try   { resolve(JSON.parse(data)) }
+        if (taille > taille_max)
+            return
+        try   { resolve(JSON.parse(Buffer.concat(morceaux).toString('utf8'))) }
         catch { resolve({}) }
     })
     req.on('error', () => resolve({}))
@@ -266,8 +297,7 @@ const parser_cookies = (cookie_header) =>
 }
 
 const construire_request = (req) => ({
-    // Le mandataire ajoute l'adresse réelle en dernier ; les précédentes viennent du client
-    ip: req.headers['x-forwarded-for']?.split(',').at(-1).trim() || req.socket.remoteAddress,
+    ip: lire_ip(req),
     user_agent: req.headers['user-agent'] ?? null,
     path: new URL(req.url, 'http://localhost').pathname,
     headers: req.headers,
@@ -559,6 +589,14 @@ const executer_hooks = async (hooks, parametres) =>
     return false
 }
 
+const repondre_surcharge = (rep) =>
+{
+    if (rep.headersSent)
+        return
+    rep.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '1' })
+    rep.end(JSON.stringify({ code: 503, error: 'Serveur surchargé, réessayez dans un instant', data: {} }))
+}
+
 const repondre_erreur_interne = (rep) =>
 {
     if (rep.headersSent)
@@ -633,6 +671,12 @@ const executer_prior_respond = async (index, contexte, rep, $body, $request, $co
         {
             if (est_reponse_deja(err))
                 return { interrompu: true, fonctions }
+
+            if (err.code === 'ARGON2_SATURE')
+            {
+                repondre_surcharge(rep)
+                return { interrompu: true, fonctions }
+            }
 
             console.log(`/!\ erreur prior_respond ${bloc.prior_respond} : ${err.message}`)
             if (!rep.headersSent)
@@ -732,17 +776,18 @@ const executer_post_respond = async (index, contexte, rep, $body, $request, $con
 
 const CODES_VALIDATION = new Set(['RULE_VIOLATION', 'ENUM_VIOLATION', 'SIZE_VIOLATION'])
 
-export const construire_routes = (schemas, index = null) =>
+export const construire_routes = (schemas, index = null, options = {}) =>
 {
+    const taille_corps_max  = analyser_taille_corps(options.body_limit)
     const fonctions_magasin = creer_fonctions_magasin(schemas)
     const fonctions_mailer  = creer_fonctions_mailer()
     const index_routes      = index ?? schemas.index ?? null
     const routes            = []
     let premiere_route      = true
 
-    const enregistrer_route = (methode, chemin, handler, description) =>
+    const enregistrer_route = (methode, chemin, handler, description, limit = undefined) =>
     {
-        routes.push({ methode, chemin, handler })
+        routes.push({ methode, chemin, handler, limit })
         if (premiere_route)
         {
             console.log('\nRoutes :')
@@ -765,7 +810,15 @@ export const construire_routes = (schemas, index = null) =>
             return null
         }
 
-        const $body         = await lire_corps(req)
+        const $body         = await lire_corps(req, taille_corps_max)
+        if ($body === CORPS_TROP_GRAND)
+        {
+            // Ne pas lire le reste d'un corps trop grand : la connexion est fermée après la réponse
+            rep.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8', 'Connection': 'close' })
+            rep.end(JSON.stringify({ code: 413, error: 'Corps de requête trop grand', data: {} }), () => req.destroy())
+            return null
+        }
+
         const $request      = construire_request(req)
         const $context      = {}
         const $params       = req.params ?? {}
@@ -822,6 +875,23 @@ export const construire_routes = (schemas, index = null) =>
             $verify_token  : creer_verify_token(),
             $set_cookie    : creer_set_cookie(rep),
             $verify_hash   : (hachage, valeur) => verifier_argon2(hachage, String(valeur ?? '')),
+            $limit         : async (clef, quota, options_limite = {}) =>
+            {
+                const quota_lu = analyser_quota(quota)
+                if (!quota_lu)
+                    throw new Error(`$limit : quota invalide (${quota}), format attendu : 10/1m`)
+
+                const par_ip  = options_limite?.per_ip ?? true
+                const attente = consommer(
+                    [{ clef: `$limit:${clef}|${quota_lu.texte}|${par_ip ? regrouper_ip($request.ip) : ''}`, quota: quota_lu }],
+                    options_limite?.count ?? true
+                )
+                if (!attente)
+                    return
+
+                rep.setHeader('Retry-After', String(attente))
+                return $indicate(429, 'Trop de requêtes')
+            },
             $q             : citer_condition
         }
 
@@ -853,6 +923,12 @@ export const construire_routes = (schemas, index = null) =>
             if (CODES_VALIDATION.has(err.code))
             {
                 try { $indicate?.(422, err.message) } catch {}
+                return
+            }
+
+            if (err.code === 'ARGON2_SATURE')
+            {
+                repondre_surcharge(rep)
                 return
             }
 
@@ -926,7 +1002,7 @@ export const construire_routes = (schemas, index = null) =>
                 }
             })
 
-            enregistrer_route(methode, route.path, handler, action.nom)
+            enregistrer_route(methode, route.path, handler, action.nom, route.limit)
         }
     }
 

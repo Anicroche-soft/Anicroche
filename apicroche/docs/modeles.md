@@ -135,6 +135,8 @@ Le hachage dépend de la présence du champ dans `@primary` ou `@unique` :
 
 Avec `size`, le type SQL suit la même règle que `char` (la taille porte alors sur la valeur hachée stockée). Une valeur hachée n'est jamais renvoyée en clair.
 
+Chaque calcul argon2 occupe 64 Mio de mémoire : sans.js n'en effectue que 4 à la fois et en met 64 au plus en attente. Au-delà, la requête reçoit `503 Serveur surchargé`, ce qui protège la mémoire du serveur lors d'une rafale de connexions.
+
 #### Champs `crypt`
 
 La valeur est chiffrée avant l'écriture et déchiffrée automatiquement à la lecture. Toutes les comparaisons sont possibles dans une condition, mais elles sont vérifiées ligne par ligne après lecture (elles ne peuvent pas être traduites en SQL).

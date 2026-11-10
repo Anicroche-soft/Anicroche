@@ -36,6 +36,7 @@ port   : 5030
 |---|---|---|---|
 | `nom` | texte | `sans.js` | Nom de l'API, affiché par la route `GET /` |
 | `port` | nombre | `PORT` ou `5030` | Port d'écoute du serveur. S'il est absent, la variable d'environnement `PORT` est utilisée, puis `5030` |
+| `body_limit` | taille | `1mb` | Taille maximale du corps des requêtes, en octets ou avec l'unité `b`, `kb` ou `mb` (`512kb`). Au-delà : `413` |
 
 ## Variables d'environnement
 
@@ -126,6 +127,9 @@ Toutes les réponses de l'API sont au format JSON :
 |---|---|
 | `GET /` | `200` « Bienvenue sur l'API … » (en mode `dev` : une console HTML pour envoyer des requêtes à l'API) |
 | Route inconnue | `404` « Route introuvable » |
+| Corps plus grand que `body_limit` | `413` « Corps de requête trop grand » (la connexion est fermée) |
+| Limite de requêtes dépassée | `429` « Trop de requêtes », avec `Retry-After` (voir [`@limits`](routes.md#limites-par-ip--limits)) |
+| Trop de calculs argon2 simultanés | `503` « Serveur surchargé », avec `Retry-After` (voir [Champs `hash`](modeles.md#champs-hash)) |
 | Erreur imprévue | `500` « Erreur interne » (le détail est affiché dans les journaux) |
 
 ## CORS

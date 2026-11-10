@@ -158,22 +158,23 @@
 
         if ($body.mot_de_passe)
         {
-            if (!coordonnee)
-            {
-                await $verify_hash(null, $body.mot_de_passe)
-                return $indicate(403, "Accès refusé")
-            }
+            await $limit('echecs_mot_de_passe', '20/1h', { count: false })
 
-            const compte = await $search_one('compte',
-                `
-                #id                   = $coordonnee.id_compte
-              & #hachage_mot_de_passe = $body.mot_de_passe
-                `,
-                {$coordonnee: coordonnee}
-            )
+            const compte = coordonnee
+                ? await $search_one('compte',
+                    `
+                    #id                   = $coordonnee.id_compte
+                  & #hachage_mot_de_passe = $body.mot_de_passe
+                    `,
+                    { $coordonnee: coordonnee }
+                )
+                : await $verify_hash(null, $body.mot_de_passe)
 
             if (!compte)
+            {
+                await $limit('echecs_mot_de_passe', '20/1h')
                 return $indicate(403, "Accès refusé")
+            }
         }
         else
         {

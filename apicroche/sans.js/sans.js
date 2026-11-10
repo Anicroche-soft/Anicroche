@@ -9,6 +9,7 @@ import {charger_modeles}  from "./analyseur_sans.js"
 import {construire_base}  from "./scripts/batisseur.js"
 import {construire_routes} from "./scripts/routeur.js"
 import { demarrer_taches_periodiques } from "./scripts/planificateur.js"
+import { construire_limites } from "./scripts/limiteur.js"
 
 console.log(`\
 ╔══════╗
@@ -92,7 +93,19 @@ await construire_base(schemas)
 
 const taches_periodiques = demarrer_taches_periodiques(schemas)
 
-const routes = construire_routes(schemas, schemas.index)
+const routes   = construire_routes(schemas, schemas.index, { body_limit: adn.body_limit })
+const limiter  = construire_limites(schemas.index?.limits, routes)
+
+// Répond 429 et retourne vrai si la requête dépasse une limite
+const refuser_si_limite = (req, rep, route = null) =>
+{
+    const attente = limiter(req, route)
+    if (!attente)
+        return false
+    rep.setHeader("Retry-After", String(attente))
+    repondre_json(rep, 429, "Trop de requêtes")
+    return true
+}
 
 const types_mime = {
     ".json":  "application/json",
@@ -265,6 +278,8 @@ const serveur = http.createServer(async (req, rep) =>
             const params = route.methode === methode ? extraire_params_route(route.chemin, url) : null
             if (params)
             {
+                if (refuser_si_limite(req, rep, route))
+                    return
                 try
                 {
                     req.params = params
@@ -334,6 +349,9 @@ const serveur = http.createServer(async (req, rep) =>
             repondre_json(rep, 200, `Bienvenue sur l'API ${adn.nom || "sans.js"}`)
             return
         }
+
+        if (refuser_si_limite(req, rep))
+            return
 
         repondre_json(rep, 404, "Route introuvable")
     }

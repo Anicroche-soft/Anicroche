@@ -420,6 +420,7 @@ const transformer_modele = (annotations, nom_fichier) =>
     const routes             = Array.isArray(annotations.routes) ? annotations.routes : []
     const script             = typeof annotations.script === 'string' ? annotations.script : null
     const actions            = annotations.actions ?? null
+    const limits             = Array.isArray(annotations.limits) ? annotations.limits : null
 
     const champs    = []
     const relations = []
@@ -486,6 +487,9 @@ const transformer_modele = (annotations, nom_fichier) =>
 
     if (actions !== null)
         modele.actions = actions
+
+    if (limits !== null)
+        modele.limits = limits
 
     return modele
 }

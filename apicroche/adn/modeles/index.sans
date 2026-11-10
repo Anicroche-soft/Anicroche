@@ -17,6 +17,23 @@
     }
 ]
 
+@limits [
+    {
+        limit : 300/1m
+    }
+
+    {
+        path  : [ /connexion, /inscription, /authentification ]
+        limit : 10/1m
+    }
+
+    {
+        path   : /clef
+        method : post
+        limit  : 3/10m
+    }
+]
+
 @routes [
     {
         path    : /test/search/all

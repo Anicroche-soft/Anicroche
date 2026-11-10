@@ -55,6 +55,7 @@ Le bloc `@script` d'un modèle contient du JavaScript. Les fonctions déclarées
 | [`$set_cookie`](#set_cookie) | Poser un cookie |
 | [`$sign_token`, `$verify_token`](#sign_token-et-verify_token) | Créer et vérifier un jeton JWT |
 | [`$verify_hash`](#verify_hash) | Vérifier une valeur contre un hachage argon2 |
+| [`$limit`](#limit) | Limiter le nombre de passages par IP |
 | [`$send_email`](#send_email) | Envoyer un courriel |
 | [`$q`](#q) | Insérer une valeur littérale dans une condition |
 | `$search_one`, `$search_all`, `$create_one`, `$create_all`, `$update_one`, `$update_all`, `$delete_one`, `$delete_all` | [Magasin](magasin.md) |
@@ -125,6 +126,33 @@ Renvoie `true` si `valeur` correspond au hachage argon2 `hachage`, `false` sinon
 if (!coordonnee)
 {
     await $verify_hash(null, $body.mot_de_passe)
+    return $indicate(403, "Accès refusé")
+}
+```
+
+### `$limit`
+
+```javascript
+await $limit(clef, quota, options)
+```
+
+Compte un passage pour l'IP de la requête et, si `quota` est dépassé, répond `429 Trop de requêtes` (avec un en-tête `Retry-After`) en **interrompant** le traitement, comme [`$indicate`](#indicate). Le décompte fonctionne comme celui de [`@limits`](routes.md#limites-par-ip--limits).
+
+- `clef` : nom du compteur, au choix ;
+- `quota` : au format `<nombre>/<durée>` (`20/1h`) ; deux quotas différents pour une même `clef` sont deux compteurs distincts ;
+- `options.count` (`true` par défaut) : avec `false`, vérifie le quota sans compter de passage ;
+- `options.per_ip` (`true` par défaut) : avec `false`, le compteur est commun à toutes les IP.
+
+Exemple : limiter les échecs de connexion d'une IP sans gêner les autres tentatives.
+
+```javascript
+await $limit('echecs_mot_de_passe', '20/1h', { count: false })
+
+// … vérification du mot de passe …
+
+if (!compte)
+{
+    await $limit('echecs_mot_de_passe', '20/1h')
     return $indicate(403, "Accès refusé")
 }
 ```

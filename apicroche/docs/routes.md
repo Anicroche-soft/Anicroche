@@ -55,6 +55,7 @@ Un hook peut interrompre la route en appelant `$indicate(…)` : la réponse est
 | `404` | Entrée introuvable (ou exclue par une restriction) |
 | `409` | Suppression d'une entrée encore référencée par une clef étrangère |
 | `422` | Valeur invalide : énumération, taille, `rule`, ou référence vers une entrée inexistante |
+| `429` | Limite de requêtes dépassée (voir [`@limits`](#limites-par-ip--limits)) |
 | `500` | Erreur imprévue (le détail est affiché dans les journaux) |
 
 ---
@@ -234,7 +235,66 @@ Un modèle (y compris `index.sans`) peut déclarer des routes sur mesure, trait�
 | `method` | `post` | Méthode HTTP (`get`, `post`, `patch`, `delete`…) |
 | `action` | — | Appel de la fonction : `$fonction($arg, …)`. Arguments reconnus : `$body`, `$request`, `$context` |
 | `mode` | `all` | `dev`, `prod` ou `all` : la route n'existe que dans ce mode d'exécution |
+| `limit` | — | Nombre maximal de requêtes par IP sur cette route, au format `10/1m` (voir [`@limits`](#limites-par-ip--limits)) |
 
 La fonction doit répondre avec [`$indicate`](scripts.md#indicate). Si elle se termine sans l'avoir appelée, la route répond `500 Aucune réponse` et un message est affiché dans les journaux. Une erreur levée par la fonction donne une réponse `500`, ou `422` pour une erreur de validation du magasin.
 
 Les routes déclarées sont prioritaires sur les routes automatiques de même méthode et de même chemin.
+
+---
+
+## Limites par IP — `@limits`
+
+Le bloc `@limits` d'`index.sans` limite le nombre de requêtes qu'une même IP peut envoyer :
+
+```
+@limits [
+    {
+        limit : 300/1m
+    }
+
+    {
+        path  : [ /connexion, /inscription, /authentification ]
+        limit : 10/1m
+    }
+
+    {
+        path   : /clef
+        method : post
+        limit  : 3/10m
+    }
+]
+```
+
+| Propriété | Description |
+|---|---|
+| `limit` | Quota au format `<nombre>/<durée>`, la durée en `s`, `m`, `h` ou `d` (`10/1m`, `3/10m`, `1000/1d`) |
+| `path` | Une route ou une liste de routes. Absent : le bloc porte sur toute l'API |
+| `method` | Une méthode ou une liste de méthodes (`post`, `[ get, patch ]`). Absent : toutes les méthodes |
+
+- **Un bloc, un compteur** : toutes les routes d'un bloc partagent le même compteur. Dans l'exemple, une IP a droit à 10 requêtes par minute au total sur les trois routes ; pour des compteurs séparés, écrire des blocs séparés.
+- Une requête doit respecter **tous** les blocs qui la concernent (le bloc sans `path` et ceux qui citent sa route).
+- `path` désigne la route telle qu'elle est déclarée : `/profil/:id` couvre tous les identifiants. Un `*` final couvre toutes les routes sous un préfixe (`/profil/*`).
+- Un élément de la liste peut être un bloc `{ path, method }`, dont `method` remplace celle du bloc :
+
+  ```
+  {
+      path  : [ /connexion, { path : /clef, method : post } ]
+      limit : 20/10m
+  }
+  ```
+
+- La propriété [`limit`](#routes-déclarées--routes) d'une route déclarée est un raccourci : elle a son propre compteur, comme un bloc ne contenant que cette route.
+- Le bloc sans `path` compte toutes les requêtes adressées aux routes de l'API et les routes inconnues ; les fichiers statiques et les requêtes `OPTIONS` ne sont pas comptés.
+
+Au-delà du quota, la requête reçoit `429 Trop de requêtes` avec un en-tête `Retry-After` (en secondes), avant toute lecture du corps et tout traitement. Une requête refusée n'est pas comptée.
+
+Fonctionnement :
+
+- l'IP est celle de [`$request.ip`](scripts.md#request) ; les adresses IPv6 sont regroupées par préfixe `/64`, un accès IPv6 disposant en général de tout un `/64` ;
+- le décompte se fait sur une fenêtre glissante approximée : la fenêtre précédente est pondérée par la part encore couverte, ce qui évite les rafales à la jonction de deux fenêtres ;
+- les compteurs sont gardés en mémoire (100 000 au plus, les plus anciens étant supprimés au-delà) et repartent de zéro au redémarrage ;
+- au démarrage, les limites sont affichées dans les journaux, ainsi qu'un avertissement pour chaque route de `@limits` qui n'existe pas.
+
+Pour compter autre chose que des requêtes (des échecs de connexion par exemple), voir [`$limit`](scripts.md#limit).
+

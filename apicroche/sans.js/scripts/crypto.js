@@ -36,9 +36,39 @@ export const hacher_hmac = (valeur) =>
 // ─── Argon2id (non déterministe) ─────────────────────────────────────────────
 
 // Paramètres et format PHC du paquet npm argon2, utilisé auparavant : les anciens hachages restent vérifiables
-const deriver_argon2    = promisify(crypto.argon2)
+const deriver_brut      = promisify(crypto.argon2)
 const parametres_argon2 = { memory: 65536, passes: 3, parallelism: 4, tagLength: 32 }
 const format_phc        = /^\$(argon2(?:id|i|d))\$v=19\$m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)$/
+
+// Chaque calcul occupe 64 Mio : au-delà de quelques calculs simultanés, une rafale de requêtes épuiserait la mémoire
+const CALCULS_SIMULTANES_MAX = 4
+const CALCULS_EN_ATTENTE_MAX = 64
+
+let calculs_en_cours = 0
+const file_calculs   = []
+
+const deriver_argon2 = async (algorithme, parametres) =>
+{
+    if (calculs_en_cours < CALCULS_SIMULTANES_MAX)
+        calculs_en_cours++
+    else if (file_calculs.length < CALCULS_EN_ATTENTE_MAX)
+        await new Promise(resolve => file_calculs.push(resolve))
+    else
+        throw Object.assign(new Error('Trop de calculs argon2 en attente'), { code: 'ARGON2_SATURE' })
+
+    try
+    {
+        return await deriver_brut(algorithme, parametres)
+    }
+    finally
+    {
+        const suivant = file_calculs.shift()
+        if (suivant)
+            suivant()
+        else
+            calculs_en_cours--
+    }
+}
 
 const base64_phc = (tampon) =>
     tampon.toString('base64').replace(/=+$/, '')
@@ -59,7 +89,11 @@ export const verifier_argon2 = async (hachage, valeur) =>
     const morceaux = String(hachage ?? '').match(format_phc)
     if (!morceaux)
     {
-        hachage_leurre ??= hacher_argon2('')
+        hachage_leurre ??= hacher_argon2('').catch((erreur) =>
+        {
+            hachage_leurre = null
+            throw erreur
+        })
         await verifier_argon2(await hachage_leurre, valeur)
         return false
     }
@@ -78,8 +112,10 @@ export const verifier_argon2 = async (hachage, valeur) =>
         })
         return crypto.timingSafeEqual(obtenue, empreinte)
     }
-    catch
+    catch (erreur)
     {
+        if (erreur.code === 'ARGON2_SATURE')
+            throw erreur
         return false
     }
 }
