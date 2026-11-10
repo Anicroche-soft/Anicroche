@@ -5,6 +5,10 @@
     }
 
     {
+        prior_respond : $normaliser_coordonnee()
+    }
+
+    {
         prior_respond : $rafraichir_jeton()
     }
 
@@ -73,6 +77,39 @@
             `
             #date_revocation != null
           | #date_validite   < now
+            `
+        )
+    }
+
+    $normaliser_coordonnee = () =>
+    {
+        if (typeof $body?.coordonnee === 'string')
+            $body.coordonnee = $body.coordonnee.trim().toLowerCase()
+    }
+
+    $verifier_clef = async () =>
+    {
+        // Décrémenter avant de vérifier : des essais simultanés ne peuvent pas dépasser le quota
+        await $update_all('clefs',
+            `
+            #id                 -{ $body.ids
+          & #hachage_coordonnee  = $body.coordonnee
+          & #type                = authentification
+          & #nombre_tentatives  >= 0
+            `,
+            {
+                nombre_tentatives : 'nombre_tentatives - 1'
+            }
+        )
+
+        return await $search_one('clef',
+            `
+            #id                 -{ $body.ids
+          & #hachage_coordonnee  = $body.coordonnee
+          & #type                = authentification
+          & #clef                = $body.clef
+          & #nombre_tentatives  >= 0
+          & #date_validite       > now
             `
         )
     }

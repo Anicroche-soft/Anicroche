@@ -51,11 +51,18 @@ export const hacher_argon2 = async (valeur) =>
     return `$argon2id$v=19$m=${memory},t=${passes},p=${parallelism}$${base64_phc(nonce)}$${base64_phc(hachage)}`
 }
 
+// Sans hachage valide, on calcule quand même un argon2 : la durée de réponse ne trahit pas l'absence d'un compte
+let hachage_leurre = null
+
 export const verifier_argon2 = async (hachage, valeur) =>
 {
-    const morceaux = String(hachage).match(format_phc)
+    const morceaux = String(hachage ?? '').match(format_phc)
     if (!morceaux)
+    {
+        hachage_leurre ??= hacher_argon2('')
+        await verifier_argon2(await hachage_leurre, valeur)
         return false
+    }
 
     const [, algorithme, memory, passes, parallelism, nonce, attendu] = morceaux
     const empreinte = Buffer.from(attendu, 'base64')

@@ -139,6 +139,11 @@ Les en-têtes CORS sont ajoutés à toutes les réponses :
 
 Les requêtes `OPTIONS` reçoivent une réponse `204`.
 
+Protection contre les requêtes intersites (CSRF) : les requêtes `POST`, `PATCH` et `DELETE` sont refusées
+
+- en `403` si leur en-tête `Origin` n'est pas une origine autorisée (ou, sans `Origin`, si `Sec-Fetch-Site` vaut `cross-site`) ;
+- en `415` si elles ont un corps dont le `Content-Type` n'est pas `application/json`.
+
 ## Fichiers statiques
 
 | Route | Dossier |

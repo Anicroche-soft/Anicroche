@@ -36,7 +36,7 @@ Le bloc `@script` d'un modèle contient du JavaScript. Les fonctions déclarées
 
 | Propriété | Contenu |
 |---|---|
-| `ip` | Adresse IP du client (première adresse de `X-Forwarded-For` si présent) |
+| `ip` | Adresse IP du client (dernière adresse de `X-Forwarded-For` si présent, c'est-à-dire celle ajoutée par le mandataire inverse) |
 | `user_agent` | En-tête `User-Agent` |
 | `path` | Chemin de l'URL |
 | `headers` | En-têtes de la requête |
@@ -54,6 +54,7 @@ Le bloc `@script` d'un modèle contient du JavaScript. Les fonctions déclarées
 | [`$add_to_respond`](#add_to_respond) | Ajouter une clef au premier niveau de la réponse |
 | [`$set_cookie`](#set_cookie) | Poser un cookie |
 | [`$sign_token`, `$verify_token`](#sign_token-et-verify_token) | Créer et vérifier un jeton JWT |
+| [`$verify_hash`](#verify_hash) | Vérifier une valeur contre un hachage argon2 |
 | [`$send_email`](#send_email) | Envoyer un courriel |
 | [`$q`](#q) | Insérer une valeur littérale dans une condition |
 | `$search_one`, `$search_all`, `$create_one`, `$create_all`, `$update_one`, `$update_all`, `$delete_one`, `$delete_all` | [Magasin](magasin.md) |
@@ -111,6 +112,22 @@ const payload = await $verify_token(jeton)
 
 - `$sign_token(payload, options)` crée un jeton JWT (HS256, clef `secret_jwt`) contenant `payload` et les dates d'émission et d'expiration. `lifetime` vaut `15m` par défaut.
 - `$verify_token(jeton)` renvoie le contenu du jeton s'il est valide et non expiré, `null` sinon.
+
+### `$verify_hash`
+
+```javascript
+const valide = await $verify_hash(hachage, valeur)
+```
+
+Renvoie `true` si `valeur` correspond au hachage argon2 `hachage`, `false` sinon. Si `hachage` est absent ou invalide, un calcul argon2 est tout de même effectué : la durée de la vérification ne révèle donc pas l'absence de l'entrée. C'est utile pour égaliser les temps de réponse quand l'entrée cherchée n'existe pas :
+
+```javascript
+if (!coordonnee)
+{
+    await $verify_hash(null, $body.mot_de_passe)
+    return $indicate(403, "Accès refusé")
+}
+```
 
 ### `$send_email`
 

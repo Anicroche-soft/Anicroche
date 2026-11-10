@@ -778,7 +778,7 @@ const evaluer_feuille_js = async (feuille, ligne) =>
     {
         const stockee = ligne[champ.name]
         const correspond = async (v) =>
-            stockee !== null && stockee !== undefined && v !== null && v !== undefined
+            v !== null && v !== undefined
             && await verifier_argon2(stockee, String(v))
 
         if (operateur === '=')  return correspond(valeur)

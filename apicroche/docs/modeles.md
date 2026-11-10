@@ -131,7 +131,7 @@ Le hachage dépend de la présence du champ dans `@primary` ou `@unique` :
 | Champ | Algorithme | Type SQL sans `size` | Comparaison |
 |---|---|---|---|
 | Dans `@primary` ou `@unique` | HMAC-SHA256 (déterministe : une même valeur donne toujours le même hash, ce qui permet l'unicité) | `CHAR(64)` | `=`, `!=`, `-{`, `!-{` traduits en SQL |
-| Ailleurs | argon2 (non déterministe, adapté aux mots de passe) | `VARCHAR(255)` | `=`, `!=`, `-{`, `!-{` vérifiés ligne par ligne |
+| Ailleurs | argon2 (non déterministe, adapté aux mots de passe) | `VARCHAR(255)` | `=`, `!=`, `-{`, `!-{` vérifiés ligne par ligne (un argon2 est calculé même quand la valeur stockée est nulle, pour ne pas révéler son absence par la durée de réponse) |
 
 Avec `size`, le type SQL suit la même règle que `char` (la taille porte alors sur la valeur hachée stockée). Une valeur hachée n'est jamais renvoyée en clair.
 

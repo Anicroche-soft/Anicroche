@@ -94,16 +94,7 @@
         )
             return $indicate(400, "Corps incomplet")
 
-        const clef = await $search_one('clef',
-            `
-            #id                 -{ $body.ids
-          & #hachage_coordonnee  = $body.coordonnee
-          & #type                = authentification
-          & #clef                = $body.clef
-          & #nombre_tentatives   > 0
-          & #date_validite       > now
-            `
-        )
+        const clef = await $verifier_clef()
 
         const coordonnee_existante = await $search_one('coordonnee',
             `
@@ -112,20 +103,7 @@
         )
 
         if (!clef || coordonnee_existante)
-        {
-            await $update_all('clefs',
-                `
-                #id                 -{ $body.ids
-              & #hachage_coordonnee  = $body.coordonnee
-              & #type                = authentification
-              & #nombre_tentatives   > 0
-                `,
-                {
-                    nombre_tentatives : 'nombre_tentatives - 1'
-                }
-            )
             return $indicate(403, 'Accès refusé')
-        }
 
         await $delete_all('clefs',
             `
@@ -173,7 +151,10 @@
         if ($body.mot_de_passe)
         {
             if (!coordonnee)
+            {
+                await $verify_hash(null, $body.mot_de_passe)
                 return $indicate(403, "Accès refusé")
+            }
 
             const compte = await $search_one('compte',
                 `
@@ -188,32 +169,10 @@
         }
         else
         {
-            const clef = await $search_one('clef',
-            `
-            #id                 -{ $body.ids
-          & #hachage_coordonnee  = $body.coordonnee
-          & #type                = authentification
-          & #clef                = $body.clef
-          & #nombre_tentatives   > 0
-          & #date_validite       > now
-            `
-            )
+            const clef = await $verifier_clef()
 
             if (!clef || !coordonnee)
-            {
-                await $update_all('clefs',
-                    `
-                    #id                 -{ $body.ids
-                  & #hachage_coordonnee  = $body.coordonnee
-                  & #type                = authentification
-                  & #nombre_tentatives   > 0
-                    `,
-                    {
-                        nombre_tentatives : 'nombre_tentatives - 1'
-                    }
-                )
                 return $indicate(403, 'Accès refusé')
-            }
 
             await $delete_all('clefs',
                 `

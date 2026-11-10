@@ -3,6 +3,7 @@ import { creer_fonctions_mailer }  from './mailer.js'
 import { evaluer, ERREUR as ERREUR_AUGURE } from './augure.js'
 import { SignJWT, jwtVerify } from 'jose'
 import { randomUUID, webcrypto } from 'crypto'
+import { verifier_argon2 } from './crypto.js'
 
 if (!globalThis.crypto)
     globalThis.crypto = webcrypto
@@ -52,6 +53,28 @@ const appliquer_cors = (req, rep) =>
     rep.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
     rep.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
     rep.setHeader('Vary', 'Origin')
+}
+
+// Un formulaire tiers peut envoyer une requête POST simple (sans requête préalable CORS) avec les cookies
+const METHODES_SURES = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+const refuser_requete_croisee = (req) =>
+{
+    if (METHODES_SURES.has(req.method))
+        return null
+
+    const origine_refusee = req.headers.origin
+        ? !resoudre_origine_cors(req)
+        : req.headers['sec-fetch-site'] === 'cross-site'
+    if (origine_refusee)
+        return { statut: 403, message: 'Origine refusée' }
+
+    const corps_annonce = Number(req.headers['content-length'] ?? 0) > 0 || !!req.headers['transfer-encoding']
+    const type_contenu  = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase()
+    if (corps_annonce && type_contenu !== 'application/json')
+        return { statut: 415, message: 'Type de contenu refusé : application/json attendu' }
+
+    return null
 }
 
 const route_est_active = (route) =>
@@ -243,7 +266,8 @@ const parser_cookies = (cookie_header) =>
 }
 
 const construire_request = (req) => ({
-    ip: req.headers['x-forwarded-for']?.split(',')[0].trim() ?? req.socket.remoteAddress,
+    // Le mandataire ajoute l'adresse réelle en dernier ; les précédentes viennent du client
+    ip: req.headers['x-forwarded-for']?.split(',').at(-1).trim() || req.socket.remoteAddress,
     user_agent: req.headers['user-agent'] ?? null,
     path: new URL(req.url, 'http://localhost').pathname,
     headers: req.headers,
@@ -733,6 +757,14 @@ export const construire_routes = (schemas, index = null) =>
     {
         appliquer_cors(req, rep)
 
+        const refus = refuser_requete_croisee(req)
+        if (refus)
+        {
+            rep.writeHead(refus.statut, { 'Content-Type': 'application/json; charset=utf-8' })
+            rep.end(JSON.stringify({ code: refus.statut, error: refus.message, data: {} }))
+            return null
+        }
+
         const $body         = await lire_corps(req)
         const $request      = construire_request(req)
         const $context      = {}
@@ -789,6 +821,7 @@ export const construire_routes = (schemas, index = null) =>
             $sign_token    : creer_sign_token(),
             $verify_token  : creer_verify_token(),
             $set_cookie    : creer_set_cookie(rep),
+            $verify_hash   : (hachage, valeur) => verifier_argon2(hachage, String(valeur ?? '')),
             $q             : citer_condition
         }
 
