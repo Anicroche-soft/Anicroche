@@ -60,11 +60,12 @@ Au démarrage, sans.js lit aussi le fichier `.env` du dossier courant ou, à dé
 
 | Variable | Défaut | Description |
 |---|---|---|
-| `mode` | `prod` | Mode d'exécution : `dev` ou `prod`. En `prod`, les cookies posés par `$set_cookie` sont `Secure` et `SameSite=None` |
+| `mode` | `prod` | Mode d'exécution : `dev` ou `prod`. En `prod`, les cookies posés par `$set_cookie` sont `Secure` et `SameSite=None`. En `dev`, les requêtes SQL sont affichées dans les journaux |
 | `schema_destructive` | `false` | En mode `dev`, supprime les colonnes et tables disparues du schéma |
 | `PORT` | `5030` | Port d'écoute HTTP (si `port` est absent de `app.adn`) |
 | `app_url` | — | Adresse du site client, autorisée pour CORS |
 | `cors_origin` | — | Autres origines autorisées pour CORS, séparées par des virgules |
+| `trusted_proxies` | `127.0.0.1,::1` | Adresses des mandataires inverses dont l'en-tête `X-Forwarded-For` est cru, séparées par des virgules. Une connexion venant d'ailleurs garde son adresse propre, quel que soit l'en-tête envoyé |
 
 ### Secrets
 

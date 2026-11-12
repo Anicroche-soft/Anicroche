@@ -36,7 +36,7 @@ Le bloc `@script` d'un modèle contient du JavaScript. Les fonctions déclarées
 
 | Propriété | Contenu |
 |---|---|
-| `ip` | Adresse IP du client (dernière adresse de `X-Forwarded-For` si présent, c'est-à-dire celle ajoutée par le mandataire inverse) |
+| `ip` | Adresse IP du client. Si la connexion vient d'un mandataire de confiance (variable `trusted_proxies`), c'est la dernière adresse de `X-Forwarded-For`, celle ajoutée par le mandataire inverse ; sinon, l'adresse de la connexion |
 | `user_agent` | En-tête `User-Agent` |
 | `path` | Chemin de l'URL |
 | `headers` | En-têtes de la requête |

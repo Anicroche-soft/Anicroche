@@ -5,6 +5,11 @@
     }
 
     {
+        periodically : $nettoyer_clefs()
+        period : 1d
+    }
+
+    {
         prior_respond : $normaliser_coordonnee()
     }
 
@@ -94,6 +99,16 @@
             `
             #date_revocation != null
           | #date_validite   < now
+            `
+        )
+    }
+
+    $nettoyer_clefs = async () =>
+    {
+        console.log('==============\nNETTOYER CLEFS\n==============')
+        await $delete_all('clefs',
+            `
+            #date_validite < now
             `
         )
     }

@@ -5,6 +5,9 @@ import { hacher_hmac, hacher_argon2, chiffrer_aes, dechiffrer_aes } from './cryp
 import { evaluer, ERREUR as ERREUR_AUGURE } from './augure.js'
 import { trouver_table, resoudre_relation as resoudre_projection_relation, preparer_lecture, traduire_now_sql } from './traducteur.js'
 
+// Les requêtes contiennent des données personnelles : elles ne sont journalisées qu'en dev
+const mode_dev = (process.env.mode || 'prod') === 'dev'
+
 // ─── Pool de connexions ───────────────────────────────────────────────────────
 
 let _pool = null
@@ -857,7 +860,8 @@ const lire_lignes = async (schemas, modele, condition, contexte_condition, etiqu
         colonnes_aux
     )
 
-    console.log(`[${etiquette}] SQL:`, rendre_requete_sql_debug(lecture.sql, lecture.valeurs))
+    if (mode_dev)
+        console.log(`[${etiquette}] SQL:`, rendre_requete_sql_debug(lecture.sql, lecture.valeurs))
     const [lignes] = await pool().query(lecture.sql, lecture.valeurs)
     return lecture.filtrer(lignes)
 }

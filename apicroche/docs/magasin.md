@@ -190,7 +190,7 @@ const profils = await $search_all('profils', ':)', { $context, $request },
 
 ### Journal SQL
 
-Les requêtes construites sont affichées dans les journaux avec leurs valeurs :
+En mode `dev` uniquement, les requêtes construites sont affichées dans les journaux avec leurs valeurs (en `prod`, elles ne le sont pas, car elles contiennent des données personnelles) :
 
 ```text
 [search_all] SQL: SELECT DISTINCT `profils`.* FROM `profils` LEFT JOIN `gerants_profils` AS `gerants_profils_1` ON … WHERE `comptes_1`.`id` = 'K3Q…'

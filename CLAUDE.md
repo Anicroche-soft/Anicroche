@@ -85,4 +85,4 @@ En production, chaque partie tourne directement avec Node (`npm start` dans `ani
 ## Git
 
 - Messages de commit en français, sous forme nominale décrivant le changement : « Ajout de … », « Correction de … », « Mise à jour de … », « Finalisation de … ».
-- Liste de tâches en cours : `to_do.txt`.
+- Liste de tâches en cours : `taches.txt`.

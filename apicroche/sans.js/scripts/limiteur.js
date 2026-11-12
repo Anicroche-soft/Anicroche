@@ -12,9 +12,30 @@ const PERIODE_NETTOYAGE = 60 * 1000
 
 // ─── IP ───────────────────────────────────────────────────────────────────────
 
-// Le mandataire ajoute l'adresse réelle en dernier ; les précédentes viennent du client
+const sans_prefixe_ipv4 = (adresse) =>
+    String(adresse ?? '').trim().toLowerCase().replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/, '')
+
+// Par défaut, seul un mandataire installé sur la même machine est cru
+const mandataires_confiance = new Set(
+    String(process.env.trusted_proxies ?? '127.0.0.1,::1')
+        .split(',')
+        .map(sans_prefixe_ipv4)
+        .filter(Boolean)
+)
+
+// Le mandataire ajoute l'adresse réelle en dernier ; les précédentes viennent du client.
+// L'en-tête n'est lu que si la connexion vient d'un mandataire de confiance : sinon,
+// n'importe quel client pourrait choisir l'adresse enregistrée et contourner les limites
 export const lire_ip = (req) =>
-    req.headers['x-forwarded-for']?.split(',').at(-1).trim() || req.socket.remoteAddress
+{
+    const adresse_socket = req.socket.remoteAddress
+    const en_tete        = req.headers['x-forwarded-for']
+
+    if (!en_tete || !mandataires_confiance.has(sans_prefixe_ipv4(adresse_socket)))
+        return adresse_socket
+
+    return en_tete.split(',').at(-1).trim() || adresse_socket
+}
 
 const developper_ipv6 = (adresse) =>
 {

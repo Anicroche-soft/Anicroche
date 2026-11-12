@@ -3,9 +3,8 @@
  * Gère le caching et le mode hors-ligne
  */
 
-const VERSION = 'v2'
+const VERSION = 'v3'
 const CACHE_ASSETS = `${VERSION}-assets`
-const CACHE_API = `${VERSION}-api`
 
 const ASSETS_A_CACHER = [
     '/',
@@ -52,7 +51,7 @@ self.addEventListener('activate', event => {
             return Promise.all(
                 names
                     .filter(name => {
-                        const isOld = name !== CACHE_ASSETS && name !== CACHE_API
+                        const isOld = name !== CACHE_ASSETS
                         if (isOld) console.log(`[SW] Suppression du cache: ${name}`)
                         return isOld
                     })
@@ -67,7 +66,7 @@ self.addEventListener('activate', event => {
 
 /**
  * Stratégie de fetch
- * - API: network-first (réseau d'abord, cache en fallback)
+ * - Autres origines (dont l'API) : jamais interceptées ni mises en cache
  * - Assets: cache-first (cache d'abord, réseau en fallback)
  */
 self.addEventListener('fetch', event => {
@@ -83,28 +82,6 @@ self.addEventListener('fetch', event => {
     // leurs réponses dépendent de la session et ne doivent pas être mises en cache
     if (url.origin !== self.location.origin) {
         return
-    }
-
-    // API calls: network-first strategy
-    if (url.pathname.startsWith('/api')) {
-        return event.respondWith(
-            fetch(request)
-                .then(response => {
-                    // Sauvegarder la réponse en cache
-                    if (response.ok) {
-                        const clonedResponse = response.clone()
-                        caches.open(CACHE_API).then(cache => {
-                            cache.put(request, clonedResponse)
-                        })
-                    }
-                    return response
-                })
-                .catch(() => {
-                    // Fallback sur le cache si le réseau échoue
-                    return caches.match(request)
-                        .then(response => response || new Response('Offline', { status: 503 }))
-                })
-        )
     }
 
     // Static assets: cache-first strategy
