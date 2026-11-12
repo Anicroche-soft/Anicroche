@@ -2,8 +2,15 @@ Liste de tâches :
 - suppression de compte (droit à l'effacement)
 - rectification de compte et de profil
 - export des données
-- politique de confidentialité, mentions légales et conditions générales d'utilisation (présentes à l'inscription, mention de la possibilité d'enregistrer l'âge)
-- lister les pratiques hors code ; documents, processus en cas de fuite etc.
-- ajouter la gestion des comptes inactifs
+- politique de confidentialité, mentions légales et conditions générales d'utilisation (présentes à l'inscription, âge minimum de 15 ans, usage de la date de naissance pour les limites d'accès, case à cocher des fonctionnalités liées à l'âge)
+- sauvegarder secret_aes et secret_hmac hors du serveur (gestionnaire de mots de passe) : sans secret_aes, les adresses chiffrées sont perdues ; noter l'endroit dans RGPD.md § 6
+- compléter RGPD.md :
+    - adresse de contact RGPD (§ 1)
+    - référence et date du contrat de sous-traitance (DPA) d'Infomaniak, couvrant serveur, base et courriels (§ 3)
+    - fréquence et durée de conservation des sauvegardes Infomaniak, relevées dans le Manager (§ 4 et § 7)
+    - durée de conservation des journaux PM2, avec pm2-logrotate (§ 2.6 et § 4)
+    - vérifier où en est la loi du 7 juillet 2023 sur la majorité numérique avant le lancement (§ 2.4)
+- ajouter la gestion des comptes inactifs (définir aussi la durée avant suppression, à reporter dans RGPD.md § 4)
 - permettre la définition de l'ordre de récupération dans les modèles .sans du cadriciel d'API
 - déplacer dans app.adn les éléments propres à Anicroche présents dans avec.js/index.html (titre, lang, canonical, description, couleurs de thème, nom pour Apple) ; la clef `langue` de app.adn n'est pas utilisée
+- chargement de la page côté serveur pour les lectures sans JavaScript
