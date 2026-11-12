@@ -456,6 +456,8 @@ const transformer_modele = (annotations, nom_fichier) =>
                 champ_source        : champ_brut.name,
                 table_cible         : champ_brut.ref ?? champ_brut.name,
                 entry               : typeof champ_brut.entry === 'string' ? champ_brut.entry : null,
+                key                 : typeof champ_brut.key === 'string' ? champ_brut.key : null,
+                champs_jonction     : Array.isArray(champ_brut.fields) ? champ_brut.fields : [],
                 count               : String(champ_brut.count),
                 min                 : count.min,
                 max                 : count.max,
@@ -503,6 +505,70 @@ const trouver_champ_pk = (table) =>
     return table.fields.find(f => f.name == table.primary[0]) ?? null
 }
 
+// Décrit la table de jonction d'une relation N-N :
+// - key désigne la colonne visée dans la table cible (par défaut, sa clef primaire). Si la clef
+//   primaire de la cible est composée, key doit en être la première colonne : la relation vise
+//   alors un groupe de lignes, et son intégrité est vérifiée par le magasin (pas de clef étrangère)
+// - fields ajoute des colonnes à la table de jonction
+const decrire_jonction = (table_source, table_cible, rel, relation) =>
+{
+    const nom_relation  = `${table_source.name}.${rel.champ_source}`
+    const pk_source     = trouver_champ_pk(table_source)
+    const colonne_cible = rel.key ?? table_cible.primary[0]
+
+    if (rel.key && table_cible.primary[0] !== rel.key)
+    {
+        console.log(`/!\\ relation \`${nom_relation}\` ignorée : key doit être la première colonne de la clef primaire de \`${table_cible.name}\``)
+        return null
+    }
+
+    const champ_cible = table_cible.fields.find(f => f.name == colonne_cible) ?? null
+    const id_source   = `id_${table_source.entry_name ?? table_source.name}`
+    const id_cible    = `id_${table_cible.entry_name  ?? table_cible.name}`
+
+    const colonne_id = (nom, champ) => ({
+        name     : nom,
+        type     : champ?.type ?? 'int',
+        min      : champ?.min  ?? null,
+        max      : champ?.max  ?? null,
+        nullable : false,
+        treatment: null
+    })
+
+    const champs_supplementaires = []
+    for (const brut of rel.champs_jonction)
+    {
+        const champ = typeof brut === 'object' && brut !== null && !Array.isArray(brut) && brut.type
+            ? transformer_champ(brut, [])
+            : "invalide"
+        if (champ === "invalide" || champ.name === id_source || champ.name === id_cible)
+        {
+            console.log(`/!\\ relation \`${nom_relation}\` ignorée : champ de jonction invalide`)
+            return null
+        }
+        champs_supplementaires.push(champ)
+    }
+
+    const groupe = Boolean(rel.key) && table_cible.primary.length > 1
+
+    return {
+        colonne_source : table_source.primary[0] ?? null,
+        colonne_cible,
+        cle_groupe     : groupe,
+        modele_jonction: {
+            name      : relation.table_jonction,
+            entry_name: relation.table_jonction_entry,
+            primary   : [id_source, id_cible],
+            unique    : [],
+            fields    : [colonne_id(id_source, pk_source), colonne_id(id_cible, champ_cible), ...champs_supplementaires],
+            champs_jonction   : champs_supplementaires.map(c => c.name),
+            references_groupes: groupe
+                ? [{ colonne: id_cible, table: table_cible.name, cle: colonne_cible }]
+                : []
+        }
+    }
+}
+
 const resoudre_relations = (tables) =>
 {
     const index = {}
@@ -541,6 +607,16 @@ const resoudre_relations = (tables) =>
                 const nom_source = table.entry_name ?? table.name
                 relation.table_jonction       = `${rel.champ_source}_${table.name}`
                 relation.table_jonction_entry = `${rel.entry ?? table_cible.entry_name ?? table_cible.name}_${nom_source}`
+
+                const jonction = decrire_jonction(table, table_cible, rel, relation)
+                if (!jonction)
+                    continue
+                Object.assign(relation, jonction)
+            }
+            else if (rel.key || rel.champs_jonction.length)
+            {
+                console.log(`/!\\ \`${table.name}.${rel.champ_source}\` : key et fields ne sont acceptés que sur une relation N-N`)
+                continue
             }
             else if (rel.max === 'N')
             {

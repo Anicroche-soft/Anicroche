@@ -186,7 +186,7 @@ Le modèle `index.sans` ne crée pas de table. Il peut contenir :
 
 - un `@script` dont les fonctions sont accessibles depuis tous les modèles ;
 - des `@routes` ;
-- des `@actions`, exécutées autour de chaque requête ou périodiquement.
+- des `@actions`, exécutées au démarrage, autour de chaque requête ou périodiquement.
 
 ```
 @actions [
@@ -211,7 +211,8 @@ Le modèle `index.sans` ne crée pas de table. Il peut contenir :
 | `prior_respond` | Fonction appelée avant le traitement de chaque route (déclarée ou automatique). Arguments reconnus : `$body`, `$request`, `$context`. Elle peut remplir `$context` ou répondre directement avec `$indicate` (la route n'est alors pas traitée) |
 | `post_respond` | Fonction appelée quand une réponse est envoyée avec `$indicate`, juste avant l'envoi. Arguments reconnus : `$body`, `$request`, `$context`. Elle peut ajouter des données avec `$add_to_data` / `$add_to_respond` |
 | `when` | Expression augure optionnelle : l'action n'est exécutée que si elle est vraie. Pour `prior_respond` / `post_respond`, elle a accès à `$request` ; pour une tâche périodique, à `$now` |
+| `prior_run` | Fonction exécutée une fois au démarrage, après la construction de la base et avant que le serveur écoute. Les actions `prior_run` s'exécutent l'une après l'autre, dans l'ordre de déclaration. Une erreur est journalisée sans empêcher le démarrage. Arguments reconnus : ceux des tâches périodiques. Typiquement : créer les entrées indispensables si elles n'existent pas encore |
 | `periodically` | Fonction exécutée périodiquement. Arguments reconnus : `$now`, `$body`, `$request`, `$context` (vides) |
 | `period` | Période d'une tâche périodique : `<n>m` (minutes), `<n>h` (heures) ou `<n>d` (jours) |
 
-Les tâches périodiques sont vérifiées chaque minute (`m`), au début de chaque heure (`h`) ou chaque jour à minuit (`d`), et exécutées dès que la période est écoulée depuis la dernière exécution. La première exécution a lieu à la première échéance après le démarrage. Leurs fonctions ont accès au magasin, à `$send_email` et à `$q`.
+Les tâches périodiques sont vérifiées chaque minute (`m`), au début de chaque heure (`h`) ou chaque jour à minuit (`d`), et exécutées dès que la période est écoulée depuis la dernière exécution. La première exécution a lieu à la première échéance après le démarrage. Leurs fonctions, comme celles de `prior_run`, ont accès au magasin, à `$send_email` et à `$q`.

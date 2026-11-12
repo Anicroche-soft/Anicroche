@@ -99,11 +99,12 @@ const creer_contexte_base = (schemas) => ({
     $q: citer_condition
 })
 
-const executer_action_periodique = async (schemas, script, bloc) =>
+// Exécute la fonction désignée par bloc[cle] (periodically, prior_run…) hors de toute requête
+const executer_action_hors_requete = async (schemas, script, bloc, cle) =>
 {
     const base = creer_contexte_base(schemas)
     const fonctions = compiler_script(script ?? '', base)
-    const action = analyser_action(bloc.periodically)
+    const action = analyser_action(bloc[cle])
 
     if (!action)
         return
@@ -111,7 +112,7 @@ const executer_action_periodique = async (schemas, script, bloc) =>
     const fn = fonctions[action.nom]
     if (typeof fn !== 'function')
     {
-        console.log(`/!\\ action périodique ignorée : fonction introuvable ${action.nom}`)
+        console.log(`/!\\ ${cle} ignoré : fonction introuvable ${action.nom}`)
         return
     }
 
@@ -129,7 +130,7 @@ const executer_action_periodique = async (schemas, script, bloc) =>
         }
         catch (err)
         {
-            console.log(`/!\\ erreur when périodique ${bloc.periodically} : ${err.message}`)
+            console.log(`/!\\ erreur when ${cle} ${bloc[cle]} : ${err.message}`)
             return
         }
     }
@@ -149,7 +150,7 @@ const executer_action_periodique = async (schemas, script, bloc) =>
     }
     catch (err)
     {
-        console.log(`/!\\ erreur dans l'action périodique ${bloc.periodically} : ${err.message}`)
+        console.log(`/!\\ erreur ${cle} ${bloc[cle]} : ${err.message}`)
     }
 }
 
@@ -195,7 +196,7 @@ export const demarrer_taches_periodiques = (schemas) =>
             derniere_execution = maintenant
             try
             {
-                await executer_action_periodique(schemas, index.script ?? '', bloc)
+                await executer_action_hors_requete(schemas, index.script ?? '', bloc, 'periodically')
             }
             finally
             {
@@ -208,4 +209,25 @@ export const demarrer_taches_periodiques = (schemas) =>
     }
 
     return taches
+}
+
+// Actions prior_run : exécutées une fois, dans l'ordre, après la construction de la base
+// et avant l'écoute du serveur. Une erreur est journalisée sans empêcher le démarrage.
+export const executer_actions_prior_run = async (schemas) =>
+{
+    const index = schemas?.index ?? null
+    if (!index?.actions || !Array.isArray(index.actions))
+        return
+
+    for (const bloc of index.actions)
+    {
+        if (!bloc || typeof bloc !== 'object' || Array.isArray(bloc))
+            continue
+
+        if (typeof bloc.prior_run !== 'string' || !bloc.prior_run.trim())
+            continue
+
+        console.log(`  PRIOR_RUN → ${bloc.prior_run}`)
+        await executer_action_hors_requete(schemas, index.script ?? '', bloc, 'prior_run')
+    }
 }

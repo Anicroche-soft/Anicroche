@@ -8,7 +8,7 @@ import {generer_adn}      from "./analyseur_adn.js"
 import {charger_modeles}  from "./analyseur_sans.js"
 import {construire_base}  from "./scripts/batisseur.js"
 import {construire_routes} from "./scripts/routeur.js"
-import { demarrer_taches_periodiques } from "./scripts/planificateur.js"
+import { demarrer_taches_periodiques, executer_actions_prior_run } from "./scripts/planificateur.js"
 import { construire_limites } from "./scripts/limiteur.js"
 
 console.log(`\
@@ -90,6 +90,7 @@ const afficher_schemas = ({ tables, relations }) =>
 afficher_schemas(schemas)
 
 await construire_base(schemas)
+await executer_actions_prior_run(schemas)
 
 const taches_periodiques = demarrer_taches_periodiques(schemas)
 

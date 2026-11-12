@@ -482,17 +482,25 @@ const ajouter_jointures = (schemas, requete, chemin_relations) =>
 
         if (relation.table_jonction)
         {
-            const cle_source     = `id_${table_source.entry_name ?? table_source.name}`
-            const cle_cible      = `id_${table_cible.entry_name ?? table_cible.name}`
+            const [cle_source, cle_cible] = relation.modele_jonction.primary
             const alias_jonction = `${relation.table_jonction}_${numero}`
             const cle_lue        = direct ? cle_source : cle_cible
             const cle_associee   = direct ? cle_cible : cle_source
-            const pk_courant     = direct ? pk_source : pk_cible
+            // colonne_cible peut désigner un groupe de lignes (relation avec key)
+            const colonne_courante = direct ? relation.colonne_source : relation.colonne_cible
+            const colonne_enfant   = direct ? relation.colonne_cible  : relation.colonne_source
 
             requete.sql_jointures.push(
-                `LEFT JOIN \`${relation.table_jonction}\` AS \`${alias_jonction}\` ON \`${alias_courant}\`.\`${pk_courant}\` = \`${alias_jonction}\`.\`${cle_lue}\``,
-                `LEFT JOIN \`${modele_enfant.name}\` AS \`${alias_enfant}\` ON \`${alias_jonction}\`.\`${cle_associee}\` = \`${alias_enfant}\`.\`${modele_enfant.primary[0]}\``
+                `LEFT JOIN \`${relation.table_jonction}\` AS \`${alias_jonction}\` ON \`${alias_courant}\`.\`${colonne_courante}\` = \`${alias_jonction}\`.\`${cle_lue}\``,
+                `LEFT JOIN \`${modele_enfant.name}\` AS \`${alias_enfant}\` ON \`${alias_jonction}\`.\`${cle_associee}\` = \`${alias_enfant}\`.\`${colonne_enfant}\``
             )
+
+            // Les champs de la jonction (fields) se lisent à travers la relation
+            const jonction = { modele: relation.modele_jonction, alias: alias_jonction }
+            requete.jointures.set(chemin, { modele: modele_enfant, alias: alias_enfant, jonction })
+            modele_courant = modele_enfant
+            alias_courant  = alias_enfant
+            continue
         }
         else if (relation.cle_etrangere)
         {
@@ -530,14 +538,26 @@ const resoudre_champ = (schemas, requete, chemin) =>
         : { modele: requete.modele, alias: requete.modele.name }
 
     const champ = modele.fields.find(f => f.name === nom_champ)
-    if (!champ)
-        throw new Error(`Condition invalide : champ inconnu "${nom_champ}" dans le modèle "${modele.name}"`)
+    if (champ)
+        return {
+            champ,
+            colonne : `\`${alias}\`.\`${champ.name}\``,
+            local   : parties.length === 0
+        }
 
-    return {
-        champ,
-        colonne : `\`${alias}\`.\`${champ.name}\``,
-        local   : parties.length === 0
-    }
+    // Champ de la table de jonction de la dernière relation traversée
+    const jonction = parties.length ? requete.jointures.get(parties.join('.'))?.jonction : null
+    const champ_jonction = jonction?.modele.champs_jonction?.includes(nom_champ)
+        ? jonction.modele.fields.find(f => f.name === nom_champ)
+        : null
+    if (champ_jonction)
+        return {
+            champ   : champ_jonction,
+            colonne : `\`${jonction.alias}\`.\`${champ_jonction.name}\``,
+            local   : false
+        }
+
+    throw new Error(`Condition invalide : champ inconnu "${nom_champ}" dans le modèle "${modele.name}"`)
 }
 
 const lire_operande = (jeton, contexte) =>

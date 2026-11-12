@@ -102,6 +102,7 @@ Déclare la liste des champs de la table. Chaque champ est un dictionnaire `{ }`
 | `rule` | [Règle de validation](#rule) de la valeur |
 | `alt` | [Nom alternatif](#alt) du champ dans les corps de requête et les résultats de création |
 | `ref`, `entry` | Table cible et nom d'entrée d'une [relation](#relations) |
+| `key`, `fields` | Colonne visée et colonnes supplémentaires de la table de jonction d'une relation `N-N` (voir [Tables de jonction](#tables-de-jonction-relation-n-n)) |
 | `can_create`, `prior_create`, `post_create` | Route automatique `POST` (voir [Routes](routes.md#post-entrée--création)) |
 | `can_update`, `prior_update`, `post_update` | Route automatique `PATCH` (voir [Routes](routes.md#patch-entréeclef--modification)) |
 | `can_search`, `restrict_search`, `prior_search`, `post_search` | Routes automatiques `GET` (voir [Routes](routes.md#get-table-et-get-entréeclef--recherche)) |
@@ -123,6 +124,8 @@ Déclare la liste des champs de la table. Chaque champ est un dictionnaire `{ }`
 | `a/b/c` | Type énuméré : la valeur doit être l'une des valeurs listées | `VARCHAR` (longueur de la plus longue valeur par défaut) |
 
 Une valeur hors énumération est refusée (code `ENUM_VIOLATION`, réponse `422`).
+
+Toutes les tables sont créées en `utf8mb4` avec l'interclassement binaire `utf8mb4_bin` : les comparaisons de texte (conditions, unicité, jointures) **respectent la casse et les accents** (`Conditions` ≠ `conditions`), et un tri sur du texte suit l'ordre des codes de caractères (`É` après `z`). Une table existante créée avec un autre interclassement est signalée au démarrage ; la réinitialiser la recrée correctement.
 
 #### Champs `hash`
 
@@ -302,6 +305,54 @@ await $create_one('gerant_profil', { id_profil: profil.id, id_compte: compte.id 
 ```
 
 > **Note :** une relation `N-N` d'une table vers elle-même n'est pas prise en charge (les deux colonnes auraient le même nom).
+
+#### `key` — Relation vers un groupe de lignes
+
+Par défaut, la jonction vise la clef primaire de la table cible. Quand celle-ci est composée, `key` désigne sa **première colonne** : la relation vise alors toutes les lignes partageant cette valeur (un *groupe*), par exemple toutes les langues et versions d'un même texte.
+
+```
+# modèle textes
+@primary [ id, langue, region, version ]
+```
+
+```
+# modèle anicroches
+{
+    name  : textes
+    key   : id
+    count : N-N
+}
+```
+
+La colonne `id_texte` de la jonction prend le type de `textes.id`. Une telle relation n'a pas de clef étrangère en base (une clef étrangère vers une colonne non unique n'est pas standard) : le magasin vérifie lui-même les références, avec les mêmes réponses que pour une clef étrangère :
+
+- une ligne de jonction doit viser un groupe existant (`422`) ;
+- la dernière ligne d'un groupe encore visé par une jonction ne peut ni être supprimée, ni changer de valeur de `key` (`409`).
+
+Une projection de la relation renvoie toutes les lignes de chaque groupe lié. `key` n'est accepté que sur une relation `N-N`.
+
+#### `fields` — Colonnes supplémentaires
+
+`fields` ajoute des colonnes à la table de jonction, déclarées comme des [champs](#propriétés-dun-champ) ordinaires :
+
+```
+{
+    name   : textes
+    key    : id
+    count  : N-N
+    fields : [
+        { name : role , type : char , size : 1-32 }
+    ]
+}
+```
+
+La clef primaire de la jonction reste composée des deux identifiants. Les colonnes supplémentaires :
+
+- se renseignent à la création de la ligne de jonction : `$create_one('texte_anicroche', { id_anicroche, id_texte, role : 'contenu' })` ;
+- s'utilisent dans les conditions à travers la relation, comme un champ de la cible : `#textes.role = contenu` ;
+- sont ajoutées à chaque entrée liée dans les projections (`select: 'textes'` donne des textes portant aussi `role`). Les citer dans `select` (`'textes.role,contenu'`) est permis.
+
+`fields` n'est accepté que sur une relation `N-N`.
 
 ### Nommage des relations
 

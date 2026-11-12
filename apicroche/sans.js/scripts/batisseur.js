@@ -112,6 +112,11 @@ const creer_connexion = async () =>
 
 // ─── Création de table ────────────────────────────────────────────────────────
 
+// Interclassement binaire : toutes les comparaisons de texte respectent la casse (et les accents)
+const JEU_CARACTERES = 'utf8mb4'
+const INTERCLASSEMENT = 'utf8mb4_bin'
+const OPTIONS_TABLE   = `DEFAULT CHARSET=${JEU_CARACTERES} COLLATE=${INTERCLASSEMENT}`
+
 const creer_table = async (connexion, table) =>
 {
     const colonnes = table.fields.map(champ =>
@@ -125,7 +130,7 @@ const creer_table = async (connexion, table) =>
         contraintes.push(`UNIQUE (${contrainte.map(c => `\`${c}\``).join(', ')})`)
 
     const lignes = [...colonnes, ...contraintes].join(',\n    ')
-    const sql    = `CREATE TABLE \`${table.name}\` (\n    ${lignes}\n)`
+    const sql    = `CREATE TABLE \`${table.name}\` (\n    ${lignes}\n) ${OPTIONS_TABLE}`
 
     try
     {
@@ -247,6 +252,15 @@ const synchro_contraintes = async (connexion, table) =>
 
 const mettre_a_jour_table = async (connexion, table, mode_dev, suppression_schema_activee) =>
 {
+    const [infos_table] = await connexion.query(
+        `SELECT TABLE_COLLATION FROM INFORMATION_SCHEMA.TABLES
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+        [table.name]
+    )
+    const interclassement_actuel = infos_table[0]?.TABLE_COLLATION
+    if (interclassement_actuel && interclassement_actuel !== INTERCLASSEMENT)
+        console.log(`/!\\ table \`${table.name}\` en ${interclassement_actuel} : elle ne respecte pas la casse (réinitialiser la base pour passer en ${INTERCLASSEMENT})`)
+
     const [rows] = await connexion.query(
         `SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT
          FROM INFORMATION_SCHEMA.COLUMNS
@@ -322,45 +336,6 @@ const mettre_a_jour_table = async (connexion, table, mode_dev, suppression_schem
     await synchro_contraintes(connexion, table)
 }
 
-// ─── Table de jonction N-N ────────────────────────────────────────────────────
-
-const pk_de_table = (table) =>
-{
-    if (!table || table.primary.length === 0)
-        return null
-    return table.fields.find(f => f.name === table.primary[0]) ?? null
-}
-
-const descripteur_jonction = (nom, table_source, table_cible) =>
-{
-    const pk_source     = pk_de_table(table_source)
-    const pk_cible      = pk_de_table(table_cible)
-    const nom_id_source = `id_${table_source.entry_name ?? table_source.name}`
-    const nom_id_cible  = `id_${table_cible.entry_name  ?? table_cible.name}`
-
-    return {
-        name   : nom,
-        primary: [nom_id_source, nom_id_cible],
-        unique : [],
-        fields : [
-            {
-                name    : nom_id_source,
-                type    : pk_source?.type ?? 'int',
-                min     : pk_source?.min  ?? null,
-                max     : pk_source?.max  ?? null,
-                nullable: false
-            },
-            {
-                name    : nom_id_cible,
-                type    : pk_cible?.type ?? 'int',
-                min     : pk_cible?.min  ?? null,
-                max     : pk_cible?.max  ?? null,
-                nullable: false
-            }
-        ]
-    }
-}
-
 // ─── Clefs étrangères ─────────────────────────────────────────────────────────
 
 const nommer_clef_etrangere = (table, colonne) =>
@@ -412,7 +387,10 @@ const lister_clefs_etrangeres = (tables, relations) =>
                 continue
             }
             ajouter(rel.table_jonction, col_source, rel.table_source, 'CASCADE')
-            ajouter(rel.table_jonction, col_cible, rel.table_cible, 'CASCADE')
+            // Une relation vers un groupe de lignes (key) n'a pas de clef étrangère :
+            // son intégrité est vérifiée par le magasin
+            if (!rel.cle_groupe)
+                ajouter(rel.table_jonction, col_cible, rel.table_cible, 'CASCADE')
         }
         else if (rel.cle_etrangere)
             ajouter(rel.table_cible, rel.cle_etrangere, rel.table_source, 'RESTRICT')
@@ -500,7 +478,6 @@ export const construire_base = async (schemas) =>
     console.log('\nConstruction de la base de données...')
 
     const { tables, relations } = schemas
-    const index_tables = Object.fromEntries(tables.map(t => [t.name, t]))
 
     const [rows_tables]      = await connexion.query("SHOW TABLES")
     const tables_existantes  = new Set(rows_tables.map(r => Object.values(r)[0]))
@@ -516,12 +493,7 @@ export const construire_base = async (schemas) =>
     const jonctions = relations.filter(r => r.table_jonction)
     for (const rel of jonctions)
     {
-        const desc = descripteur_jonction(
-            rel.table_jonction,
-            index_tables[rel.table_source],
-            index_tables[rel.table_cible]
-        )
-        desc.entry_name = rel.table_jonction_entry ?? null
+        const desc = rel.modele_jonction
         if (!tables_existantes.has(rel.table_jonction))
             await creer_table(connexion, desc)
         else

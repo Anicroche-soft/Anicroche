@@ -40,48 +40,9 @@ const trouver_pk = (table) =>
     return table.fields.find(f => f.name === nom_pk) ?? null
 }
 
+// Modèle de la table de jonction d'une relation N-N, décrit par l'analyseur
 const construire_modele_jonction_auto = (schemas, relation) =>
-{
-    if (!relation?.table_jonction)
-        return null
-
-    const table_source = trouver_table(schemas, relation.table_source)
-    const table_cible  = trouver_table(schemas, relation.table_cible)
-
-    if (!table_source || !table_cible)
-        return null
-
-    const pk_source = trouver_pk(table_source)
-    const pk_cible  = trouver_pk(table_cible)
-
-    const nom_id_source = `id_${table_source.entry_name ?? table_source.name}`
-    const nom_id_cible  = `id_${table_cible.entry_name  ?? table_cible.name}`
-
-    return {
-        name   : relation.table_jonction,
-        entry_name: relation.table_jonction_entry ?? null,
-        primary: [nom_id_source, nom_id_cible],
-        unique : [],
-        fields : [
-            {
-                name     : nom_id_source,
-                type     : pk_source?.type ?? 'int',
-                min      : pk_source?.min ?? null,
-                max      : pk_source?.max ?? null,
-                nullable : false,
-                treatment: null
-            },
-            {
-                name     : nom_id_cible,
-                type     : pk_cible?.type ?? 'int',
-                min      : pk_cible?.min ?? null,
-                max      : pk_cible?.max ?? null,
-                nullable : false,
-                treatment: null
-            }
-        ]
-    }
-}
+    relation?.modele_jonction ?? null
 
 const trouver_modele_table = (schemas, nom) =>
 {
@@ -430,13 +391,24 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
 
         if (relation.table_jonction)
         {
-            const cle_source = `id_${table_source.entry_name ?? table_source.name}`
-            const cle_cible  = `id_${table_cible.entry_name ?? table_cible.name}`
+            const jonction   = relation.modele_jonction
             const est_direct = sens === 'direct'
-            const cle_ligne  = est_direct ? pk_source?.name : pk_cible?.name
-            const cle_lire   = est_direct ? cle_source : cle_cible
-            const cle_assoc  = est_direct ? cle_cible : cle_source
-            const ids_lignes = [...new Set(lignes.map(ligne => ligne[cle_ligne]).filter(v => v !== undefined && v !== null))]
+            const [cle_source, cle_cible] = jonction.primary
+            // Colonne de la ligne courante et colonne visée chez l'enfant
+            // (colonne_cible peut désigner un groupe de lignes : relation avec key)
+            const cle_ligne   = est_direct ? relation.colonne_source : relation.colonne_cible
+            const cle_enfant  = est_direct ? relation.colonne_cible  : relation.colonne_source
+            const cle_lire    = est_direct ? cle_source : cle_cible
+            const cle_assoc   = est_direct ? cle_cible  : cle_source
+            const champs_sup  = jonction.champs_jonction ?? []
+
+            // Les champs de la jonction cités dans select ne sont pas des champs de l'enfant
+            const select_enfant = (spec.select ?? [])
+                .map(morceau => normaliser_token_projection(morceau).filter(nom => !champs_sup.includes(nom)).join(', '))
+                .filter(Boolean)
+            const projeter_enfant_sans_jonction = (rows) =>
+                rows.length ? projeter_lignes_select(schemas, modele_enfant, rows, select_enfant, contexte_enforce) : []
+            const ids_lignes  = [...new Set(lignes.map(ligne => ligne[cle_ligne]).filter(v => v !== undefined && v !== null))]
 
             if (!ids_lignes.length)
             {
@@ -445,21 +417,22 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
                 continue
             }
 
-            const placeholders = ids_lignes.map(() => '?').join(', ')
+            const colonnes_lues = [cle_lire, cle_assoc, ...champs_sup].map(c => `\`${c}\``).join(', ')
+            const placeholders  = ids_lignes.map(() => '?').join(', ')
             const [jonctions] = await pool().query(
-                `SELECT \`${cle_lire}\`, \`${cle_assoc}\` FROM \`${relation.table_jonction}\` WHERE \`${cle_lire}\` IN (${placeholders})`,
+                `SELECT ${colonnes_lues} FROM \`${relation.table_jonction}\` WHERE \`${cle_lire}\` IN (${placeholders})`,
                 ids_lignes
             )
 
-            const ids_par_ligne = indexer_lignes_par_clef(jonctions, cle_lire)
-            const ids_relatifs = [...new Set(jonctions.map(ligne => ligne[cle_assoc]).filter(v => v !== undefined && v !== null))]
+            const liens_par_ligne = indexer_lignes_par_clef(jonctions, cle_lire)
+            const ids_relatifs    = [...new Set(jonctions.map(ligne => ligne[cle_assoc]).filter(v => v !== undefined && v !== null))]
 
             let lignes_relatives = []
             if (ids_relatifs.length)
             {
                 if (spec.restrict_conditions?.length)
                 {
-                    const condition = [`#${modele_enfant.primary[0]} -{ $__ids__`, ...spec.restrict_conditions].join(' & ')
+                    const condition = [`#${cle_enfant} -{ $__ids__`, ...spec.restrict_conditions].join(' & ')
                     lignes_relatives = await creer_search_all(schemas)(
                         modele_enfant.name,
                         condition,
@@ -469,17 +442,41 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
                 }
                 else
                 {
-                    lignes_relatives = await lire_lignes_par_in(modele_enfant, modele_enfant.primary[0], ids_relatifs)
+                    lignes_relatives = await lire_lignes_par_in(modele_enfant, cle_enfant, ids_relatifs)
                 }
             }
-            const map_relatives = new Map(lignes_relatives.map(ligne_rel => [ligne_rel[modele_enfant.primary[0]], decrypter_ligne(modele_enfant, ligne_rel)]))
+            // Plusieurs lignes par clef quand la relation vise un groupe
+            const relatives_par_clef = indexer_lignes_par_clef(lignes_relatives.map(ligne_rel => decrypter_ligne(modele_enfant, ligne_rel)), cle_enfant)
 
             for (let i = 0; i < lignes.length; i++)
             {
-                const id_ligne = lignes[i][cle_ligne]
-                const ids = [...new Set((ids_par_ligne.get(id_ligne) ?? []).map(l => l[cle_assoc]).filter(v => v !== undefined && v !== null))]
-                const valeurs = ids.map(id => map_relatives.get(id)).filter(Boolean)
-                resultats[i][token] = spec.select ? await projection_enfant(valeurs) : valeurs.map(v => v)
+                const liens = liens_par_ligne.get(lignes[i][cle_ligne]) ?? []
+                const vus   = new Set()
+                const entrees = []
+
+                for (const lien of liens)
+                {
+                    const id = lien[cle_assoc]
+                    if (id === undefined || id === null || vus.has(id))
+                        continue
+                    vus.add(id)
+                    for (const ligne_rel of relatives_par_clef.get(id) ?? [])
+                        entrees.push({ ligne: ligne_rel, lien })
+                }
+
+                const valeurs = spec.select
+                    ? await projeter_enfant_sans_jonction(entrees.map(e => e.ligne))
+                    : entrees.map(e => ({ ...e.ligne }))
+
+                // Les champs de la jonction (fields) sont ajoutés à chaque entrée liée
+                if (champs_sup.length)
+                    valeurs.forEach((valeur, k) =>
+                    {
+                        for (const champ of champs_sup)
+                            valeur[champ] = entrees[k].lien[champ]
+                    })
+
+                resultats[i][token] = valeurs
             }
 
             continue
@@ -1024,6 +1021,77 @@ const supprimer_par_pk = async (modele, ligne) =>
     await pool().query(`DELETE FROM \`${modele.name}\` WHERE ${clause}`, valeurs)
 }
 
+// ─── Intégrité des relations vers un groupe de lignes (key) ──────────────────
+// Ces relations n'ont pas de clef étrangère en base : le magasin vérifie lui-même
+// les références, avec les mêmes codes d'erreur que MySQL.
+
+const erreur_reference = (code, message) => Object.assign(new Error(message), { code })
+
+const relations_vers_groupe = (schemas, modele) =>
+    (schemas.relations ?? []).filter(r => r.cle_groupe && r.table_cible === modele.name)
+
+// Chaque ligne de jonction doit viser un groupe existant
+const verifier_groupes_vises = async (modele, lignes) =>
+{
+    for (const ref of modele.references_groupes ?? [])
+    {
+        const valeurs = [...new Set(lignes.map(l => l?.[ref.colonne]).filter(v => v !== undefined && v !== null))]
+        if (!valeurs.length)
+            continue
+
+        const [rows] = await pool().query(
+            `SELECT DISTINCT \`${ref.cle}\` AS valeur FROM \`${ref.table}\` WHERE \`${ref.cle}\` IN (${valeurs.map(() => '?').join(', ')})`,
+            valeurs
+        )
+        const existantes = new Set(rows.map(r => String(r.valeur)))
+        const manquante  = valeurs.find(v => !existantes.has(String(v)))
+        if (manquante !== undefined)
+            throw erreur_reference('ER_NO_REFERENCED_ROW_2', `Référence introuvable : ${ref.table}.${ref.cle} = ${manquante}`)
+    }
+}
+
+// Le dernier membre d'un groupe encore visé par une jonction ne peut pas en sortir
+// (suppression, ou modification de la colonne visée)
+const verifier_groupes_restants = async (schemas, modele, lignes) =>
+{
+    for (const relation of relations_vers_groupe(schemas, modele))
+    {
+        const cle              = relation.colonne_cible
+        const colonne_jonction = relation.modele_jonction.primary[1]
+
+        for (const [valeur, membres] of indexer_lignes_par_clef(lignes, cle))
+        {
+            const [[{ total }]] = await pool().query(
+                `SELECT COUNT(*) AS total FROM \`${modele.name}\` WHERE \`${cle}\` = ?`,
+                [valeur]
+            )
+            if (Number(total) > membres.length)
+                continue
+
+            const [liens] = await pool().query(
+                `SELECT 1 FROM \`${relation.table_jonction}\` WHERE \`${colonne_jonction}\` = ? LIMIT 1`,
+                [valeur]
+            )
+            if (liens.length)
+                throw erreur_reference('ER_ROW_IS_REFERENCED_2', `${modele.name}.${cle} = ${valeur} est encore référencé par ${relation.table_jonction}`)
+        }
+    }
+}
+
+const verifier_mise_a_jour_groupes = async (schemas, modele, lignes, donnees) =>
+{
+    await verifier_groupes_vises(modele, [donnees])
+
+    for (const relation of relations_vers_groupe(schemas, modele))
+    {
+        const cle = relation.colonne_cible
+        if (!(cle in donnees))
+            continue
+        const sortantes = lignes.filter(ligne => String(ligne[cle]) !== String(donnees[cle]))
+        await verifier_groupes_restants(schemas, modele, sortantes)
+    }
+}
+
 const contexte_enforce_de = (options_norm, contexte_norm) =>
     options_norm.enforce_rules
         ? { context: contexte_norm?.$context ?? {}, request: contexte_norm?.$request ?? {} }
@@ -1070,6 +1138,7 @@ const creer_delete_one = (schemas) => async (nom_modele, condition, contexte_con
     if (!lignes.length)
         return 0
 
+    await verifier_groupes_restants(schemas, modele, [lignes[0]])
     await supprimer_par_pk(modele, lignes[0])
     return 1
 }
@@ -1086,6 +1155,7 @@ const creer_delete_all = (schemas) => async (nom_modele, condition, contexte_con
     const elements = lignes.map(brute => ({ brute, decryptee: decrypter_ligne(modele, brute) }))
     const cibles = appliquer_options_liste(elements, { ...options_norm, select: null }, (element, nom) => element.decryptee[nom])
 
+    await verifier_groupes_restants(schemas, modele, cibles.map(element => element.brute))
     for (const element of cibles)
         await supprimer_par_pk(modele, element.brute)
 
@@ -1104,6 +1174,7 @@ const creer_update_one = (schemas) => async (nom_modele, condition, donnees, con
     if (!lignes.length)
         return 0
 
+    await verifier_mise_a_jour_groupes(schemas, modele, [lignes[0]], donnees_norm)
     return mettre_a_jour_lignes(modele, [lignes[0]], donnees_norm)
 }
 
@@ -1119,6 +1190,7 @@ const creer_update_all = (schemas) => async (nom_modele, condition, donnees, con
     if (!lignes.length)
         return 0
 
+    await verifier_mise_a_jour_groupes(schemas, modele, lignes, donnees_norm)
     return mettre_a_jour_lignes(modele, lignes, donnees_norm)
 }
 
@@ -1384,6 +1456,7 @@ const creer_create_one = (schemas) => async (nom_modele, donnees = {}) =>
 {
     const modele = trouver_modele_entree(schemas, nom_modele)
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
+    await verifier_groupes_vises(modele, [donnees])
     const [resultat] = await inserer_batch(modele, [donnees])
     return resultat
 }
@@ -1394,6 +1467,7 @@ const creer_create_all = (schemas) => async (nom_modele, tableau = []) =>
 {
     const modele = trouver_modele_table(schemas, nom_modele)
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
+    await verifier_groupes_vises(modele, tableau)
     return inserer_batch(modele, tableau)
 }
 
