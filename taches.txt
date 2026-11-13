@@ -27,4 +27,3 @@ Liste de tâches :
 - 
 - remplacer la ligne d'indication au déut de l'édition de page par une boîte de notifications généralisée à toute l'application
 - constat :ajouter un '/' final à la fin d'une URL empêche l'accès à la page du site
-- au focus de la textarea, une outline noire apparaît

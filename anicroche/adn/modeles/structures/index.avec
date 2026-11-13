@@ -90,7 +90,7 @@
         transition: outline-color var(--d-animation);
 
         --f-fond: transparent;
-        --c-focus: --c-flux;
+        --c-focus: var(--c-flux);
     }
 
     *:focus-visible {
