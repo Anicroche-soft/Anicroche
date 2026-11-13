@@ -1,0 +1,227 @@
+@script [
+    // Les listes ne dépendent que des arguments : elles sont calculées une fois par instance
+    $jours_champ_date = Array.from({ length: 31 }, (_, i) => i + 1)
+
+    $mois_champ_date = [
+        'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+        'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
+    ].map((nom, i) => ({ numero: i + 1, nom }))
+
+    $annees_champ_date = []
+    for (let annee = $annee_max ?? new Date().getFullYear(); annee >= $annee_min; annee--)
+        $annees_champ_date.push(annee)
+
+    const lire_parties = (conteneur) =>
+        ['jour', 'mois', 'annee'].map(partie => conteneur.querySelector(`select[data-partie="${partie}"]`))
+
+    // Recopie le choix des trois listes dans le vrai champ date.
+    // Un jour absent du mois choisi reste sélectionnable, pour que le 31 ne disparaisse pas
+    // avant le choix du mois : la liste des jours devient alors invalide et bloque l envoi
+    $mettre_a_jour_champ_date = () =>
+    {
+        const conteneur = $node.closest('.champ-date')
+        const [jour, mois, annee] = lire_parties(conteneur)
+        const champ = conteneur.querySelector('input[type="date"]')
+
+        jour.setCustomValidity('')
+        champ.value = ''
+
+        if (!jour.value || !mois.value || !annee.value)
+            return
+
+        const [j, m, a] = [jour.value, mois.value, annee.value].map(Number)
+        const date = new Date(Date.UTC(a, m - 1, j))
+
+        if (date.getUTCMonth() !== m - 1)
+        {
+            jour.setCustomValidity("Ce jour n'existe pas dans ce mois")
+            return
+        }
+
+        champ.value = `${a}-${String(m).padStart(2, '0')}-${String(j).padStart(2, '0')}`
+    }
+
+    $monter_champ_date = () =>
+    {
+        const morceaux = /^(\d{4})-(\d{2})-(\d{2})$/.exec($valeur ?? '')
+        if (!morceaux)
+            return
+
+        const [jour, mois, annee] = lire_parties($node)
+        jour.value  = String(Number(morceaux[3]))
+        mois.value  = String(Number(morceaux[2]))
+        annee.value = morceaux[1]
+        $mettre_a_jour_champ_date()
+    }
+]
+
+@style [
+    .champ-date {
+        flex: 1024;
+
+        --l-ecart: 0.5rem;
+    }
+
+    .champ-date > legend {
+        display: contents;
+        cursor: default;
+    }
+
+    .champ-date > .parties {
+        width: 100%;
+
+        flex-direction: row;
+
+        --l-ecart: 0.5rem;
+    }
+
+    .champ-date .partie {
+        position: relative;
+
+        height: 2rem;
+
+        border: 0.125rem var(--c-vif);
+        border-style: dashed solid;
+        border-radius: 0.5rem;
+        padding: 0.375rem;
+
+        flex: 2;
+        flex-direction: row;
+        align-items: center;
+
+        cursor: pointer;
+
+        --c-focus: var(--c-vif);
+        --p-fonte: var(--p-champ);
+        --l-ecart: 0;
+    }
+
+    .champ-date .partie.jour {
+        flex: 1;
+    }
+
+    .champ-date .partie.annee {
+        flex: 1.5;
+    }
+
+    .champ-date .partie::after {
+        content: "";
+        pointer-events: none;
+
+        position: absolute;
+        inset: -0.125rem;
+
+        border: 0.125rem solid var(--c-vif);
+        border-radius: 0.5rem;
+
+        transition: opacity var(--d-animation);
+    }
+
+    .champ-date .partie:has(> select:invalid)::after {
+        opacity: 0;
+    }
+
+    .champ-date .partie:focus-within {
+        outline-color: var(--c-focus);
+    }
+
+    .champ-date .partie > select {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+
+        outline: none;
+        width: 0rem;
+        flex-grow: 1;
+
+        cursor: pointer;
+    }
+
+    .champ-date .partie > select:has(> option[value=""]:checked) {
+        color: var(--c-plus);
+        font-style: italic;
+    }
+
+    .champ-date .fleche {
+        position: absolute;
+        right: 0.25rem;
+        top: 0.25rem;
+        bottom: 0.25rem;
+
+        display: flex;
+
+        pointer-events: none;
+
+        --c-flux: var(--c-plus);
+    }
+]
+
+@args [
+    $etiquette, $nom
+    $requis : :)
+    $valeur : ''
+    $annee_min : 1900
+    $annee_max : :o
+    $indice : :(
+]
+
+<fieldset
+    .champ
+    .champ-date
+    @mount="$monter_champ_date()"
+>
+    <legend>
+        "$etiquette"
+    <div .parties>
+        <label .partie .jour>
+            <select
+                data-partie="jour"
+                aria-label="Jour"
+                [$requis] ? required
+                @change="$mettre_a_jour_champ_date()"
+            >
+                <option value="" selected disabled>
+                    "Jour"
+                @for-each [$jour] of [$jours_champ_date]
+                    <option value="$jour">
+                        "$jour"
+            <div .fleche>
+                icone-fleche-depliable
+        <label .partie .mois>
+            <select
+                data-partie="mois"
+                aria-label="Mois"
+                [$requis] ? required
+                @change="$mettre_a_jour_champ_date()"
+            >
+                <option value="" selected disabled>
+                    "Mois"
+                @for-each [$mois] of [$mois_champ_date]
+                    <option value="$mois.numero">
+                        "$mois.nom"
+            <div .fleche>
+                icone-fleche-depliable
+        <label .partie .annee>
+            <select
+                data-partie="annee"
+                aria-label="Année"
+                [$requis] ? required
+                @change="$mettre_a_jour_champ_date()"
+            >
+                <option value="" selected disabled>
+                    "Année"
+                @for-each [$annee] of [$annees_champ_date]
+                    <option value="$annee">
+                        "$annee"
+            <div .fleche>
+                icone-fleche-depliable
+    <input
+        name="$nom"
+        type="date"
+        tabindex="-1"
+        aria-hidden="true"
+        hidden
+    >
+    @if [$indice]
+        indication
+            "$indice"

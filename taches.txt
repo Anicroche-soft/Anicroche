@@ -17,3 +17,4 @@ Liste de tâches :
 - ajout des comptes sous contrôle parental
 - mettre en place la configuration de compte et de profils
 - ajouter un système de rôles d'utilisateurs
+- valider ou revoir la syntaxe `/:parametre`
