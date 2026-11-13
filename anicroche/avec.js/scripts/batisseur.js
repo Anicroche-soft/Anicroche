@@ -87,6 +87,14 @@ const decapsuler = (str) =>
     return texte
 }
 
+// Le contenu de @script et @style, déjà délimité par l'analyseur du serveur (qui ignore les
+// commentaires), n'est pas réanalysé : une apostrophe d'un commentaire y ouvrirait une chaîne
+const retirer_crochets = (str) =>
+{
+    const texte = str.trim()
+    return texte.startsWith('[') && texte.endsWith(']') ? texte.slice(1, -1) : texte
+}
+
 const extraire_modele_et_classes = (str) =>
 {
     const brut = str.trim()
@@ -1677,12 +1685,12 @@ const construire_modele = (bloc, donnees) =>
     {
         if (enfant.type === `instruction` && enfant.args[0] === `@style`)
         {
-            const css = decapsuler(enfant.args[1])
+            const css = retirer_crochets(enfant.args[1])
             activer_style(nom, css)
         }
         if (enfant.type === `instruction` && enfant.args[0] === `@script`)
         {
-            const js = decapsuler(enfant.args[1])
+            const js = retirer_crochets(enfant.args[1])
             activer_script(nom, js, scope_modele, args)
         }
     }
