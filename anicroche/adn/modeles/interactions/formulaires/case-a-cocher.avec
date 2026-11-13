@@ -3,7 +3,7 @@
         flex: 1024;
 
         flex-direction: row;
-        align-items: flex-start;
+        align-items: center;
 
         cursor: pointer;
 

@@ -25,6 +25,10 @@
 @else-if [$path ~= '/chargement']
     -page-chargement
 
+# Anicroches : identifiant lisible en minuscules, ou majuscules et chiffres par groupes de trois
+@else-if [$path ~= '/<$chemin_anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->']
+    -page-anicroche
+
 @else
     -page-404
 

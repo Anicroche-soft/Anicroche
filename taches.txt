@@ -20,3 +20,4 @@ Liste de tâches :
 - valider ou revoir la syntaxe `/:parametre`
 - analyseur .avec : ignorer le contenu des commentaires JS (// et /* */) des @script et CSS (/* */) des @style, où une apostrophe ou une parenthèse dérègle aujourd'hui l'analyse
 - avec.js : la valeur par défaut :o d'un argument (@args) n'arrive pas comme null dans les @script
+- vérifier le modèle de case à cocher

@@ -1,0 +1,74 @@
+@script [
+    $etat_anicroche          = 'chargement'
+    $anicroche               = null
+    $chemin_anicroche_charge = null
+
+    // Deux formes d adresse pour une anicroche :
+    // - un identifiant lisible en minuscules, tel quel : /conditions-d-utilisation
+    // - un identifiant en majuscules et chiffres, découpé en groupes de trois : /AB1-C2D
+    const lire_identifiant = (chemin) =>
+    {
+        if (/^(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/.test(chemin))
+            return chemin
+        if (/^[A-Z0-9]{3}(?:-[A-Z0-9]{3})*$/.test(chemin))
+            return chemin.replaceAll('-', '')
+        return null
+    }
+
+    // Le modèle reste en place quand on passe d une anicroche à une autre :
+    // le chargement suit donc $path plutôt que l exécution du script
+    $charger_anicroche = async () =>
+    {
+        const chemin = $path
+        $chemin_anicroche_charge = chemin
+        $etat_anicroche = 'chargement'
+
+        const id = lire_identifiant(chemin.slice(1))
+        if (!id)
+        {
+            $etat_anicroche = 'introuvable'
+            return
+        }
+
+        // Seules les pages existent pour l instant
+        const reponse = await $search(`page/${encodeURIComponent(id)}`)
+
+        // Une réponse arrivée après une nouvelle navigation est ignorée
+        if ($path !== chemin)
+            return
+
+        if (reponse.code !== 200)
+        {
+            $etat_anicroche = 'introuvable'
+            return
+        }
+
+        $anicroche      = reponse.data
+        $etat_anicroche = 'trouvee'
+    }
+]
+
+@if [$path != $chemin_anicroche_charge]
+    <div hidden @mount="$charger_anicroche()">
+
+@if [$etat_anicroche = introuvable]
+    page-404
+
+@else
+    page
+        navigation
+            <div .gauche>
+                fleche-retour
+
+            <div .centre>
+                @if [$anicroche.sources.titre]
+                    <span>
+                        "$anicroche.sources.titre.contenu"
+
+        onglet
+            @if [$etat_anicroche = chargement]
+                section-chargement
+
+            @else
+                section [anicroche]
+                    texte-mis-en-forme [$anicroche.sources.contenu.contenu]

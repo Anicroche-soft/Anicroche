@@ -1,0 +1,15 @@
+@script [
+    // Met en forme un texte brut. Pour l instant, chaque ligne non vide devient un paragraphe :
+    // les titres, l italique et les autres mises en forme viendront plus tard
+    $paragraphes_texte = String($texte ?? '')
+        .split(/\r?\n/)
+        .map(ligne => ligne.trim())
+        .filter(Boolean)
+]
+
+@args [$texte]
+
+<div .texte-mis-en-forme>
+    @for-each [$paragraphe] of [$paragraphes_texte]
+        <p>
+            "$paragraphe"

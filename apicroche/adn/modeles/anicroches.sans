@@ -7,7 +7,7 @@
         name : id
         type : char
         size : 1-48
-        rule : "$type != page | $id ~= /^[a-z0-9]+(?:-[a-z0-9]+)*$/"
+        rule : "$type != page | $id ~= /^(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/"
     }
 
     {
