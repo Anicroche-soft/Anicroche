@@ -62,7 +62,7 @@ Définit le nom de la table et, optionnellement, son **nom d'entrée** (le nom a
 Le nom d'entrée sert à nommer :
 
 - les clefs étrangères qui pointent vers cette table : `id_<entrée>` (ex. `id_compte`) ;
-- les routes portant sur une seule entrée : `POST /compte`, `GET /compte/:id` ;
+- les routes portant sur une seule entrée : `POST /compte`, `GET /compte/<$id>` ;
 - le premier paramètre des fonctions `$search_one`, `$create_one`, `$update_one` et `$delete_one` (voir [Magasin](magasin.md#nom-dentrée-et-nom-de-table)).
 
 ## `@primary`
@@ -73,7 +73,7 @@ Déclare la clef primaire de la table. Prend une liste de noms de champs.
 @primary [ id ]
 ```
 
-> **Note :** les relations, les routes `/<entrée>/:clef` et les clefs étrangères utilisent le premier champ de la clef primaire. Un modèle référencé par une relation doit avoir une clef primaire simple.
+> **Note :** les relations, les routes `/<entrée>/<$clef>` et les clefs étrangères utilisent le premier champ de la clef primaire. Un modèle référencé par une relation doit avoir une clef primaire simple.
 
 ## `@unique`
 
@@ -453,8 +453,8 @@ Le résultat d'une projection est une liste, sauf pour le sens direct d'une rela
 
 Avec ce modèle :
 
-- `GET /profils` et `GET /profil/:id` ne répondent qu'à un utilisateur connecté (`$context.compte` est rempli par une action `prior_respond`, voir [Scripts](scripts.md#fichiers-génériques-et-actions)) et ne renvoient que les profils qu'il gère ;
+- `GET /profils` et `GET /profil/<$id>` ne répondent qu'à un utilisateur connecté (`$context.compte` est rempli par une action `prior_respond`, voir [Scripts](scripts.md#fichiers-génériques-et-actions)) et ne renvoient que les profils qu'il gère ;
 - `POST /profil` crée un profil à partir de `identifiant` et `pseudonyme` ;
-- `PATCH /profil/:id` modifie le `pseudonyme` d'un profil géré par l'utilisateur ;
-- `DELETE /profil/:id` supprime un profil géré par l'utilisateur (ses lignes de `gerants_profils` sont supprimées en cascade) ;
+- `PATCH /profil/<$id>` modifie le `pseudonyme` d'un profil géré par l'utilisateur ;
+- `DELETE /profil/<$id>` supprime un profil géré par l'utilisateur (ses lignes de `gerants_profils` sont supprimées en cascade) ;
 - depuis `comptes`, la relation inverse `is_gerant_of_profils` est accessible à un utilisateur connecté.

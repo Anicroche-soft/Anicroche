@@ -109,7 +109,7 @@ const naviguer = (bord) =>
     initialiser_sculpteur()
 
     definir_variable_racine(`$path`, lien.pathname)
-    definir_variable_racine(`$params`, Object.fromEntries(lien.searchParams))
+    definir_variable_racine(`$query`, Object.fromEntries(lien.searchParams))
     definir_variable_racine(`$hash`, lien.hash)
 
     console.log(`Navigation vers ${bord}`)

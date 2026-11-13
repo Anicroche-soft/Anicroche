@@ -12,13 +12,13 @@ Toutes les routes répondent au [format JSON commun](demarrage.md#format-des-ré
 |---|---|---|
 | `POST /<entrée>` | au moins un champ a `can_create` | Créer une entrée |
 | `GET /<table>` | toujours | Rechercher des entrées |
-| `GET /<entrée>/:<clef>` | le modèle a une clef primaire | Lire une entrée |
-| `PATCH /<entrée>/:<clef>` | au moins un champ a `can_update` | Modifier une entrée |
-| `DELETE /<entrée>/:<clef>` | `@rules` contient `can_delete` | Supprimer une entrée |
+| `GET /<entrée>/<$clef>` | le modèle a une clef primaire | Lire une entrée |
+| `PATCH /<entrée>/<$clef>` | au moins un champ a `can_update` | Modifier une entrée |
+| `DELETE /<entrée>/<$clef>` | `@rules` contient `can_delete` | Supprimer une entrée |
 
-`:<clef>` reprend les champs de la clef primaire (`/coordonnee/:hachage_coordonnee`, ou plusieurs segments pour une clef composite). Pour un champ haché, l'URL contient la valeur en clair.
+`<$clef>` reprend les champs de la clef primaire, un segment par champ (`/coordonnee/<$hachage_coordonnee>`, ou `/texte/<$id_anicroche>/<$role>/<$version>/<$langue>/<$region>` pour une clef composée). Pour un champ haché, l'URL contient la valeur en clair.
 
-Une valeur vide (`''`) s'écrit `-` dans l'adresse : `PATCH /texte/accueil/contenu/1/fr/-` désigne la région `''`. Cette règle vaut pour tous les paramètres `:nom`, y compris ceux des [routes déclarées](#routes-déclarées--routes) ; une valeur réellement égale à `-` ne peut donc pas être désignée dans une adresse.
+Une valeur vide (`''`) s'écrit `-` dans l'adresse : `PATCH /texte/accueil/contenu/1/fr/-` désigne la région `''`. Cette règle vaut pour toutes les captures `<$nom>`, y compris celles des [routes déclarées](#routes-déclarées--routes) ; une valeur réellement égale à `-` ne peut donc pas être désignée dans une adresse.
 
 ### Expressions d'autorisation
 
@@ -95,7 +95,7 @@ Arguments des hooks : `$body`, `$request`, `$context`, `$values` (valeurs à ins
 }
 ```
 
-## `GET /<table>` et `GET /<entrée>/:<clef>` — Recherche
+## `GET /<table>` et `GET /<entrée>/<$clef>` — Recherche
 
 | Propriété | Où | Description |
 |---|---|---|
@@ -118,7 +118,7 @@ Ordre d'exécution : `prior_search` du modèle, `prior_search` des champs, reche
 
 Arguments des hooks : `$body`, `$request`, `$context`, et `$results` (résultats filtrés) pour `post_search`.
 
-Réponse : `200 OK` avec la liste des entrées (`GET /<table>`) ou l'entrée (`GET /<entrée>/:<clef>`), `404` si l'entrée est introuvable.
+Réponse : `200 OK` avec la liste des entrées (`GET /<table>`) ou l'entrée (`GET /<entrée>/<$clef>`), `404` si l'entrée est introuvable.
 
 ### Accès aux relations
 
@@ -144,7 +144,7 @@ Pour chaque relation, le `can_search` et le `restrict_search` de `@rules` du mod
 }
 ```
 
-## `PATCH /<entrée>/:<clef>` — Modification
+## `PATCH /<entrée>/<$clef>` — Modification
 
 Route générée dès qu'au moins un champ déclare `can_update`.
 
@@ -165,7 +165,7 @@ Déroulement :
 
 Arguments des hooks : `$body`, `$request`, `$context`, `$values` (valeurs modifiées).
 
-## `DELETE /<entrée>/:<clef>` — Suppression
+## `DELETE /<entrée>/<$clef>` — Suppression
 
 Route générée si `@rules` déclare `can_delete`.
 
@@ -233,7 +233,7 @@ Un modèle (de table ou générique) peut déclarer des routes sur mesure, trait
 
 | Propriété | Défaut | Description |
 |---|---|---|
-| `path` | — | Chemin de la route. Un segment `:nom` est un paramètre, disponible dans `$request.params.nom` ; un chemin qui en contient doit être entre guillemets (`path : "/anicroche/:id"`), sinon le `:` est lu comme un séparateur |
+| `path` | — | Chemin de la route, avec d'éventuelles [captures](#chemins-et-captures) `<$nom>` (`path : /anicroche/<$id>`) |
 | `method` | `post` | Méthode HTTP (`get`, `post`, `patch`, `delete`…) |
 | `action` | — | Appel de la fonction : `$fonction($arg, …)`. Arguments reconnus : `$body`, `$request`, `$context` |
 | `mode` | `all` | `dev`, `prod` ou `all` : la route n'existe que dans ce mode d'exécution |
@@ -242,6 +242,25 @@ Un modèle (de table ou générique) peut déclarer des routes sur mesure, trait
 La fonction doit répondre avec [`$indicate`](scripts.md#indicate). Si elle se termine sans l'avoir appelée, la route répond `500 Aucune réponse` et un message est affiché dans les journaux. Une erreur levée par la fonction donne une réponse `500`, ou `422` pour une erreur de validation du magasin.
 
 Les routes déclarées sont prioritaires sur les routes automatiques de même méthode et de même chemin.
+
+---
+
+## Chemins et captures
+
+Les chemins des routes (automatiques et déclarées) utilisent la même syntaxe que l'opérateur `~=` d'avec.js. Une capture `<$nom>` accepte un segment de l'adresse et le range dans `$request.params.nom` (scripts) et `$params.nom` (conditions) :
+
+| Capture | Accepte | Exemple |
+|---|---|---|
+| `<$nom>` | un segment : tout caractère sauf `/` | `/profil/<$id>` |
+| `<$nom :+ caractères>` | seulement les caractères listés | `"/page/<$id :+ abcdefghijklmnopqrstuvwxyz0123456789->"` |
+| `<$nom :- caractères>` | tout sauf les caractères listés ; `:- ''` accepte aussi les `/` | `"/fichier/<$chemin :- ''>"` |
+
+- Une capture avec `:+` ou `:-` contient un espace et un `:` : le chemin s'écrit alors entre guillemets dans le fichier `.sans`.
+- Une capture s'arrête aussi au texte fixe qui la suit (`/v<$numero :+ 0123456789>.json`) ; deux captures doivent être séparées par un texte fixe.
+- Une capture n'est jamais vide : une valeur vide s'écrit `-` dans l'adresse. La valeur est décodée (`%40` → `@`).
+- Une adresse qui ne respecte pas le chemin ne correspond pas à la route : `404 Route introuvable`.
+- Les `/` répétés ou finaux de l'adresse sont ignorés (`/moi/` désigne `/moi`).
+- L'ancienne syntaxe `:nom` est refusée au démarrage, avec un message indiquant la forme à utiliser.
 
 ---
 
@@ -276,7 +295,7 @@ Le bloc `@limits` d'un fichier générique (sans `@name`) limite le nombre de re
 
 - **Un bloc, un compteur** : toutes les routes d'un bloc partagent le même compteur. Dans l'exemple, une IP a droit à 10 requêtes par minute au total sur les trois routes ; pour des compteurs séparés, écrire des blocs séparés.
 - Une requête doit respecter **tous** les blocs qui la concernent (le bloc sans `path` et ceux qui citent sa route).
-- `path` désigne la route telle qu'elle est déclarée : `/profil/:id` couvre tous les identifiants. Un `*` final couvre toutes les routes sous un préfixe (`/profil/*`).
+- `path` désigne la route telle qu'elle est déclarée : `/profil/<$id>` couvre tous les identifiants. Un `*` final couvre toutes les routes sous un préfixe (`/profil/*`).
 - Un élément de la liste peut être un bloc `{ path, method }`, dont `method` remplace celle du bloc :
 
   ```

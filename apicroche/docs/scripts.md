@@ -43,7 +43,7 @@ Le bloc `@script` d'un modèle contient du JavaScript. Les fonctions déclarées
 | `path` | Chemin de l'URL |
 | `headers` | En-têtes de la requête |
 | `cookies` | Cookies de la requête (`{ nom: valeur }`) |
-| `params` | Paramètres de l'URL (`:nom` dans le chemin de la route) |
+| `params` | Valeurs des [captures](routes.md#chemins-et-captures) `<$nom>` du chemin de la route |
 
 ---
 

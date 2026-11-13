@@ -38,7 +38,7 @@ L'adresse de l'API est donnée par la variable d'environnement `api_url` du serv
 ]
 ```
 
-Avec une API sans.js, `$create`, `$search`, `$update` et `$delete` correspondent aux [routes automatiques](../../apicroche/docs/routes.md) `POST /<entrée>`, `GET`, `PATCH /<entrée>/:clef` et `DELETE /<entrée>/:clef`.
+Avec une API sans.js, `$create`, `$search`, `$update` et `$delete` correspondent aux [routes automatiques](../../apicroche/docs/routes.md) `POST /<entrée>`, `GET`, `PATCH /<entrée>/<$clef>` et `DELETE /<entrée>/<$clef>`.
 
 ## Actions autour des requêtes — `$add_action`
 

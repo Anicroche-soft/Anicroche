@@ -6,6 +6,7 @@ import { randomUUID, webcrypto } from 'crypto'
 import { verifier_argon2 } from './crypto.js'
 import { lire_ip, regrouper_ip, analyser_quota, consommer } from './limiteur.js'
 import { lister_fonctions_script } from '../analyseur_sans.js'
+import { compiler_chemin } from './chemins.js'
 
 if (!globalThis.crypto)
     globalThis.crypto = webcrypto
@@ -807,7 +808,17 @@ export const construire_routes = (schemas, index = null, options = {}) =>
 
     const enregistrer_route = (methode, chemin, handler, description, limit = undefined) =>
     {
-        routes.push({ methode, chemin, handler, limit })
+        let compile
+        try
+        {
+            compile = compiler_chemin(chemin)
+        }
+        catch (err)
+        {
+            console.log(`/!\\ route ${methode} ${chemin} ignorée : ${err.message}`)
+            return
+        }
+        routes.push({ methode, chemin, compile, handler, limit })
         if (premiere_route)
         {
             console.log('\nRoutes :')
@@ -1038,7 +1049,7 @@ export const construire_routes = (schemas, index = null, options = {}) =>
     {
         const nom_entree   = table.entry_name ?? table.name
         const a_une_pk     = Array.isArray(table.primary) && table.primary.length > 0
-        const chemin_pk    = `/${nom_entree}/${table.primary.map(clef => `:${clef}`).join('/')}`
+        const chemin_pk    = `/${nom_entree}/${table.primary.map(clef => `<$${clef}>`).join('/')}`
         const condition_pk = construire_condition_pk(table)
 
         // Lire les champs du corps (sous leur nom `alt` s'il est défini)
@@ -1111,7 +1122,7 @@ export const construire_routes = (schemas, index = null, options = {}) =>
             enregistrer_route('POST', `/${nom_entree}`, handler, `can_create [${champs_can_create.map(f => f.name).join(', ')}]`)
         }
 
-        // ─── GET /<table> et GET /<entrée>/:pk (champs can_search) ──────────
+        // ─── GET /<table> et GET /<entrée>/<$pk> (champs can_search) ──────────
 
         const routes_recherche = [{ is_one: false, chemin: `/${table.name}`, action: 'search_all' }]
         if (a_une_pk)
@@ -1232,7 +1243,7 @@ export const construire_routes = (schemas, index = null, options = {}) =>
         if (!a_une_pk)
             continue
 
-        // ─── PATCH /<entrée>/:pk (champs can_update) ─────────────────────────
+        // ─── PATCH /<entrée>/<$pk> (champs can_update) ─────────────────────────
 
         const champs_can_update = table.fields.filter(f => f.can_update != null)
         if (champs_can_update.length)
@@ -1284,7 +1295,7 @@ export const construire_routes = (schemas, index = null, options = {}) =>
             enregistrer_route('PATCH', chemin_pk, handler, `can_update [${champs_can_update.map(f => f.name).join(', ')}]`)
         }
 
-        // ─── DELETE /<entrée>/:pk (@rules can_delete) ────────────────────────
+        // ─── DELETE /<entrée>/<$pk> (@rules can_delete) ────────────────────────
 
         if (table.rules?.can_delete != null)
         {

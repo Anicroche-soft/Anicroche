@@ -197,6 +197,13 @@ const lire_cibles = (bloc, numero) =>
             continue
         }
 
+        const ancien = chemin.split('/').find(segment => segment.startsWith(':'))
+        if (ancien)
+        {
+            console.log(`/!\\ @limits bloc ${numero} : ${chemin} ignoré, la syntaxe ${ancien} n'existe plus (écrire <$${ancien.slice(1)}>)`)
+            continue
+        }
+
         const joker = chemin.endsWith('/*')
         cibles.push({
             chemin,

@@ -18,7 +18,7 @@
         type : int
     }
 
-    # PATCH /version/:id_anicroche/:numero { date_publication } publie le brouillon :
+    # PATCH /version/<$id_anicroche>/<$numero> { date_publication } publie le brouillon :
     # maintenant ("now") ou à une date future
     {
         name         : date_publication
@@ -30,7 +30,7 @@
 ]
 
 # Une version publiée ne change plus : seul un brouillon peut être modifié ou supprimé
-# (DELETE /version/:id_anicroche/:numero supprime le brouillon et ses textes)
+# (DELETE /version/<$id_anicroche>/<$numero> supprime le brouillon et ses textes)
 @rules [
     restrict_update : "#date_publication = null"
     can_delete      : "$context.compte"

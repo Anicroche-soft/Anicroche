@@ -795,8 +795,7 @@ const op_correspondance = (chaine, motif_brut, donnees) =>
             }
 
             pos++ // Saute >
-            const delimiteur = pos < motif_brut.length ? motif_brut[pos] : null
-            segments.push({ type: 'capture', nom, mode, filtrage, delimiteur })
+            segments.push({ type: 'capture', nom, mode, filtrage })
         }
         else
         {
@@ -832,13 +831,12 @@ const op_correspondance = (chaine, motif_brut, donnees) =>
             {
                 const c = chaine[pos_chaine]
 
-                // Arrêt sur le délimiteur suivant
                 if (prochain_fixe && chaine.startsWith(prochain_fixe, pos_chaine)) break
-                if (seg.delimiteur && c === seg.delimiteur && !prochain_fixe) break
 
-                // Filtrage
-                if (seg.mode === ':+' && seg.filtrage && !seg.filtrage.includes(c)) break
-                if (seg.mode === ':-' && seg.filtrage &&  seg.filtrage.includes(c)) break
+                // Sans filtrage, une capture s'arrête au / : elle vaut un segment, comme dans sans.js
+                if (seg.mode === ':+' && seg.filtrage) { if (!seg.filtrage.includes(c)) break }
+                else if (seg.mode === ':-')            { if ((seg.filtrage ?? '').includes(c)) break }
+                else if (c === '/') break
 
                 valeur_capturee += c
                 pos_chaine++

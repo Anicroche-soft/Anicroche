@@ -10,6 +10,7 @@ import {construire_base}  from "./scripts/batisseur.js"
 import {construire_routes, appliquer_cors} from "./scripts/routeur.js"
 import { demarrer_taches_periodiques, executer_actions_prior_run } from "./scripts/planificateur.js"
 import { construire_limites } from "./scripts/limiteur.js"
+import { correspondre_chemin } from "./scripts/chemins.js"
 
 console.log(`\
 ╔══════╗
@@ -185,38 +186,6 @@ const repondre_json = (rep, statut, message, data) =>
 const est_reponse_deja = (erreur) =>
     erreur && typeof erreur === 'object' && erreur.message === 'reponse_deja_envoyee'
 
-const extraire_params_route = (chemin_route, url) =>
-{
-    const parties_route = String(chemin_route).split('/').filter(Boolean)
-    const parties_url = String(url).split('/').filter(Boolean)
-
-    if (parties_route.length !== parties_url.length)
-        return null
-
-    const params = {}
-    for (let i = 0; i < parties_route.length; i++)
-    {
-        const segment_route = parties_route[i]
-        const segment_url = parties_url[i]
-
-        if (segment_route.startsWith(':'))
-        {
-            const nom_param = segment_route.slice(1)
-            if (!nom_param)
-                return null
-            // Un segment vide ne peut pas figurer dans une adresse : il s'écrit `-`
-            const valeur = decodeURIComponent(segment_url)
-            params[nom_param] = valeur === '-' ? '' : valeur
-            continue
-        }
-
-        if (segment_route !== segment_url)
-            return null
-    }
-
-    return params
-}
-
 const serveur = http.createServer(async (req, rep) =>
     {
         const url     = req.url.split('?')[0]
@@ -234,7 +203,7 @@ const serveur = http.createServer(async (req, rep) =>
         // Routes des modèles
         for (const route of routes)
         {
-            const params = route.methode === methode ? extraire_params_route(route.chemin, url) : null
+            const params = route.methode === methode ? correspondre_chemin(route.compile, url) : null
             if (params)
             {
                 if (refuser_si_limite(req, rep, route))

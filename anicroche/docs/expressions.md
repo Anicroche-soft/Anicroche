@@ -36,7 +36,7 @@ Si une variable n'existe dans aucun parent, l'affectation crée la variable dans
 | Variable | Type | Description |
 |---|---|---|
 | `$path` | texte | Chemin de l'URL courante (ex : `/page/42`) |
-| `$params` | dictionnaire | Paramètres de l'URL (ex : `{q: "recherche"}`) |
+| `$query` | dictionnaire | Paramètres de la chaîne de requête de l'URL (ex : `{q: "recherche"}` pour `?q=recherche`) |
 | `$hash` | texte | Fragment de l'URL (ex : `#section`) |
 | `$navigate_to` | fonction | Navigue vers une URL (`$navigate_to('/connexion')`, `$navigate_to('/article/42?q=test')`) |
 | `$navigate_prev` | fonction | Reproduit la flèche "retour" du navigateur (`$navigate_prev()`) |
@@ -47,7 +47,7 @@ Si une variable n'existe dans aucun parent, l'affectation crée la variable dans
 | `$create`, `$search`, `$update`, `$delete` | fonctions | Requêtes vers l'API (voir [Requêtes vers l'API](api.md)) |
 | `$add_action` | fonction | Actions exécutées autour des requêtes vers l'API (voir [Requêtes vers l'API](api.md#actions-autour-des-requêtes--add_action)) |
 
-`$path`, `$params` et `$hash` sont mis à jour à chaque navigation sans rechargement de page. Une barre oblique finale est retirée de l'adresse (`/profil/` devient `/profil`), qui est réécrite dans l'historique sans nouvelle entrée.
+`$path`, `$query` et `$hash` sont mis à jour à chaque navigation sans rechargement de page. Une barre oblique finale est retirée de l'adresse (`/profil/` devient `/profil`), qui est réécrite dans l'historique sans nouvelle entrée.
 
 Précisions :
 
@@ -228,8 +228,10 @@ Le résultat est vrai si l'expression trouve une correspondance dans le texte (c
 
 ```
 @if [$path ~= '/<$id>']
-# $id contient la partie capturée
+# $id contient la partie capturée, jusqu'au prochain / exclu
 ```
+
+Sans filtrage, une capture s'arrête au premier `/` : elle vaut un segment de chemin, comme dans les routes de sans.js. Elle s'arrête aussi au texte fixe qui la suit dans le motif.
 
 **Capture avec caractères autorisés (`:+`) — s'arrête dès qu'un caractère non listé est rencontré :**
 
@@ -237,17 +239,17 @@ Le résultat est vrai si l'expression trouve une correspondance dans le texte (c
 @if [$path ~= '/<$id :+ abcdefghijklmnopqrstuvwxyz0123456789->']
 ```
 
-**Capture avec caractères d'arrêt (`:−`) — s'arrête dès qu'un caractère listé est rencontré :**
+**Capture avec caractères d'arrêt (`:-`) — s'arrête dès qu'un caractère listé est rencontré ; la liste remplace le `/`, et `:- ''` capture tout, `/` compris :**
 
 ```
 @if [$path ~= '/<$id :- />']
 ```
 
-**Arrêt sur le caractère suivant immédiatement le `>` du gabarit :**
+**Plusieurs segments :**
 
 ```
 @if [$path ~= '/<$section>/<$id>']
-# $section capture tout jusqu'au premier /, $id capture tout jusqu'à la fin
+# $section et $id capturent chacun un segment : /a/b correspond, /a/b/c non
 ```
 
 Les variables capturées sont écrites dans le scope courant (ou dans un parent si la variable existe déjà) et immédiatement disponibles dans les expressions, les textes et les scripts.
