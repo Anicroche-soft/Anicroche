@@ -20,10 +20,15 @@
     }
 
     {
-        name :  date_naissance
-        type :  crypt
-        size :  1-64
-        count : 0-1
+        name : date_naissance
+        type : crypt
+        size : 1-64
+        rule : "$date_naissance ~= /^\d{4}-\d{2}-\d{2}$/"
+    }
+
+    {
+        name : date_acceptation_conditions
+        type : datetime
     }
 
     {
@@ -88,10 +93,29 @@
             !$body.coordonnee
          || !$body.clef
          || !$body.mot_de_passe
+         || !$body.date_naissance
          || !Array.isArray($body.ids)
          || !$body.ids.length
         )
             return $indicate(400, "Corps incomplet")
+
+        // Vérifiés avant la clef, pour ne pas consommer d'essai
+        const age = $calculer_age($body.date_naissance)
+
+        if (age === null)
+            return $indicate(422, "Date de naissance invalide")
+
+        if (age < $age_minimum())
+            return $indicate(403, "Âge minimum non atteint")
+
+        if ($body.accepte_conditions !== true)
+            return $indicate(422, "Conditions d'utilisation non acceptées")
+
+        // En dev, l'inscription reste possible tant qu'aucune version des conditions n'est publiée
+        const conditions = await $version_en_vigueur('conditions-d-utilisation')
+
+        if (!conditions && (process.env.mode || 'prod') !== 'dev')
+            return $indicate(503, "Conditions d'utilisation indisponibles")
 
         const clef = await $verifier_clef()
 
@@ -112,7 +136,9 @@
         )
 
         const compte = await $create_one('compte', {
-            hachage_mot_de_passe : $body.mot_de_passe
+            hachage_mot_de_passe        : $body.mot_de_passe,
+            date_naissance              : $body.date_naissance,
+            date_acceptation_conditions : new Date()
         })
 
         // Les codes ne sont envoyés que par courriel ; deux inscriptions simultanées peuvent passer la vérification de la clef
