@@ -20,7 +20,8 @@ Le bloc `@script` d'un modèle contient du JavaScript. Les fonctions déclarées
 
 - Seules les déclarations de la forme `$nom = (…) =>` sont exportées ; une fonction déclarée autrement reste utilisable à l'intérieur du script mais ne peut pas être appelée par une route ou un hook.
 - Le script est évalué à chaque requête : les variables (`$body`, `$request`, `$context`…) et fonctions ci-dessous désignent toujours celles de la requête en cours.
-- Les fonctions du `@script` d'`index.sans` sont accessibles depuis les scripts de tous les modèles.
+- Les fonctions du `@script` d'`index.sans` sont accessibles depuis les scripts de tous les modèles, mais une route ou un hook d'un modèle ne peut appeler que les fonctions du `@script` de son propre fichier : pour utiliser une fonction d'`index.sans`, l'appeler depuis une fonction du modèle.
+- Au démarrage, sans.js signale chaque route ou hook dont l'action est mal formée ou désigne une fonction absente du `@script` de son fichier (en précisant, le cas échéant, le fichier où elle est définie).
 
 ---
 

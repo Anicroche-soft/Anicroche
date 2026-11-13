@@ -26,8 +26,10 @@ Un modèle est une suite d'**annotations** commençant par `@`, suivies d'une va
 - Une **liste** s'écrit entre crochets `[ … ]`, un **dictionnaire** (paires `clef : valeur`) entre accolades `{ … }`. Un dictionnaire peut aussi s'écrire entre crochets : `@rules [ can_search : ':)' ]`.
 - Les éléments sont séparés par des retours à la ligne, des espaces ou des virgules.
 - Une valeur contenant des espaces ou des caractères spéciaux (`:`, `#`, `[`, `{`, `,`…) s'écrit entre guillemets `"…"`, `'…'` ou `` `…` ``.
+  C'est le cas d'un hook à plusieurs arguments : `prior_update : "$verifier($values, $request)"`.
 - Les **commentaires** commencent par `#` et s'étendent jusqu'à la fin de la ligne.
 - Le contenu de `@script [ … ]` est du JavaScript, recopié tel quel.
+- Un modèle invalide est ignoré (ni table ni routes) : le journal de démarrage indique le fichier, la ligne, la colonne et la cause (``/!\ modèle invalide : `versions.sans` (ligne 28, colonne 24) : …``).
 
 ### Annotations
 

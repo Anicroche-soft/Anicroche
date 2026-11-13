@@ -5,6 +5,7 @@ import { SignJWT, jwtVerify } from 'jose'
 import { randomUUID, webcrypto } from 'crypto'
 import { verifier_argon2 } from './crypto.js'
 import { lire_ip, regrouper_ip, analyser_quota, consommer } from './limiteur.js'
+import { lister_fonctions_script } from '../analyseur_sans.js'
 
 if (!globalThis.crypto)
     globalThis.crypto = webcrypto
@@ -442,7 +443,7 @@ const compiler_script = (code_brut, contexte) =>
     // Supporte les fonctions async ET synchrones :
     // $nom = async ($args) => { ... }
     // $nom = ($args) => { ... }
-    const noms = [...code_brut.matchAll(/(\$\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/g)].map(m => m[1])
+    const noms = lister_fonctions_script(code_brut)
     const export_obj = `return { ${noms.join(', ')} }`
 
     const noms_contexte = Object.keys(contexte)

@@ -3,6 +3,20 @@ import path from "path"
 
 // ─── Analyseur syntaxique ─────────────────────────────────────────────────────
 
+const echouer = (pos, message) =>
+{
+    throw Object.assign(new Error(message), { pos })
+}
+
+const decrire_caractere = (str, pos) =>
+{
+    if (pos >= str.length)
+        return 'la fin du fichier'
+    if (str[pos] === '\n')
+        return 'une fin de ligne'
+    return `« ${str[pos]} »`
+}
+
 const passer_blancs = (str, pos) =>
 {
     while (pos < str.length && /^[ \t]$/.test(str[pos]))
@@ -29,13 +43,17 @@ const passer_separateurs = (str, pos) =>
 
 const lire_scalaire = (str, pos) =>
 {
-    let valeur = ''
+    const debut          = pos
+    let valeur           = ''
+    let entre_guillemets = false
     while (pos < str.length)
     {
         const c = str[pos]
         if (/^["'`]$/.test(c))
         {
             const guillemet = c
+            const ouverture = pos
+            entre_guillemets = true
             pos++
             while (pos < str.length && str[pos] != guillemet)
             {
@@ -43,7 +61,7 @@ const lire_scalaire = (str, pos) =>
                 pos++
             }
             if (pos >= str.length)
-                return { valeur: "invalide", pos }
+                echouer(ouverture, `guillemet ${guillemet} jamais refermé`)
             pos++
             continue
         }
@@ -52,9 +70,9 @@ const lire_scalaire = (str, pos) =>
         valeur += c
         pos++
     }
-    if (valeur.length == 0)
-        return { valeur: "invalide", pos }
-    return { valeur, pos }
+    if (pos == debut)
+        echouer(pos, `valeur attendue, ${decrire_caractere(str, pos)} trouvé`)
+    return { valeur, pos, entre_guillemets }
 }
 
 // ─── Analyse d'un jeu de caractères style [A-Z0-9] ───────────────────────────
@@ -83,40 +101,11 @@ const analyser_chars = (str) =>
     return resultat || null
 }
 
-const lire_regex = (str, pos) =>
-{
-    pos++ // passer le '/' ouvrant
-    let source = ''
-    while (pos < str.length && str[pos] !== '/')
-    {
-        if (str[pos] === '\\' && pos + 1 < str.length)
-        {
-            source += str[pos] + str[pos + 1]
-            pos += 2
-        }
-        else
-        {
-            source += str[pos]
-            pos++
-        }
-    }
-    if (pos >= str.length)
-        return { valeur: "invalide", pos }
-    pos++ // passer le '/' fermant
-    let flags = ''
-    while (pos < str.length && /^[gimsuy]$/.test(str[pos]))
-    {
-        flags += str[pos]
-        pos++
-    }
-    return { valeur: { __regex__: true, source, flags }, pos }
-}
-
 const lire_valeur = (str, pos) =>
 {
     pos = passer_blancs(str, pos)
     if (pos >= str.length)
-        return { valeur: "invalide", pos }
+        echouer(pos, 'valeur attendue, la fin du fichier trouvée')
     if (str[pos] == '[')
         return est_dict_entre_crochets(str, pos) ? lire_dict(str, pos, ']') : lire_liste(str, pos)
     if (str[pos] == '{')
@@ -130,27 +119,45 @@ const est_dict_entre_crochets = (str, pos) =>
     pos = passer_separateurs(str, pos + 1)
     if (pos >= str.length || /^[\[\]{}]$/.test(str[pos]))
         return false
-    const res = lire_scalaire(str, pos)
-    if (res.valeur === "invalide")
+    try
+    {
+        pos = lire_scalaire(str, pos).pos
+    }
+    catch
+    {
         return false
-    pos = passer_blancs(str, res.pos)
+    }
+    pos = passer_blancs(str, pos)
     return str[pos] === ':'
+}
+
+// Une valeur non mise entre guillemets s'arrête au premier espace ou à la première virgule :
+// `$f($a, $b)` est alors lu `$f($a`, et la suite rend le modèle invalide
+const verifier_parentheses = ({ valeur, entre_guillemets }, cle, pos) =>
+{
+    if (typeof valeur !== 'string' || entre_guillemets)
+        return
+    const ouvrantes = (valeur.match(/\(/g) ?? []).length
+    const fermantes = (valeur.match(/\)/g) ?? []).length
+    if (ouvrantes > fermantes)
+        echouer(pos, `la valeur${cle ? ` de \`${cle}\`` : ''} est coupée après « ${valeur} » : une valeur contenant des espaces ou des virgules s'écrit entre guillemets, ex. "$fonction($a, $b)"`)
 }
 
 const lire_liste = (str, pos) =>
 {
+    const ouverture = pos
     pos++
     const liste = []
     while (true)
     {
         pos = passer_separateurs(str, pos)
         if (pos >= str.length)
-            return { valeur: "invalide", pos }
+            echouer(ouverture, 'crochet [ jamais refermé')
         if (str[pos] == ']')
             return { valeur: liste, pos: pos + 1 }
-        const res = lire_valeur(str, pos)
-        if (res.valeur === "invalide")
-            return { valeur: "invalide", pos: res.pos }
+        const debut = pos
+        const res   = lire_valeur(str, pos)
+        verifier_parentheses(res, null, debut)
         liste.push(res.valeur)
         pos = res.pos
     }
@@ -158,35 +165,42 @@ const lire_liste = (str, pos) =>
 
 const lire_dict = (str, pos, fermant = '}') =>
 {
+    const ouverture = pos
     pos++
-    const dict = {}
+    const dict      = {}
+    let precedente  = null
     while (true)
     {
         pos = passer_separateurs(str, pos)
         if (pos >= str.length)
-            return { valeur: "invalide", pos }
+            echouer(ouverture, `${str[ouverture]} jamais refermé`)
         if (str[pos] == fermant)
             return { valeur: dict, pos: pos + 1 }
-        const res_cle = lire_scalaire(str, pos)
-        if (res_cle.valeur === "invalide")
-            return { valeur: "invalide", pos: res_cle.pos }
-        pos = res_cle.pos
-        pos = passer_blancs(str, pos)
+        const debut_cle = pos
+        const res_cle   = lire_scalaire(str, pos)
+        pos = passer_blancs(str, res_cle.pos)
         if (pos >= str.length || str[pos] != ':')
-            return { valeur: "invalide", pos }
+        {
+            const suite = precedente && typeof dict[precedente] === 'string'
+                ? ` ; si « ${res_cle.valeur} » fait partie de la valeur de \`${precedente}\`, mettez cette valeur entre guillemets`
+                : ''
+            echouer(debut_cle, `« : » attendu après la clef \`${res_cle.valeur}\`, ${decrire_caractere(str, pos)} trouvé${suite}`)
+        }
         pos++
-        const res_val = lire_valeur(str, pos)
-        if (res_val.valeur === "invalide")
-            return { valeur: "invalide", pos: res_val.pos }
+        const debut_val = passer_blancs(str, pos)
+        const res_val   = lire_valeur(str, pos)
+        verifier_parentheses(res_val, res_cle.valeur, debut_val)
         dict[res_cle.valeur] = res_val.valeur
-        pos = res_val.pos
+        precedente           = res_cle.valeur
+        pos                  = res_val.pos
     }
 }
 
 const lire_bloc_brut = (str, pos) =>
 {
     if (pos >= str.length || str[pos] !== '[')
-        return { valeur: "invalide", pos }
+        echouer(pos, `« [ » attendu après @script, ${decrire_caractere(str, pos)} trouvé`)
+    const ouverture = pos
     pos++
     let profondeur = 1
     let contenu    = ''
@@ -203,9 +217,10 @@ const lire_bloc_brut = (str, pos) =>
         contenu += str[pos]
         pos++
     }
-    return { valeur: "invalide", pos }
+    echouer(ouverture, 'crochet [ de @script jamais refermé')
 }
 
+// Lève une erreur portant la position (`pos`) du problème si le contenu est invalide
 const analyser_sans = (str) =>
 {
     const annotations = {}
@@ -216,18 +231,13 @@ const analyser_sans = (str) =>
         if (pos >= str.length)
             break
         if (str[pos] != '@')
-            return "invalide"
+            echouer(pos, `annotation (@nom) attendue, ${decrire_caractere(str, pos)} trouvé`)
         pos++
         const res_nom = lire_scalaire(str, pos)
-        if (res_nom.valeur === "invalide")
-            return "invalide"
-        pos = res_nom.pos
-        pos = passer_blancs(str, pos)
+        pos = passer_blancs(str, res_nom.pos)
         const res_val = res_nom.valeur === 'script'
             ? lire_bloc_brut(str, pos)
             : lire_valeur(str, pos)
-        if (res_val.valeur === "invalide")
-            return "invalide"
         annotations[res_nom.valeur] = res_val.valeur
         pos = res_val.pos
     }
@@ -408,9 +418,6 @@ const transformer_champ = (champ_brut, champs_dans_unique) =>
 
 const transformer_modele = (annotations, nom_fichier) =>
 {
-    if (annotations === "invalide")
-        return "invalide"
-
     const name_brut  = Array.isArray(annotations.name) ? annotations.name : null
     const nom_table  = name_brut?.[0] ?? nom_fichier
     const nom_entree = name_brut?.[1] ?? null
@@ -444,17 +451,17 @@ const transformer_modele = (annotations, nom_fichier) =>
     for (const champ_brut of champs_bruts)
     {
         if (typeof champ_brut !== "object" || champ_brut === null || Array.isArray(champ_brut))
-            return "invalide"
+            throw new Error(`@fields : chaque champ s'écrit entre accolades { name : …, type : … }, ${JSON.stringify(champ_brut)} trouvé`)
         if (!champ_brut.name)
-            return "invalide"
+            throw new Error(`@fields : champ sans name (${JSON.stringify(champ_brut)})`)
 
         if (!champ_brut.type)
         {
             if (!champ_brut.count)
-                return "invalide"
+                throw new Error(`@fields : le champ \`${champ_brut.name}\` n'a ni type ni count (relation)`)
             const count = analyser_count(String(champ_brut.count))
             if (!count)
-                return "invalide"
+                throw new Error(`@fields : count invalide pour \`${champ_brut.name}\` : « ${champ_brut.count} » (format attendu : 0-1, 1-N, N-N…)`)
             relations.push({
                 champ_source        : champ_brut.name,
                 table_cible         : champ_brut.ref ?? champ_brut.name,
@@ -474,7 +481,7 @@ const transformer_modele = (annotations, nom_fichier) =>
 
         const champ = transformer_champ(champ_brut, champs_dans_unique)
         if (champ === "invalide")
-            return "invalide"
+            throw new Error(`@fields : type inconnu pour \`${champ_brut.name}\` : « ${champ_brut.type} »`)
         champs.push(champ)
     }
 
@@ -673,6 +680,84 @@ const resoudre_relations = (tables) =>
 
 // ─── Chargement ───────────────────────────────────────────────────────────────
 
+const fichiers = new WeakMap()
+
+const situer = (contenu, pos) =>
+{
+    if (typeof pos !== 'number')
+        return ''
+    const lignes = contenu.slice(0, pos).split('\n')
+    return ` (ligne ${lignes.length}, colonne ${lignes.at(-1).length + 1})`
+}
+
+export const lister_fonctions_script = (script) =>
+    [...(script ?? '').matchAll(/(\$\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/g)].map(m => m[1])
+
+const lister_hooks_modele = (table) =>
+{
+    const hooks = []
+    for (const champ of table.fields)
+        for (const clef of ['prior_create', 'post_create', 'prior_update', 'post_update', 'prior_search', 'post_search'])
+            if (champ[clef])
+                hooks.push({ action: champ[clef], etiquette: `${clef} du champ \`${champ.name}\`` })
+    for (const clef of ['prior_search', 'post_search', 'prior_delete', 'post_delete'])
+        if (table.rules?.[clef])
+            hooks.push({ action: table.rules[clef], etiquette: `${clef} de @rules` })
+    for (const route of table.routes)
+        hooks.push({ action: route.action, etiquette: `action de la route ${route.path}` })
+    return hooks
+}
+
+const lister_hooks_index = (index) =>
+{
+    const hooks = []
+    for (const action of Array.isArray(index.actions) ? index.actions : [])
+        for (const clef of ['prior_run', 'periodically', 'prior_respond', 'post_respond'])
+            if (action?.[clef])
+                hooks.push({ action: action[clef], etiquette: `${clef} de @actions` })
+    for (const route of index.routes)
+        hooks.push({ action: route.action, etiquette: `action de la route ${route.path}` })
+    return hooks
+}
+
+// Un hook n'appelle que les fonctions du @script de son propre fichier : le signaler au démarrage
+// plutôt qu'à la première requête concernée
+const verifier_hooks = (tables, index) =>
+{
+    const fonctions_index = new Set(lister_fonctions_script(index?.script))
+    const proprietaires   = new Map()
+    for (const table of tables)
+        for (const nom of lister_fonctions_script(table.script))
+            proprietaires.set(nom, fichiers.get(table))
+
+    const verifier = (nom_fichier, hooks, fonctions, ailleurs) =>
+    {
+        for (const { action, etiquette } of hooks)
+        {
+            const prefixe = `/!\\ \`${nom_fichier}.sans\`, ${etiquette}`
+            const match   = typeof action === 'string' ? /^(\$\w+)\(([^)]*)\)$/.exec(action.trim()) : null
+            if (!match)
+            {
+                console.log(`${prefixe} : action invalide « ${action ?? ''} » (format attendu : $fonction($arg, …), entre guillemets s'il y a plusieurs arguments)`)
+                continue
+            }
+            if (fonctions.has(match[1]))
+                continue
+            const autre = ailleurs(match[1])
+            console.log(autre
+                ? `${prefixe} : ${match[1]} est définie dans le @script de \`${autre}.sans\`, or un hook n'appelle que les fonctions du @script de son propre fichier${autre === 'index' ? ' (l\'appeler depuis une fonction de ce @script)' : ''}`
+                : `${prefixe} : fonction ${match[1]} introuvable dans le @script de \`${nom_fichier}.sans\``)
+        }
+    }
+
+    for (const table of tables)
+        verifier(fichiers.get(table), lister_hooks_modele(table), new Set(lister_fonctions_script(table.script)),
+            nom => fonctions_index.has(nom) ? 'index' : proprietaires.get(nom))
+
+    if (index)
+        verifier('index', lister_hooks_index(index), fonctions_index, nom => proprietaires.get(nom))
+}
+
 const lire_dossier = (dossier, tables) =>
 {
     let entrees
@@ -709,15 +794,16 @@ const lire_dossier = (dossier, tables) =>
             continue
         }
 
-        const annotations = analyser_sans(contenu)
-        const table       = transformer_modele(annotations, nom_fichier)
-        if (table === "invalide")
+        try
         {
-            console.log(`/!\\ modèle invalide : \`${entree.name}\``)
-            continue
+            const table = transformer_modele(analyser_sans(contenu), nom_fichier)
+            fichiers.set(table, nom_fichier)
+            tables.push(table)
         }
-
-        tables.push(table)
+        catch (err)
+        {
+            console.log(`/!\\ modèle invalide : \`${entree.name}\`${situer(contenu, err.pos)} : ${err.message}`)
+        }
     }
 }
 
@@ -732,6 +818,8 @@ export const charger_modeles = (dossier) =>
     const index_pos = tables.findIndex(table => table.name === 'index')
     if (index_pos !== -1)
         index = tables.splice(index_pos, 1)[0]
+
+    verifier_hooks(tables, index)
 
     return { tables, relations, noms_connus, index }
 }
