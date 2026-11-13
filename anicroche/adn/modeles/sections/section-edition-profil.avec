@@ -137,7 +137,7 @@ section [edition-profil, centree]
                 $valeur : $profil.pseudonyme
             ]
             @if [$a_des_derives_edition & $identifiant_modifie_edition]
-                information-formulaire
+                alerte-formulaire
                     "En éditant le profil, tous les profils dérivés seront également renommés."
             bouton-soumission
                 "Éditer le profil"

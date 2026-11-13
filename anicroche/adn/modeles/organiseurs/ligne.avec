@@ -5,10 +5,19 @@
         flex-flow: row wrap;
     }
 
+    .ligne.centree {
+        align-items: center;
+    }
+
     .ligne:has(> .bouton) {
         --l-ecart: 0.5rem;
     }
 ]
 
-<div .ligne>
+@args [$type : classique]
+
+<div
+    .ligne
+    [$type = centree] ? .centree
+>
     @stud

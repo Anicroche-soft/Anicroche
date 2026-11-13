@@ -114,6 +114,10 @@
         fill: none;
     }
 
+    .icone.lettre path {
+        stroke-linecap: butt;
+    }
+
     html {
         overflow: hidden;
 
