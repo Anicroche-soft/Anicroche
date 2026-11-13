@@ -7,7 +7,7 @@ import fs   from "fs"
 import {generer_adn}      from "./analyseur_adn.js"
 import {charger_modeles}  from "./analyseur_sans.js"
 import {construire_base}  from "./scripts/batisseur.js"
-import {construire_routes} from "./scripts/routeur.js"
+import {construire_routes, appliquer_cors} from "./scripts/routeur.js"
 import { demarrer_taches_periodiques, executer_actions_prior_run } from "./scripts/planificateur.js"
 import { construire_limites } from "./scripts/limiteur.js"
 
@@ -94,7 +94,10 @@ await executer_actions_prior_run(schemas)
 
 const taches_periodiques = demarrer_taches_periodiques(schemas)
 
-const routes   = construire_routes(schemas, schemas.index, { body_limit: adn.body_limit })
+const routes   = construire_routes(schemas, schemas.index, {
+    body_limit   : adn.body_limit,
+    cors_headers : adn.cors_headers
+})
 const limiter  = construire_limites(schemas.index?.limits, routes)
 
 // Répond 429 et retourne vrai si la requête dépasse une limite
@@ -146,53 +149,6 @@ const composants = {
         chemin: "adn/fontes",
         recursif: true
     }
-}
-
-const mode = process.env.mode || "prod"
-const origines_configurees = [process.env.cors_origin, process.env.app_url]
-    .filter(Boolean)
-    .flatMap(valeur => String(valeur).split(','))
-    .map(valeur => valeur.trim())
-    .filter(Boolean)
-
-const est_origine_http = (origine) =>
-{
-    try
-    {
-        const { protocol } = new URL(origine)
-        return protocol === 'http:' || protocol === 'https:'
-    }
-    catch
-    {
-        return false
-    }
-}
-
-const resoudre_origine_cors = (req) =>
-{
-    const origine = req.headers.origin
-    if (!origine)
-        return origines_configurees[0] ?? null
-
-    if (origines_configurees.includes(origine))
-        return origine
-
-    if (mode === 'dev' && est_origine_http(origine))
-        return origine
-
-    return null
-}
-
-const appliquer_cors = (req, rep) =>
-{
-    const origine = resoudre_origine_cors(req)
-    if (origine)
-        rep.setHeader("Access-Control-Allow-Origin", origine)
-
-    rep.setHeader("Access-Control-Allow-Credentials", "true")
-    rep.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
-    rep.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
-    rep.setHeader("Vary", "Origin")
 }
 
 const rechercher_fichier = (dossier, nom, recursif) =>

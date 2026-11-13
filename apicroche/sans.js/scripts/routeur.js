@@ -44,7 +44,19 @@ const resoudre_origine_cors = (req) =>
     return null
 }
 
-const appliquer_cors = (req, rep) =>
+// En-têtes de requête acceptés : ceux de base, complétés par cors_headers de app.adn
+const ENTETES_CORS_BASE = ['Content-Type', 'Authorization']
+let entetes_cors        = ENTETES_CORS_BASE.join(', ')
+
+const definir_entetes_cors = (valeur) =>
+{
+    const supplementaires = (Array.isArray(valeur) ? valeur : String(valeur ?? '').split(','))
+        .map(entete => String(entete).trim())
+        .filter(Boolean)
+    entetes_cors = [...new Set([...ENTETES_CORS_BASE, ...supplementaires])].join(', ')
+}
+
+export const appliquer_cors = (req, rep) =>
 {
     const origine = resoudre_origine_cors(req)
     if (origine)
@@ -52,7 +64,7 @@ const appliquer_cors = (req, rep) =>
 
     rep.setHeader('Access-Control-Allow-Credentials', 'true')
     rep.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
-    rep.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    rep.setHeader('Access-Control-Allow-Headers', entetes_cors)
     rep.setHeader('Vary', 'Origin')
 }
 
@@ -778,6 +790,8 @@ const CODES_VALIDATION = new Set(['RULE_VIOLATION', 'ENUM_VIOLATION', 'SIZE_VIOL
 
 export const construire_routes = (schemas, index = null, options = {}) =>
 {
+    definir_entetes_cors(options.cors_headers)
+
     const taille_corps_max  = analyser_taille_corps(options.body_limit)
     const fonctions_magasin = creer_fonctions_magasin(schemas)
     const fonctions_mailer  = creer_fonctions_mailer()

@@ -15,8 +15,8 @@
     // Une valeur vide s écrit - dans une adresse de l API
     const segment = (valeur) => valeur === '' ? '-' : encodeURIComponent(valeur)
 
-    // Provisoire : seuls les gérants de @anicroche modifient les pages
-    const est_gerant = () => ($compte?.is_gerant_of_profils ?? []).some(profil => profil.identifiant === 'anicroche')
+    // Provisoire : seul le profil @anicroche, sélectionné, modifie les pages
+    const est_gerant = () => $profil?.identifiant === 'anicroche'
 
     // Le modèle reste en place quand on passe d une anicroche à une autre :
     // le chargement suit donc $path plutôt que l exécution du script

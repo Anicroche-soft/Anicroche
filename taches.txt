@@ -28,4 +28,4 @@ Liste de tâches :
 - sans.js : signaler clairement les erreurs de modèle les plus courantes (hook désignant une fonction d'index.sans au lieu du @script du modèle, valeur à plusieurs arguments non mise entre guillemets, qui rend aujourd'hui tout le modèle invalide sans explication)
 - remplacer la ligne d'indication au déut de l'édition de page par une boîte de notifications généralisée à toute l'application
 - constat :ajouter un '/' final à la fin d'une URL empêche l'accès à la page du site
-- constat : on peut avoir les accès d'un profil même sans l'avoir sélectionnésur le site
+- au focus de la textarea, une outline noire apparaît

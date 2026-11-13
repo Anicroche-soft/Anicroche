@@ -37,6 +37,7 @@ port   : 5030
 | `nom` | texte | `sans.js` | Nom de l'API, affiché par la route `GET /` |
 | `port` | nombre | `PORT` ou `5030` | Port d'écoute du serveur. S'il est absent, la variable d'environnement `PORT` est utilisée, puis `5030` |
 | `body_limit` | taille | `1mb` | Taille maximale du corps des requêtes, en octets ou avec l'unité `b`, `kb` ou `mb` (`512kb`). Au-delà : `413` |
+| `cors_headers` | liste | — | En-têtes de requête autorisés pour CORS en plus de `Content-Type` et `Authorization` (`[ X-Profil ]`). Une requête du navigateur portant un autre en-tête est bloquée |
 
 ## Variables d'environnement
 
@@ -139,7 +140,7 @@ Les en-têtes CORS sont ajoutés à toutes les réponses :
 
 - origines autorisées : `app_url` et `cors_origin` ; en mode `dev`, toute origine `http://` ou `https://` est acceptée ;
 - méthodes : `GET`, `POST`, `PATCH`, `DELETE`, `OPTIONS` ;
-- en-têtes : `Content-Type`, `Authorization` ;
+- en-têtes : `Content-Type`, `Authorization`, et ceux de `cors_headers` (`app.adn`) ;
 - les cookies sont acceptés (`Access-Control-Allow-Credentials: true`).
 
 Les requêtes `OPTIONS` reçoivent une réponse `204`.

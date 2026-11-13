@@ -171,6 +171,7 @@
                 if (compte)
                 {
                     $context.compte = compte
+                    await $resoudre_profil()
                     return
                 }
             }
@@ -237,6 +238,28 @@
         )
 
         $context.compte = compte
+        await $resoudre_profil()
+    }
+
+    // Le profil sélectionné sur le site arrive dans l en-tête X-Profil : seul celui-ci compte
+    // pour les droits, et seulement si le compte en est gérant
+    $resoudre_profil = async () =>
+    {
+        const id_profil = String($request.headers?.['x-profil'] ?? '').trim()
+
+        if (!$context.compte || !id_profil)
+            return
+
+        const profil = await $search_one('profil',
+            `
+            #id         = $id_profil
+          & #gerants.id = $id_compte
+            `,
+            { $id_profil: id_profil, $id_compte: $context.compte.id }
+        )
+
+        if (profil)
+            $context.profil = profil
     }
 
     $detecter_connexion = async () =>
@@ -250,29 +273,15 @@
             return $indicate(401, 'Non authentifié')
     }
 
-    // Provisoire (dev) : seuls les gérants du profil @anicroche modifient les pages,
+    // Provisoire (dev) : seul le profil @anicroche, sélectionné, modifie les pages,
     // en attendant les rôles d'utilisateurs
-    $est_gerant_anicroche = async () =>
-    {
-        if (!$context.compte)
-            return false
-
-        const profil = await $search_one('profil',
-            `
-            #identifiant = anicroche
-          & #gerants.id  = $id_compte
-            `,
-            { $id_compte: $context.compte.id }
-        )
-
-        return !!profil
-    }
+    $est_gerant_anicroche = () => $context.profil?.identifiant === 'anicroche'
 
     $exiger_gerant_anicroche = async () =>
     {
         await $exiger_compte()
 
-        if (!(await $est_gerant_anicroche()))
+        if (!$est_gerant_anicroche())
             return $indicate(403, 'Accès refusé')
     }
 

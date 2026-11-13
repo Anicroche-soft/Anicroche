@@ -1,2 +1,3 @@
-nom    : Apicroche
-langue : fr
+nom          : Apicroche
+langue       : fr
+cors_headers : [ X-Profil ]

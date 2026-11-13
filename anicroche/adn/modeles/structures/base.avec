@@ -11,6 +11,10 @@
     {
         if ($jeton_acces)
             options.headers['Authorization'] = `Bearer ${$jeton_acces}`
+
+        // L API ne tient compte que du profil sélectionné
+        if ($profil?.id)
+            options.headers['X-Profil'] = $profil.id
     })
 
     $add_action('post_requested', async (data, options) =>
