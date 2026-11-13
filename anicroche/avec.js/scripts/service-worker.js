@@ -3,7 +3,7 @@
  * Gère le caching et le mode hors-ligne
  */
 
-const VERSION = 'v12'
+const VERSION = 'v13'
 const CACHE_ASSETS = `${VERSION}-assets`
 
 const ASSETS_A_CACHER = [

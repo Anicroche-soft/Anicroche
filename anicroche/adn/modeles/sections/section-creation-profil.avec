@@ -10,6 +10,9 @@
     
     $type = $options.length < 5 ? 'racine' : 'derive'
 
+    // Figé au montage : $compte est mis à jour après la création, pendant la transition de sortie
+    $choix_type_visible = $compte.is_gerant_of_profils.length > 0 && $options.length < 5
+
     $mettre_a_jour_type = () =>
     {
         $type = $node.value
@@ -62,7 +65,7 @@ section [creation-profil, centree]
             @if [$erreur_creation_profil]
                 erreur-formulaire
                     "$erreur_creation_profil"
-            @if [_ $compte.is_gerant_of_profils > 0 & _ $options < 5]
+            @if [$choix_type_visible]
                 choix-unique [
                     "Type de profil", type
                     $choix : [
