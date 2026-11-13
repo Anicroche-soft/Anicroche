@@ -248,7 +248,9 @@ const extraire_params_route = (chemin_route, url) =>
             const nom_param = segment_route.slice(1)
             if (!nom_param)
                 return null
-            params[nom_param] = decodeURIComponent(segment_url)
+            // Un segment vide ne peut pas figurer dans une adresse : il s'écrit `-`
+            const valeur = decodeURIComponent(segment_url)
+            params[nom_param] = valeur === '-' ? '' : valeur
             continue
         }
 

@@ -4,227 +4,97 @@
 
 @fields [
     {
-        name : id
-        type : char
-        size : 1-48
-        rule : "$type != page | $id ~= /^(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/"
+        name         : id
+        type         : char
+        size         : 1-48
+        rule         : "$type != page | $id ~= /^(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/"
+        can_create   : ':)'
+        can_search   : ':)'
+        prior_create : $verifier_creation_anicroche($values)
     }
 
     {
-        name : type
-        type : page/
-    }
-
-    {
-        name   : textes
-        key    : id
-        count  : N-N
-        fields : [
-            { name : role , type : char , size : 1-32 }
-        ]
+        name       : type
+        type       : page/
+        can_create : ':)'
+        can_search : ':)'
     }
 
     {
         name  : versions
         count : 0-N
     }
+
+    {
+        name  : textes
+        count : 0-N
+    }
 ]
 
-@routes [
-    {
-        path   : "/anicroche/:id"
-        method : get
-        action : $obtenir_anicroche($request)
-    }
-
-    {
-        path   : /anicroche/source
-        action : $enregistrer_source_anicroche($body)
-    }
-
-    {
-        path   : /anicroche/publication
-        action : $publier_anicroche($body)
-    }
+# Seules les anicroches qui ont une version publiée sont visibles ; chacune est complétée
+# par sa version en vigueur et ses sources
+@rules [
+    restrict_search : "#versions.date_publication <= now"
+    post_search     : $completer_anicroches($results)
 ]
 
 @script [
-    // Quel que soit son type : le site choisit ensuite comment l afficher
-    $obtenir_anicroche = async ($request) =>
-    {
-        const anicroche = await $lire_anicroche($request.params.id)
-
-        if (!anicroche)
-            return $indicate(404, "Anicroche introuvable")
-
-        return $indicate(200, "Anicroche récupérée", anicroche)
-    }
-
-    // Ajoute ou remplace une source dans le brouillon (créé si besoin).
-    // Seules les pages sont modifiables pour l instant, par les gérants de @anicroche
-    $enregistrer_source_anicroche = async ($body) =>
+    // Seules les pages existent pour l instant : elles sont réservées aux gérants de @anicroche
+    $verifier_creation_anicroche = async ($values) =>
     {
         await $exiger_gerant_anicroche()
 
-        const id_anicroche = $body.id_anicroche
-        const role    = $body.role
-        const contenu = $body.contenu
-        const langue  = $body.langue ?? $langue_preferee().langue
-        const region  = $body.region ?? $langue_preferee().region
-
-        if (!id_anicroche || !role || typeof contenu !== 'string')
-            return $indicate(400, "Corps incomplet")
-
-        const page = await $search_one('anicroche',
-            `
-            #id   = $id_anicroche
-          & #type = page
-            `,
-            { $id_anicroche: id_anicroche }
-        )
-
-        if (!page)
-            return $indicate(404, "Page introuvable")
-
-        const brouillon = await $obtenir_brouillon(id_anicroche)
-
-        const lien = await $search_one('texte_anicroche',
-            `
-            #id_anicroche = $id_anicroche
-          & #role         = $role
-            `,
-            { $id_anicroche: id_anicroche, $role: role }
-        )
-
-        if (!lien)
-        {
-            const texte = await $create_one('texte', {
-                langue,
-                region,
-                version : brouillon.numero,
-                contenu
-            })
-
-            await $create_one('texte_anicroche', {
-                id_anicroche : id_anicroche,
-                id_texte     : texte.id,
-                role
-            })
-
-            return $indicate(201, "Source ajoutée au brouillon", { version: brouillon.numero })
-        }
-
-        const valeurs = {
-            $id      : lien.id_texte,
-            $langue  : langue,
-            $region  : region,
-            $version : brouillon.numero
-        }
-
-        const existante = await $search_one('texte',
-            `
-            #id      = $id
-          & #langue  = $langue
-          & #region  = $region
-          & #version = $version
-            `,
-            valeurs
-        )
-
+        const existante = await $search_one('anicroche', `#id = $id`, { $id: $values.id })
         if (existante)
-            await $update_one('texte',
-                `
-                #id      = $id
-              & #langue  = $langue
-              & #region  = $region
-              & #version = $version
-                `,
-                { contenu },
-                valeurs
-            )
-        else
-            await $create_one('texte', {
-                id      : lien.id_texte,
-                langue,
-                region,
-                version : brouillon.numero,
-                contenu
-            })
-
-        return $indicate(200, "Source enregistrée dans le brouillon", { version: brouillon.numero })
+            return $indicate(409, "Identifiant déjà utilisé")
     }
 
-    // Publie le brouillon, maintenant ou à une date future
-    $publier_anicroche = async ($body) =>
+    // Complète chaque anicroche trouvée par la route automatique de recherche avec sa version
+    // en vigueur et une source par rôle :
+    // - une source non remplacée par une version plus récente reste valable
+    // - préférence de langue : langue et région préférées, puis langue seule, puis sans langue
+    $completer_anicroches = async ($results) =>
     {
-        await $exiger_gerant_anicroche()
+        const { langue, region } = $langue_preferee()
+        const preferences = [ [ langue, region ], [ langue, '' ], [ '', '' ] ]
+        const rang = (texte) =>
+        {
+            const index = preferences.findIndex(([l, r]) => l === texte.langue && r === texte.region)
+            return index < 0 ? preferences.length : index
+        }
 
-        if (!$body.id_anicroche)
-            return $indicate(400, "Corps incomplet")
+        for (const anicroche of $results)
+        {
+            const version = await $version_en_vigueur(anicroche.id)
+            const textes  = version
+                ? await $search_all('textes',
+                    `
+                    #id_anicroche = $id
+                  & #version     <= $numero
+                    `,
+                    { $id: anicroche.id, $numero: version.numero }
+                )
+                : []
 
-        const maintenant = new Date()
-        const date = $body.date_publication ? new Date($body.date_publication) : maintenant
+            const sources = {}
+            for (const texte of textes)
+            {
+                const actuelle = sources[texte.role]
+                const meilleure = !actuelle
+                    || rang(texte) < rang(actuelle)
+                    || (rang(texte) === rang(actuelle) && texte.version > actuelle.version)
 
-        if (Number.isNaN(date.getTime()))
-            return $indicate(400, "Date de publication invalide")
+                if (meilleure)
+                    sources[texte.role] = texte
+            }
 
-        // Une date passée réécrirait l'historique (acceptations des conditions déjà enregistrées)
-        if (date < maintenant)
-            return $indicate(422, "La date de publication ne peut pas être passée")
-
-        const brouillon = await $search_one('version',
-            `
-            #id_anicroche     = $id_anicroche
-          & #date_publication = null
-            `,
-            { $id_anicroche: $body.id_anicroche }
-        )
-
-        if (!brouillon)
-            return $indicate(404, "Aucun brouillon à publier")
-
-        const sources = await $search_all('textes',
-            `
-            #version                   = $numero
-          & #is_texte_of_anicroches.id = $id_anicroche
-            `,
-            { $numero: brouillon.numero, $id_anicroche: $body.id_anicroche }
-        )
-
-        if (!sources.length)
-            return $indicate(422, "Le brouillon ne contient aucune source")
-
-        await $update_one('version',
-            `
-            #id_anicroche = $id_anicroche
-          & #numero       = $numero
-            `,
-            { date_publication: date },
-            { $id_anicroche: $body.id_anicroche, $numero: brouillon.numero }
-        )
-
-        return $indicate(200, "Version publiée", {
-            version          : brouillon.numero,
-            date_publication : date
-        })
-    }
-
-    // Brouillon de l anicroche : dernière version si elle n'a pas de date de publication,
-    // sinon une nouvelle version
-    $obtenir_brouillon = async (id_anicroche) =>
-    {
-        const derniere = await $search_one('version',
-            `#id_anicroche = $id_anicroche`,
-            { $id_anicroche: id_anicroche },
-            { order: 'numero', dir: 'desc' }
-        )
-
-        if (derniere && !derniere.date_publication)
-            return derniere
-
-        return await $create_one('version', {
-            id_anicroche : id_anicroche,
-            numero       : (derniere?.numero ?? 0) + 1
-        })
+            anicroche.version          = version?.numero ?? null
+            anicroche.date_publication = version?.date_publication ?? null
+            anicroche.sources          = Object.fromEntries(Object.entries(sources).map(([role, texte]) => [role, {
+                langue  : texte.langue,
+                region  : texte.region,
+                contenu : texte.contenu
+            }]))
+        }
     }
 ]

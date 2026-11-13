@@ -1,36 +1,115 @@
 @name [ textes, texte ]
 
-@primary [ id, langue, region, version ]
+# Adresse d un texte : /texte/<anicroche>/<role>/<version>/<langue>/<region>
+# (une langue ou une région vide s écrit -)
+@primary [ id_anicroche, role, version, langue, region ]
 
 @fields [
+    # POST /texte ajoute une source au brouillon d une anicroche : aucun texte n existe
+    # sans son anicroche
     {
-        name    : id
-        type    : char
-        size    : 27
-        default : auto
+        name         : id_anicroche
+        type         : char
+        size         : 1-48
+        can_create   : ':)'
+        prior_create : $verifier_source($values)
     }
 
     {
-        name : langue
-        type : char
-        size : 0-3
-        rule : "$langue ~= /^([a-z]{2,3})?$/"
+        name       : role
+        type       : char
+        size       : 1-32
+        can_create : ':)'
     }
 
     {
-        name : region
-        type : char
-        size : 0-2
-        rule : "$region ~= /^([A-Z]{2})?$/"
+        name       : version
+        type       : int
+        can_create : ':)'
     }
 
     {
-        name : version
-        type : int
+        name       : langue
+        type       : char
+        size       : 0-3
+        rule       : "$langue ~= /^([a-z]{2,3})?$/"
+        can_create : ':)'
     }
 
     {
-        name : contenu
-        type : text
+        name       : region
+        type       : char
+        size       : 0-2
+        rule       : "$region ~= /^([A-Z]{2})?$/"
+        can_create : ':)'
+    }
+
+    # PATCH /texte/... { contenu } corrige une source, tant que sa version est un brouillon
+    {
+        name         : contenu
+        type         : text
+        can_create   : ':)'
+        can_update   : ':)'
+        prior_update : $verifier_modification_source($request)
+    }
+]
+
+@script [
+    // Roles autorisés par type d anicroche : une page a exactement un texte
+    const ROLES = { page: ['contenu'] }
+
+    // Le brouillon d une anicroche est sa dernière version, si elle n a pas de date de publication
+    const lire_brouillon = async (id_anicroche) =>
+    {
+        const derniere = await $search_one('version',
+            `#id_anicroche = $id`,
+            { $id: id_anicroche },
+            { order: 'numero', dir: 'desc' }
+        )
+        return derniere && !derniere.date_publication ? derniere : null
+    }
+
+    $verifier_source = async ($values) =>
+    {
+        await $exiger_gerant_anicroche()
+
+        const anicroche = await $search_one('anicroche', `#id = $id`, { $id: $values.id_anicroche })
+        if (!anicroche)
+            return $indicate(404, "Anicroche introuvable")
+
+        if (!(ROLES[anicroche.type] ?? []).includes($values.role))
+            return $indicate(422, `Rôle invalide pour une anicroche de type ${anicroche.type}`)
+
+        const brouillon = await lire_brouillon($values.id_anicroche)
+        if (!brouillon || brouillon.numero !== Number($values.version))
+            return $indicate(422, "La version doit être le brouillon de l'anicroche")
+
+        const existante = await $search_one('texte',
+            `
+            #id_anicroche = $id_anicroche
+          & #role         = $role
+          & #version      = $version
+          & #langue       = $langue
+          & #region       = $region
+            `,
+            {
+                $id_anicroche : $values.id_anicroche,
+                $role         : $values.role,
+                $version      : Number($values.version),
+                $langue       : $values.langue,
+                $region       : $values.region
+            }
+        )
+        if (existante)
+            return $indicate(409, "Cette source existe déjà : la modifier avec PATCH")
+    }
+
+    $verifier_modification_source = async ($request) =>
+    {
+        await $exiger_gerant_anicroche()
+
+        const brouillon = await lire_brouillon($request.params.id_anicroche)
+        if (!brouillon || brouillon.numero !== Number($request.params.version))
+            return $indicate(422, "Seule une source du brouillon peut être modifiée")
     }
 ]

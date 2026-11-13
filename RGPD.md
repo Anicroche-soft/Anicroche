@@ -254,7 +254,13 @@ Les conditions d'utilisation, la politique de confidentialité et les mentions l
 - **une version n'est jamais publiée avec une date passée** (l'API le refuse), car elle changerait après coup ce que les utilisateurs ont accepté ;
 - **une page légale n'est jamais supprimée** : la base l'empêche de toute façon tant qu'elle a des versions.
 
-**Publier une page.** Un gérant du profil `@anicroche` dépose le texte dans un brouillon (`POST /anicroche/source`), puis le publie (`POST /anicroche/publication`), immédiatement ou à une date future. Le brouillon reste invisible jusqu'à sa publication.
+**Publier une page.** Avec un compte gérant du profil `@anicroche`, par les routes automatiques de l'API :
+
+1. `POST /version { id_anicroche }` ouvre un brouillon et renvoie son `numero` ;
+2. `POST /texte { id_anicroche, role : contenu, version, langue, region, contenu }` y dépose le texte (`PATCH /texte/<id_anicroche>/contenu/<version>/<langue>/<region> { contenu }` le corrige tant que la version n'est pas publiée ; une langue ou une région vide s'écrit `-`) ;
+3. `PATCH /version/<id_anicroche>/<numero> { date_publication }` publie le brouillon, immédiatement (`"now"`) ou à une date future.
+
+Le brouillon reste invisible jusqu'à sa publication. Dans une nouvelle version, seules les sources qui changent sont à déposer : les autres restent celles des versions précédentes.
 
 **Avant le lancement.** En production, l'inscription est refusée (`503`) tant qu'aucune version des conditions d'utilisation n'est publiée : publier les trois pages avant d'ouvrir le service.
 

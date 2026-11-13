@@ -3,14 +3,106 @@
 @primary [ id_anicroche, numero ]
 
 @fields [
+    # POST /version { id_anicroche } crée le brouillon suivant de l anicroche
+    {
+        name         : id_anicroche
+        type         : char
+        size         : 1-48
+        can_create   : ':)'
+        prior_create : $preparer_brouillon($values)
+        post_create  : $retourner_numero($values)
+    }
+
     {
         name : numero
         type : int
     }
 
+    # PATCH /version/:id_anicroche/:numero { date_publication } publie le brouillon :
+    # maintenant ("now") ou à une date future
     {
-        name  : date_publication
-        type  : datetime
-        count : 0-1
+        name         : date_publication
+        type         : datetime
+        count        : 0-1
+        can_update   : ':)'
+        prior_update : "$verifier_publication($values, $request)"
+    }
+]
+
+# Une version publiée ne change plus : seul un brouillon peut être modifié
+@rules [
+    restrict_update : "#date_publication = null"
+]
+
+@script [
+    $preparer_brouillon = async ($values) =>
+    {
+        await $exiger_gerant_anicroche()
+
+        const anicroche = await $search_one('anicroche',
+            `
+            #id   = $id
+          & #type = page
+            `,
+            { $id: $values.id_anicroche }
+        )
+
+        if (!anicroche)
+            return $indicate(404, "Page introuvable")
+
+        const derniere = await $search_one('version',
+            `#id_anicroche = $id`,
+            { $id: $values.id_anicroche },
+            { order: 'numero', dir: 'desc' }
+        )
+
+        if (derniere && !derniere.date_publication)
+            return $indicate(409, "Un brouillon existe déjà", { numero: derniere.numero })
+
+        $values.numero = (derniere?.numero ?? 0) + 1
+    }
+
+    $retourner_numero = ($values) =>
+    {
+        $add_to_data('numero', $values.numero)
+    }
+
+    $verifier_publication = async ($values, $request) =>
+    {
+        await $exiger_gerant_anicroche()
+
+        if (!('date_publication' in $values))
+            return
+
+        // Une date passée réécrirait l historique : les acceptations des conditions déjà
+        // enregistrées désigneraient une autre version. Une minute de marge couvre le délai
+        // de la requête ; "now" publie immédiatement
+        if ($values.date_publication !== 'now')
+        {
+            const date = new Date($values.date_publication)
+
+            if (Number.isNaN(date.getTime()))
+                return $indicate(422, "Date de publication invalide")
+
+            if (date < new Date(Date.now() - 60 * 1000))
+                return $indicate(422, "La date de publication ne peut pas être passée")
+
+            $values.date_publication = date
+        }
+
+        const { id_anicroche, numero } = $request.params
+
+        const contenu = await $search_one('texte',
+            `
+            #id_anicroche = $id_anicroche
+          & #role         = contenu
+          & #version      = $numero
+          & #contenu     != ''
+            `,
+            { $id_anicroche: id_anicroche, $numero: Number(numero) }
+        )
+
+        if (!contenu)
+            return $indicate(422, "Le brouillon ne contient pas de contenu")
     }
 ]

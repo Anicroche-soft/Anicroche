@@ -18,6 +18,8 @@ Toutes les routes répondent au [format JSON commun](demarrage.md#format-des-ré
 
 `:<clef>` reprend les champs de la clef primaire (`/coordonnee/:hachage_coordonnee`, ou plusieurs segments pour une clef composite). Pour un champ haché, l'URL contient la valeur en clair.
 
+Une valeur vide (`''`) s'écrit `-` dans l'adresse : `PATCH /texte/accueil/contenu/1/fr/-` désigne la région `''`. Cette règle vaut pour tous les paramètres `:nom`, y compris ceux des [routes déclarées](#routes-déclarées--routes) ; une valeur réellement égale à `-` ne peut donc pas être désignée dans une adresse.
+
 ### Expressions d'autorisation
 
 Les propriétés `can_*` sont des expressions [augure](magasin.md#expressions-augure) qui doivent être vraies pour autoriser l'opération (sinon : `403 Accès refusé`). Elles ont accès à :
