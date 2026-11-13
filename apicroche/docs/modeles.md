@@ -42,19 +42,21 @@ Un modèle est une suite d'**annotations** commençant par `@`, suivies d'une va
 | [`@rules`](routes.md#règles-du-modèle--rules) | Règles d'accès et hooks des routes automatiques |
 | [`@routes`](routes.md#routes-déclarées--routes) | Routes sur mesure |
 | [`@script`](scripts.md) | Fonctions JavaScript du modèle |
-| [`@actions`](scripts.md#indexsans-et-actions) | Actions globales (uniquement dans `index.sans`) |
+| [`@actions`](scripts.md#fichiers-génériques-et-actions) | Actions globales (uniquement dans un fichier générique, sans `@name`) |
+| [`@limits`](routes.md#limites-par-ip--limits) | Limites de requêtes (uniquement dans un fichier générique, sans `@name`) |
 
 ---
 
 ## `@name`
 
-Définit le nom de la table et, optionnellement, son **nom d'entrée** (le nom au singulier d'une ligne de la table).
+Définit le nom de la table et, optionnellement, son **nom d'entrée** (le nom au singulier d'une ligne de la table). C'est `@name` qui fait d'un fichier un modèle de table : un fichier sans `@name` est [générique](scripts.md#fichiers-génériques-et-actions), et ses éventuels `@primary`, `@unique`, `@fields` et `@rules` sont ignorés (avec un avertissement).
 
 ```
 @name [ comptes, compte ]
+@name comptes
 ```
 
-- Le premier élément est le nom de la table. Si `@name` est absent, le nom du fichier `.sans` (sans extension) est utilisé.
+- Le premier élément est le nom de la table (lettres, chiffres et `_`). Le nom du fichier n'a pas d'importance.
 - Le second élément est le nom d'entrée. S'il est absent, le nom de la table est utilisé.
 
 Le nom d'entrée sert à nommer :
@@ -451,7 +453,7 @@ Le résultat d'une projection est une liste, sauf pour le sens direct d'une rela
 
 Avec ce modèle :
 
-- `GET /profils` et `GET /profil/:id` ne répondent qu'à un utilisateur connecté (`$context.compte` est rempli par une action `prior_respond`, voir [Scripts](scripts.md#indexsans-et-actions)) et ne renvoient que les profils qu'il gère ;
+- `GET /profils` et `GET /profil/:id` ne répondent qu'à un utilisateur connecté (`$context.compte` est rempli par une action `prior_respond`, voir [Scripts](scripts.md#fichiers-génériques-et-actions)) et ne renvoient que les profils qu'il gère ;
 - `POST /profil` crée un profil à partir de `identifiant` et `pseudonyme` ;
 - `PATCH /profil/:id` modifie le `pseudonyme` d'un profil géré par l'utilisateur ;
 - `DELETE /profil/:id` supprime un profil géré par l'utilisateur (ses lignes de `gerants_profils` sont supprimées en cascade) ;

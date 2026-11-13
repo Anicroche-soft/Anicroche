@@ -20,7 +20,7 @@ Le bloc `@script` d'un modèle contient du JavaScript. Les fonctions déclarées
 
 - Seules les déclarations de la forme `$nom = (…) =>` sont exportées ; une fonction déclarée autrement reste utilisable à l'intérieur du script mais ne peut pas être appelée par une route ou un hook.
 - Le script est évalué à chaque requête : les variables (`$body`, `$request`, `$context`…) et fonctions ci-dessous désignent toujours celles de la requête en cours.
-- Les fonctions du `@script` d'`index.sans` sont accessibles depuis les scripts de tous les modèles, mais une route ou un hook d'un modèle ne peut appeler que les fonctions du `@script` de son propre fichier : pour utiliser une fonction d'`index.sans`, l'appeler depuis une fonction du modèle.
+- Les fonctions des fichiers génériques (sans `@name`) sont accessibles depuis les scripts de tous les modèles, mais une route ou un hook d'une table ne peut appeler que les fonctions du `@script` de son propre fichier : pour utiliser une fonction générique, l'appeler depuis une fonction du modèle.
 - Au démarrage, sans.js signale chaque route ou hook dont l'action est mal formée ou désigne une fonction absente du `@script` de son fichier (en précisant, le cas échéant, le fichier où elle est définie).
 
 ---
@@ -74,7 +74,7 @@ Envoie la réponse et **interrompt** le traitement (la fonction lève une except
 - `message` : placé dans `message` (succès `2xx`) ou `error` ;
 - `data` : données de la réponse (`{}` par défaut). Si `data` est un objet, les données ajoutées par `$add_to_data` y sont fusionnées.
 
-Les actions [`post_respond`](#indexsans-et-actions) sont exécutées juste avant l'envoi.
+Les actions [`post_respond`](#fichiers-génériques-et-actions) sont exécutées juste avant l'envoi.
 
 ### `$add_to_data`
 
@@ -182,11 +182,12 @@ Renvoie la valeur sous forme de littéral (texte JSON entre guillemets), pour l'
 
 ---
 
-## `index.sans` et `@actions`
+## Fichiers génériques et `@actions`
 
-Le modèle `index.sans` ne crée pas de table. Il peut contenir :
+Un fichier `.sans` sans `@name` (comme `index.sans`) ne crée pas de table. Il peut y en avoir plusieurs, dans n'importe quel sous-dossier : ils sont réunis en un seul ensemble, lus dans l'ordre alphabétique des chemins. Chacun peut contenir :
 
-- un `@script` dont les fonctions sont accessibles depuis tous les modèles ;
+- un `@script` dont les fonctions sont accessibles depuis tous les modèles et depuis les autres fichiers génériques (les déclarations internes, comme `const`, restent propres à leur fichier ; une même fonction `$nom` ne doit être définie que dans un seul fichier) ;
+- des `@limits` ;
 - des `@routes` ;
 - des `@actions`, exécutées au démarrage, autour de chaque requête ou périodiquement.
 

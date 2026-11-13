@@ -416,11 +416,15 @@ const transformer_champ = (champ_brut, champs_dans_unique) =>
     return champ
 }
 
-const transformer_modele = (annotations, nom_fichier) =>
+const transformer_modele = (annotations) =>
 {
-    const name_brut  = Array.isArray(annotations.name) ? annotations.name : null
-    const nom_table  = name_brut?.[0] ?? nom_fichier
-    const nom_entree = name_brut?.[1] ?? null
+    const name_brut  = Array.isArray(annotations.name) ? annotations.name : [annotations.name]
+    const nom_table  = name_brut[0]
+    const nom_entree = name_brut[1] ?? null
+    if (typeof nom_table !== 'string' || !/^\w+$/.test(nom_table))
+        throw new Error(`@name : nom de table attendu, ex. @name [ profils, profil ], ${JSON.stringify(annotations.name)} trouvé`)
+    if (nom_entree !== null && (typeof nom_entree !== 'string' || !/^\w+$/.test(nom_entree)))
+        throw new Error(`@name : nom d'entrée invalide ${JSON.stringify(nom_entree)}`)
 
     const primary            = Array.isArray(annotations.primary) ? annotations.primary : []
     const unique             = (Array.isArray(annotations.unique) ? annotations.unique : []).filter(Array.isArray)
@@ -429,8 +433,6 @@ const transformer_modele = (annotations, nom_fichier) =>
     const rules_brutes       = annotations.rules ?? null
     const routes             = Array.isArray(annotations.routes) ? annotations.routes : []
     const script             = typeof annotations.script === 'string' ? annotations.script : null
-    const actions            = annotations.actions ?? null
-    const limits             = Array.isArray(annotations.limits) ? annotations.limits : null
 
     const champs    = []
     const relations = []
@@ -496,12 +498,6 @@ const transformer_modele = (annotations, nom_fichier) =>
         script,
         _relations: relations
     }
-
-    if (actions !== null)
-        modele.actions = actions
-
-    if (limits !== null)
-        modele.limits = limits
 
     return modele
 }
@@ -680,6 +676,10 @@ const resoudre_relations = (tables) =>
 
 // ─── Chargement ───────────────────────────────────────────────────────────────
 
+// Un fichier avec @name décrit une table ; les autres sont génériques
+const ANNOTATIONS_TABLE     = ['primary', 'unique', 'fields', 'rules']
+const ANNOTATIONS_GENERIQUE = ['actions', 'limits']
+
 const fichiers = new WeakMap()
 
 const situer = (contenu, pos) =>
@@ -691,7 +691,115 @@ const situer = (contenu, pos) =>
 }
 
 export const lister_fonctions_script = (script) =>
-    [...(script ?? '').matchAll(/(\$\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/g)].map(m => m[1])
+    [...new Set([...(script ?? '').matchAll(/(\$\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/g)].map(m => m[1]))]
+
+const lire_generique = (annotations, fichier) =>
+{
+    for (const clef of ANNOTATIONS_TABLE)
+        if (annotations[clef] !== undefined)
+            console.log(`/!\\ \`${fichier}\` : @${clef} ignoré, ce fichier n'a pas de @name (fichier générique)`)
+
+    const liste = (clef) =>
+    {
+        const valeur = annotations[clef]
+        if (valeur === undefined)
+            return []
+        if (Array.isArray(valeur))
+            return valeur
+        console.log(`/!\\ \`${fichier}\` : @${clef} ignoré, une liste [ … ] est attendue`)
+        return []
+    }
+
+    return {
+        fichier,
+        script : typeof annotations.script === 'string' ? annotations.script : null,
+        actions: liste('actions'),
+        routes : liste('routes'),
+        limits : liste('limits')
+    }
+}
+
+const lire_dossier = (dossier, racine, tables, generiques) =>
+{
+    let entrees
+    try
+    {
+        entrees = fs.readdirSync(dossier, { withFileTypes: true })
+    }
+    catch
+    {
+        console.log(`/!\\ dossier introuvable : ${dossier}`)
+        return
+    }
+
+    entrees.sort((a, b) => a.name.localeCompare(b.name))
+
+    for (const entree of entrees)
+    {
+        const chemin = path.join(dossier, entree.name)
+        if (entree.isDirectory())
+        {
+            lire_dossier(chemin, racine, tables, generiques)
+            continue
+        }
+        if (!entree.isFile() || !entree.name.endsWith('.sans'))
+            continue
+
+        const fichier = path.relative(racine, chemin).split(path.sep).join('/')
+        let contenu
+        try
+        {
+            contenu = fs.readFileSync(chemin, 'utf-8')
+        }
+        catch (err)
+        {
+            console.log(`/!\\ erreur lecture \`${fichier}\` : ${err.message}`)
+            continue
+        }
+
+        try
+        {
+            const annotations = analyser_sans(contenu)
+            if (annotations.name === undefined)
+            {
+                generiques.push(lire_generique(annotations, fichier))
+                continue
+            }
+
+            for (const clef of ANNOTATIONS_GENERIQUE)
+                if (annotations[clef] !== undefined)
+                    console.log(`/!\\ \`${fichier}\` : @${clef} ignoré, réservé aux fichiers génériques (sans @name)`)
+
+            const table = transformer_modele(annotations)
+            const autre = tables.find(t => t.name === table.name || (t.entry_name ?? t.name) === (table.entry_name ?? table.name))
+            if (autre)
+            {
+                console.log(`/!\\ modèle ignoré : \`${fichier}\` déclare la table \`${table.name}\`, dont le nom ou l'entrée est déjà pris par \`${fichiers.get(autre)}\``)
+                continue
+            }
+            fichiers.set(table, fichier)
+            tables.push(table)
+        }
+        catch (err)
+        {
+            console.log(`/!\\ modèle invalide : \`${fichier}\`${situer(contenu, err.pos)} : ${err.message}`)
+        }
+    }
+}
+
+// Les fichiers génériques forment un seul ensemble : chaque @script est placé dans son propre
+// bloc, pour que ses déclarations internes (const…) ne se heurtent pas à celles des autres
+const fusionner_generiques = (generiques) =>
+{
+    const scripts = generiques.filter(g => g.script)
+    return {
+        name   : 'index',
+        script : scripts.length ? scripts.map(g => `{\n${g.script}\n}`).join('\n') : null,
+        actions: generiques.flatMap(g => g.actions),
+        routes : generiques.flatMap(g => g.routes),
+        limits : generiques.flatMap(g => g.limits)
+    }
+}
 
 const lister_hooks_modele = (table) =>
 {
@@ -708,33 +816,42 @@ const lister_hooks_modele = (table) =>
     return hooks
 }
 
-const lister_hooks_index = (index) =>
+const lister_hooks_generique = (generique) =>
 {
     const hooks = []
-    for (const action of Array.isArray(index.actions) ? index.actions : [])
+    for (const action of generique.actions)
         for (const clef of ['prior_run', 'periodically', 'prior_respond', 'post_respond'])
             if (action?.[clef])
                 hooks.push({ action: action[clef], etiquette: `${clef} de @actions` })
-    for (const route of index.routes)
-        hooks.push({ action: route.action, etiquette: `action de la route ${route.path}` })
+    for (const route of generique.routes)
+        hooks.push({ action: route?.action, etiquette: `action de la route ${route?.path}` })
     return hooks
 }
 
-// Un hook n'appelle que les fonctions du @script de son propre fichier : le signaler au démarrage
-// plutôt qu'à la première requête concernée
-const verifier_hooks = (tables, index) =>
+// Un hook de table n'appelle que les fonctions du @script de son fichier, un hook générique
+// celles de tous les fichiers génériques : le signaler au démarrage plutôt qu'à la première requête
+const verifier_hooks = (tables, generiques) =>
 {
-    const fonctions_index = new Set(lister_fonctions_script(index?.script))
-    const proprietaires   = new Map()
+    const origines_generiques = new Map()
+    for (const generique of generiques)
+        for (const nom of lister_fonctions_script(generique.script))
+        {
+            if (origines_generiques.has(nom))
+                console.log(`/!\\ \`${generique.fichier}\` : ${nom} est déjà définie dans \`${origines_generiques.get(nom)}\``)
+            else
+                origines_generiques.set(nom, generique.fichier)
+        }
+
+    const origines_tables = new Map()
     for (const table of tables)
         for (const nom of lister_fonctions_script(table.script))
-            proprietaires.set(nom, fichiers.get(table))
+            origines_tables.set(nom, fichiers.get(table))
 
-    const verifier = (nom_fichier, hooks, fonctions, ailleurs) =>
+    const verifier = (fichier, hooks, fonctions, ailleurs, portee) =>
     {
         for (const { action, etiquette } of hooks)
         {
-            const prefixe = `/!\\ \`${nom_fichier}.sans\`, ${etiquette}`
+            const prefixe = `/!\\ \`${fichier}\`, ${etiquette}`
             const match   = typeof action === 'string' ? /^(\$\w+)\(([^)]*)\)$/.exec(action.trim()) : null
             if (!match)
             {
@@ -745,81 +862,35 @@ const verifier_hooks = (tables, index) =>
                 continue
             const autre = ailleurs(match[1])
             console.log(autre
-                ? `${prefixe} : ${match[1]} est définie dans le @script de \`${autre}.sans\`, or un hook n'appelle que les fonctions du @script de son propre fichier${autre === 'index' ? ' (l\'appeler depuis une fonction de ce @script)' : ''}`
-                : `${prefixe} : fonction ${match[1]} introuvable dans le @script de \`${nom_fichier}.sans\``)
+                ? `${prefixe} : ${match[1]} est définie dans \`${autre.fichier}\`, or ${portee}${autre.generique ? ' (l\'appeler depuis une fonction de ce @script)' : ''}`
+                : `${prefixe} : fonction ${match[1]} introuvable (${portee})`)
         }
     }
+
+    const dans_generiques = (nom) => origines_generiques.has(nom) ? { fichier: origines_generiques.get(nom), generique: true } : null
+    const dans_tables     = (nom) => origines_tables.has(nom) ? { fichier: origines_tables.get(nom), generique: false } : null
 
     for (const table of tables)
         verifier(fichiers.get(table), lister_hooks_modele(table), new Set(lister_fonctions_script(table.script)),
-            nom => fonctions_index.has(nom) ? 'index' : proprietaires.get(nom))
+            nom => dans_generiques(nom) ?? dans_tables(nom),
+            'un hook de table n\'appelle que les fonctions du @script de son propre fichier')
 
-    if (index)
-        verifier('index', lister_hooks_index(index), fonctions_index, nom => proprietaires.get(nom))
-}
-
-const lire_dossier = (dossier, tables) =>
-{
-    let entrees
-    try
-    {
-        entrees = fs.readdirSync(dossier, { withFileTypes: true })
-    }
-    catch
-    {
-        console.log(`/!\\ dossier introuvable : ${dossier}`)
-        return
-    }
-
-    for (const entree of entrees)
-    {
-        const chemin = path.join(dossier, entree.name)
-        if (entree.isDirectory())
-        {
-            lire_dossier(chemin, tables)
-            continue
-        }
-        if (!entree.isFile() || !entree.name.endsWith('.sans'))
-            continue
-
-        const nom_fichier = entree.name.slice(0, -5)
-        let contenu
-        try
-        {
-            contenu = fs.readFileSync(chemin, 'utf-8')
-        }
-        catch (err)
-        {
-            console.log(`/!\\ erreur lecture \`${entree.name}\` : ${err.message}`)
-            continue
-        }
-
-        try
-        {
-            const table = transformer_modele(analyser_sans(contenu), nom_fichier)
-            fichiers.set(table, nom_fichier)
-            tables.push(table)
-        }
-        catch (err)
-        {
-            console.log(`/!\\ modèle invalide : \`${entree.name}\`${situer(contenu, err.pos)} : ${err.message}`)
-        }
-    }
+    const fonctions_generiques = new Set(origines_generiques.keys())
+    for (const generique of generiques)
+        verifier(generique.fichier, lister_hooks_generique(generique), fonctions_generiques, dans_tables,
+            'un hook générique n\'appelle que les fonctions des fichiers génériques (sans @name)')
 }
 
 export const charger_modeles = (dossier) =>
 {
-    const tables      = []
-    const noms_connus = new Set()
-    lire_dossier(dossier, tables, noms_connus)
+    const tables     = []
+    const generiques = []
+    lire_dossier(dossier, dossier, tables, generiques)
     const relations = resoudre_relations(tables)
 
-    let index = null
-    const index_pos = tables.findIndex(table => table.name === 'index')
-    if (index_pos !== -1)
-        index = tables.splice(index_pos, 1)[0]
+    verifier_hooks(tables, generiques)
 
-    verifier_hooks(tables, index)
+    const index = generiques.length ? fusionner_generiques(generiques) : null
 
-    return { tables, relations, noms_connus, index }
+    return { tables, relations, noms_connus: new Set(), index }
 }

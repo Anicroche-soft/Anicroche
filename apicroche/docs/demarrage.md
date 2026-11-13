@@ -12,16 +12,18 @@ adn/
 ├── images/            ← images servies sous /systeme/images/
 ├── fontes/            ← polices servies sous /systeme/fontes/
 └── modeles/           ← fichiers .sans (organisables librement en sous-dossiers)
-    └── index.sans     ← modèle spécial : actions globales, routes et fonctions partagées
+    ├── comptes.sans   ← modèle de table (avec @name)
+    └── index.sans     ← fichier générique (sans @name) : actions globales, routes et fonctions partagées
 sans.js/               ← moteur du cadriciel
 depot/                 ← fichiers servis publiquement sous /depot/
 ```
 
-Les modèles peuvent être rangés dans des sous-dossiers à la convenance de l'auteur.
+Les fichiers `.sans` peuvent être rangés dans des sous-dossiers, à n'importe quelle profondeur, et porter n'importe quel nom :
 
-> **Important :** deux modèles ne doivent pas porter le même nom, même s'ils se trouvent dans des dossiers différents.
+- un fichier qui contient [`@name`](modeles.md#name) décrit une **table** ;
+- un fichier sans `@name` est **générique** : il ne crée pas de table et sert à déclarer les [actions globales](scripts.md#fichiers-génériques-et-actions), les [limites](routes.md#limites-par-ip--limits), des routes et des fonctions accessibles depuis tous les scripts. Il peut y en avoir plusieurs : ils sont réunis en un seul ensemble.
 
-Le fichier `index.sans` n'est pas une table : il sert à déclarer les [actions globales](scripts.md#indexsans-et-actions), des routes et des fonctions accessibles depuis tous les scripts.
+> **Important :** deux tables ne doivent pas porter le même nom ni le même nom d'entrée, même si elles sont déclarées dans des dossiers différents : la seconde est ignorée.
 
 ## Le fichier `app.adn`
 

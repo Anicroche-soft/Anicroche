@@ -2,7 +2,7 @@
 
 sans.js génère des routes à partir des propriétés des champs et des règles des modèles, et permet de déclarer des routes sur mesure dans `@routes`.
 
-Toutes les routes répondent au [format JSON commun](demarrage.md#format-des-réponses). Avant chaque route, les actions [`prior_respond`](scripts.md#indexsans-et-actions) d'`index.sans` sont exécutées.
+Toutes les routes répondent au [format JSON commun](demarrage.md#format-des-réponses). Avant chaque route, les actions [`prior_respond`](scripts.md#fichiers-génériques-et-actions) des fichiers génériques sont exécutées.
 
 ---
 
@@ -208,7 +208,7 @@ Récapitulatif des propriétés de `@rules` :
 
 ## Routes déclarées — `@routes`
 
-Un modèle (y compris `index.sans`) peut déclarer des routes sur mesure, traitées par une fonction de son `@script` :
+Un modèle (de table ou générique) peut déclarer des routes sur mesure, traitées par une fonction de son `@script` :
 
 ```
 @routes [
@@ -247,7 +247,7 @@ Les routes déclarées sont prioritaires sur les routes automatiques de même m�
 
 ## Limites par IP — `@limits`
 
-Le bloc `@limits` d'`index.sans` limite le nombre de requêtes qu'une même IP peut envoyer :
+Le bloc `@limits` d'un fichier générique (sans `@name`) limite le nombre de requêtes qu'une même IP peut envoyer :
 
 ```
 @limits [

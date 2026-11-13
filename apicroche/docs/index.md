@@ -19,5 +19,5 @@
 - [Démarrage](demarrage.md) : structure du projet, configuration, variables d'environnement, fichiers statiques
 - [Modèles](modeles.md) : écrire des fichiers `.sans` (champs, types, relations)
 - [Routes](routes.md) : routes automatiques, règles d'accès, hooks, routes déclarées
-- [Scripts](scripts.md) : `@script`, fonctions et variables disponibles, `index.sans` et `@actions`
+- [Scripts](scripts.md) : `@script`, fonctions et variables disponibles, fichiers génériques et `@actions`
 - [Magasin et conditions](magasin.md) : fonctions d'accès aux données, syntaxe des conditions, options

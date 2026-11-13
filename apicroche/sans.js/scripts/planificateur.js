@@ -3,6 +3,7 @@ import cron from 'node-cron'
 import { creer_fonctions_magasin } from './magasin.js'
 import { creer_fonctions_mailer } from './mailer.js'
 import { evaluer } from './augure.js'
+import { lister_fonctions_script } from '../analyseur_sans.js'
 
 const analyser_action = (action) =>
 {
@@ -16,15 +17,18 @@ const analyser_action = (action) =>
 
 const compiler_script = (code_brut, contexte) =>
 {
-    const noms = [...code_brut.matchAll(/(\$\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/g)].map(m => m[1])
+    const noms = lister_fonctions_script(code_brut)
     const export_obj = `return { ${noms.join(', ')} }`
 
     const noms_contexte = Object.keys(contexte)
     const vals_contexte = Object.values(contexte)
 
+    const a_declarer  = noms.filter(nom => !noms_contexte.includes(nom))
+    const declaration = a_declarer.length ? `let ${a_declarer.join(', ')}\n` : ''
+
     try
     {
-        const fabrique = new Function(...noms_contexte, `${code_brut}\n${export_obj}`)
+        const fabrique = new Function(...noms_contexte, `${declaration}${code_brut}\n${export_obj}`)
         return fabrique(...vals_contexte)
     }
     catch (err)

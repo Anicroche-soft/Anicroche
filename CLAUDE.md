@@ -23,8 +23,7 @@ Toute évolution d'un cadriciel visible par son utilisateur (nouvelle instructio
 ### apicroche (sans.js)
 
 - `adn/app.adn` : configuration (format `clef : valeur`)
-- `adn/modeles/*.sans` : un fichier par table (`@primary`, `@unique`, `@fields`, `@rules`, hooks…)
-- `adn/modeles/index.sans` : `@actions` globales (tâches périodiques, hooks `prior_respond` / `post_respond`), `@routes` et `@script`
+- `adn/modeles/**/*.sans` : un fichier avec `@name` décrit une table (`@primary`, `@unique`, `@fields`, `@rules`, hooks…) ; un fichier sans `@name` est générique (comme `index.sans`) : `@actions` globales (tâches périodiques, hooks `prior_respond` / `post_respond`), `@limits`, `@routes` et `@script` partagés
 - `sans.js/scripts/` : `routeur` (routes automatiques et déclarées), `magasin` (fonctions d'accès aux données), `traducteur` (conditions → SQL), `batisseur` (tables, colonnes, clefs étrangères), `augure` (expressions), `limiteur` (limites de requêtes par IP), `planificateur`, `mailer`, `crypto`
 - `depot/` : fichiers déposés (ignoré par git)
 

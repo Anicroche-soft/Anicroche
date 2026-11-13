@@ -1,4 +1,4 @@
-// Limitation du nombre de requêtes par IP : blocs @limits d'index.sans, propriété limit des @routes et $limit des scripts
+// Limitation du nombre de requêtes par IP : blocs @limits des fichiers génériques, propriété limit des @routes et $limit des scripts
 
 const UNITES_MS = {
     s: 1000,

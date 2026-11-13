@@ -449,10 +449,15 @@ const compiler_script = (code_brut, contexte) =>
     const noms_contexte = Object.keys(contexte)
     const vals_contexte = Object.values(contexte)
 
+    // Sans déclaration, `$nom = …` créerait une variable globale, partagée entre les requêtes
+    // simultanées : une fonction appellerait alors la copie liée au $context d'une autre requête
+    const a_declarer  = noms.filter(nom => !noms_contexte.includes(nom))
+    const declaration = a_declarer.length ? `let ${a_declarer.join(', ')}\n` : ''
+
     try
     {
         // eslint-disable-next-line no-new-func
-        const fabrique = new Function(...noms_contexte, `${code_brut}\n${export_obj}`)
+        const fabrique = new Function(...noms_contexte, `${declaration}${code_brut}\n${export_obj}`)
         return fabrique(...vals_contexte)
     }
     catch (err)
