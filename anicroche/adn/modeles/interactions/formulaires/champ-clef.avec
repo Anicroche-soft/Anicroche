@@ -104,6 +104,17 @@
         atteindre_case(elements, index - 1)
     }
 
+    const envoyer_formulaire = (noeud) =>
+    {
+        const formulaire = noeud.form
+        if (!formulaire)
+            return
+        const bouton = Array.from(formulaire.elements).find((element) => element.type === 'submit')
+        if (bouton?.disabled)
+            return
+        formulaire.requestSubmit(bouton)
+    }
+
     $monter_champ_clef = () =>
     {
         const elements = elements_champ_clef($node)
@@ -150,6 +161,13 @@
 
         switch (evenement.key)
         {
+        case 'Enter':
+            // L envoi implicite serait annulé avec la saisie par beforeinput (insertLineBreak).
+            if (evenement.isComposing)
+                break
+            evenement.preventDefault()
+            envoyer_formulaire(noeud)
+            break
         case 'Backspace':
         case 'Delete':
             evenement.preventDefault()
@@ -183,6 +201,8 @@
         const index    = elements.chiffres.indexOf(noeud)
         const type     = evenement.inputType ?? ''
 
+        if (type === 'insertLineBreak')
+            return
         if (type.startsWith('insert'))
         {
             evenement.preventDefault()
