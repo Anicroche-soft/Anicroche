@@ -924,7 +924,11 @@ const construire_conditionnel = (chaine, donnees) =>
                     return
                 }
 
+                // Les dépendances sont relevées à chaque évaluation : avec & et |, une variable
+                // non lue la première fois (court-circuit) doit pouvoir être suivie ensuite
+                definir_noeud_courant(ancre_debut)
                 const nouvelle_branche = evaluer_chaine(chaine, donnees)
+                effacer_noeud_courant()
 
                 if (nouvelle_branche === branche_active) return
 
@@ -1208,7 +1212,9 @@ const construire_texte = (bloc, donnees) =>
                 return
             }
 
+            definir_noeud_courant(noeud)
             noeud.textContent = valoriser(decapsuler(bloc.args[0]), donnees)
+            effacer_noeud_courant()
         })
     }
 
