@@ -335,7 +335,7 @@
                     lien-ancre [/conditions-generales-d-utilisation, $nouvel_onglet : :)]
                         "conditions d'utilisation"
                     "."
-                <p .information>
+                information-formulaire
                     "Vos données sont traitées comme l'explique la "
                     lien-ancre [/politique-de-confidentialite, $nouvel_onglet : :)]
                         "politique de confidentialité"

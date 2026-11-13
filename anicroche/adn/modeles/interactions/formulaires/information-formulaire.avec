@@ -1,0 +1,29 @@
+@style [
+    .information-formulaire {
+        flex-flow: row nowrap;
+        align-items: center;
+
+        border-radius: 0.5rem;
+        padding: 0.5rem 0.75rem;
+
+        --f-fond: var(--c-analogue);
+        --l-ecart: 0.5rem;
+    }
+
+    .information-formulaire > .icone {
+        flex-shrink: 0;
+
+        --c-flux: var(--c-vif);
+    }
+
+    .information-formulaire > p {
+        min-width: 0;
+
+        line-height: 1.4;
+    }
+]
+
+<div .information-formulaire>
+    icone-information
+    <p>
+        @stud
