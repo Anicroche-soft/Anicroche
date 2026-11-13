@@ -92,6 +92,8 @@ Les arguments sont séparés par `,` ou par un retour à la ligne.
 
 Les arguments sont accessibles dans les textes, les expressions et les scripts (`@script`, événements, `@mount`, `@unmount`).
 
+Une valeur `:)`, `:(` ou `:o` (par défaut ou passée à l'appel) arrive dans les scripts sous la forme `true`, `false` ou `null`.
+
 Les arguments sont **en lecture seule** : une affectation sur un argument déclenche une erreur.
 
 En cas de conflit de nom, `@args` est prioritaire sur une variable de scope.

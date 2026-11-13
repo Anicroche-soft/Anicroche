@@ -1,6 +1,6 @@
 import {charger_modele} from './heraut.js'
 import {valoriser} from './scribe.js'
-import {evaluer, evaluer_valeur} from './augure.js'
+import {evaluer, evaluer_valeur, evaluer_valeur_ou_erreur} from './augure.js'
 import {activer_style, desactiver_style} from './decorateur.js'
 import {
     initialiser_sculpteur, executer_script, executer_script_async,
@@ -1640,10 +1640,10 @@ const construire_modele = (bloc, donnees) =>
 
                 const noeud_traceur = {}
                 definir_noeud_courant(noeud_traceur)
-                const valeur_evaluee = evaluer_valeur(valeur_decapsule, donnees)
+                const valeur_evaluee = evaluer_valeur_ou_erreur(valeur_decapsule, donnees)
                 effacer_noeud_courant()
 
-                if (valeur_evaluee !== null && valeur_evaluee !== ':x')
+                if (valeur_evaluee !== ':x')
                 {
                     if (noeud_traceur._avec_deps?.size > 0)
                     {

@@ -1005,6 +1005,19 @@ export const evaluer_valeur = (str, donnees) =>
     }
 }
 
+// Comme evaluer_valeur, mais un échec d'analyse donne :x et non null, qui reste réservé à :o
+export const evaluer_valeur_ou_erreur = (str, donnees) =>
+{
+    try
+    {
+        return evaluer_noeud(parser(tokeniser(str)), donnees)
+    }
+    catch (e)
+    {
+        return ERREUR
+    }
+}
+
 export const evaluer = (str, donnees) =>
 {
     const result = evaluer_valeur(str, donnees)
