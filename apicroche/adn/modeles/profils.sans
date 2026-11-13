@@ -32,6 +32,7 @@
         size : 1-64
 
         can_create : ':)'
+        can_update : "$context.compte"
     }
 
     # Rôle du profil sur le site : appelé à recevoir d autres valeurs
@@ -53,6 +54,10 @@
         ref   : comptes
         count : N-N
     }
+]
+
+@rules [
+    restrict_update : "#gerants.id = $context.compte.id"
 ]
 
 @script [

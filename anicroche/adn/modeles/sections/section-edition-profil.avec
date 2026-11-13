@@ -3,25 +3,35 @@
 
     $envoyer_formulaire_edition = async () =>
     {
-        data = new FormData($node)
+        const data       = new FormData($node)
+        const id_profil  = $profil.id
+        const pseudonyme = String(data.get('pseudonyme') ?? '').trim()
 
-        const reponse = await $create('profil', {
-            identifiant: data.get('identifiant'),
-            pseudonyme : data.get('pseudonyme')
-        })
+        if (!pseudonyme)
+        {
+            $erreur_edition_profil = "Le nom d'affichage est obligatoire"
+            return
+        }
 
-        if (!reponse.error)
+        const reponse = await $update(`profil/${encodeURIComponent(id_profil)}`, { pseudonyme })
+
+        if (reponse.error)
         {
-            $navigate_to('/profil')
+            $erreur_edition_profil = reponse.error ?? "La modification du profil a échoué"
+            return
         }
-        else
+
+        const reponse_compte = await $search('moi')
+        if (!reponse_compte.error)
         {
-            $erreur_edition_profil = reponse.error ?? "La création du profil a échoué"
+            $compte = reponse_compte.data
+            $selectionner_profil(id_profil)
         }
+        $navigate_to('/profil')
     }
 ]
 
-section [creation-profil, centree]
+section [edition-profil, centree]
     titre [centre]
         "Éditez votre profil"
     carte
@@ -31,9 +41,14 @@ section [creation-profil, centree]
                     "$erreur_edition_profil"
             champ-texte [
                 "Identifiant", identifiant
+                $valeur : $profil.identifiant
+                $modifiable : :(
+                $prefixe : @
+                $indice : "L'identifiant ne peut pas être modifié"
             ]
             champ-texte [
-                "Pseudonyme", pseudonyme
+                "Nom d'affichage", pseudonyme
+                $valeur : $profil.pseudonyme
             ]
             bouton-soumission
-                "Créer le profil"
+                "Enregistrer"
