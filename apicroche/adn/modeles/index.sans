@@ -309,6 +309,14 @@
 
     $langue_preferee = () => ({ langue: 'fr', region: 'FR' })
 
+    // Toute anicroche naît avec le brouillon de sa première version
+    $creer_premier_brouillon = async (id_anicroche) =>
+    {
+        const version = await $search_one('version', `#id_anicroche = $id`, { $id: id_anicroche })
+        if (!version)
+            await $create_one('version', { id_anicroche, numero: 1 })
+    }
+
     $creer_pages_obligatoires = async () =>
     {
         const pages = [ 'conditions-generales-d-utilisation', 'mentions-legales', 'politique-de-confidentialite' ]
@@ -316,11 +324,14 @@
         for (const id of pages)
         {
             const existante = await $search_one('anicroche', `#id = $id`, { $id: id })
-            if (existante)
-                continue
+            if (!existante)
+            {
+                await $create_one('anicroche', { id, type: 'page' })
+                console.log(`  PAGE   ${id} créée`)
+            }
 
-            await $create_one('anicroche', { id, type: 'page' })
-            console.log(`  PAGE   ${id} créée`)
+            // Aussi pour une page créée avant cette règle
+            await $creer_premier_brouillon(id)
         }
     }
 

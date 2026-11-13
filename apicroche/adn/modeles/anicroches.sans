@@ -11,6 +11,7 @@
         can_create   : ':)'
         can_search   : ':)'
         prior_create : $verifier_creation_anicroche($values)
+        post_create  : $ouvrir_premier_brouillon($values)
     }
 
     {
@@ -47,6 +48,12 @@
         const existante = await $search_one('anicroche', `#id = $id`, { $id: $values.id })
         if (existante)
             return $indicate(409, "Identifiant déjà utilisé")
+    }
+
+    $ouvrir_premier_brouillon = async ($values) =>
+    {
+        await $creer_premier_brouillon($values.id)
+        $add_to_data('brouillon', 1)
     }
 
     // Une source par rôle pour une version donnée :

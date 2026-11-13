@@ -22,8 +22,10 @@ Liste de tâches :
 - avec.js : la valeur par défaut :o d'un argument (@args) n'arrive pas comme null dans les @script
 - vérifier le modèle de case à cocher
 - fixer la page d'édition de profil
-- après la création du premier profil d'un compte, le choix entre les deux types de profils (avec ou sans '.') s'affiche pendant la durée de la transition
+- constat : après la création du premier profil d'un compte, le choix entre les deux types de profils (avec ou sans '.') s'affiche pendant la durée de la transition
 - demander une nouvelle acceptation des conditions d'utilisation à la connexion quand une version importante est publiée (date_acceptation_conditions antérieure à la version en vigueur), voir RGPD.md § 11
 - 
 - sans.js : signaler clairement les erreurs de modèle les plus courantes (hook désignant une fonction d'index.sans au lieu du @script du modèle, valeur à plusieurs arguments non mise entre guillemets, qui rend aujourd'hui tout le modèle invalide sans explication)
 - remplacer la ligne d'indication au déut de l'édition de page par une boîte de notifications généralisée à toute l'application
+- constat :ajouter un '/' final à la fin d'une URL empêche l'accès à la page du site
+- constat : on peut avoir les accès d'un profil même sans l'avoir sélectionnésur le site

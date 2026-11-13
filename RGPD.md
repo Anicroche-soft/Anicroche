@@ -256,7 +256,7 @@ Les conditions d'utilisation, la politique de confidentialité et les mentions l
 
 **Publier une page.** Le plus simple est la page d'édition du site, `/<identifiant>/edition` (par exemple `/conditions-generales-d-utilisation/edition`), réservée aux gérants du profil `@anicroche` : elle crée, enregistre, publie ou supprime un brouillon. Elle s'appuie sur les routes automatiques de l'API :
 
-1. `POST /version { id_anicroche }` ouvre un brouillon et renvoie son `numero` ;
+1. `POST /version { id_anicroche }` ouvre un brouillon et renvoie son `numero` (une anicroche naît avec le brouillon de sa version 1 : cette étape ne sert qu'aux versions suivantes) ;
 2. `POST /texte { id_anicroche, role : contenu, version, langue, region, contenu }` y dépose le texte (`PATCH /texte/<id_anicroche>/contenu/<version>/<langue>/<region> { contenu }` le corrige tant que la version n'est pas publiée ; une langue ou une région vide s'écrit `-`) ;
 3. `PATCH /version/<id_anicroche>/<numero> { date_publication }` publie le brouillon, immédiatement (`"now"`) ou à une date future.
 
