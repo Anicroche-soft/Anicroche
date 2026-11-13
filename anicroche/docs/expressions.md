@@ -47,7 +47,7 @@ Si une variable n'existe dans aucun parent, l'affectation crée la variable dans
 | `$create`, `$search`, `$update`, `$delete` | fonctions | Requêtes vers l'API (voir [Requêtes vers l'API](api.md)) |
 | `$add_action` | fonction | Actions exécutées autour des requêtes vers l'API (voir [Requêtes vers l'API](api.md#actions-autour-des-requêtes--add_action)) |
 
-`$path`, `$params` et `$hash` sont mis à jour à chaque navigation sans rechargement de page.
+`$path`, `$params` et `$hash` sont mis à jour à chaque navigation sans rechargement de page. Une barre oblique finale est retirée de l'adresse (`/profil/` devient `/profil`), qui est réécrite dans l'historique sans nouvelle entrée.
 
 Précisions :
 

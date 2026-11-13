@@ -97,6 +97,13 @@ const naviguer = (bord) =>
 {
     const lien = new URL(bord, location.origin)
 
+    if (lien.pathname.length > 1 && lien.pathname.endsWith('/'))
+    {
+        lien.pathname = lien.pathname.replace(/\/+$/, '') || '/'
+        history.replaceState(history.state, '', lien.pathname + lien.search + lien.hash)
+        return
+    }
+
     historique.push(lien.pathname + lien.search + lien.hash)
 
     initialiser_sculpteur()
