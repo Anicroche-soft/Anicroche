@@ -276,7 +276,10 @@ const resoudre_type_sql = (type_sans, taille, est_deterministe) =>
 
     if (type_sans.includes('/'))
     {
-        const valeurs = type_sans.split('/')
+        // Une barre oblique finale permet un énuméré à une seule valeur (page/)
+        const valeurs = type_sans.replace(/\/$/, '').split('/')
+        if (valeurs.some(v => !v))
+            return null
         return {
             type     : 'varchar',
             min      : min ?? 0,

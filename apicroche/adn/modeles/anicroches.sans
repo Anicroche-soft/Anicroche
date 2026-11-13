@@ -1,0 +1,228 @@
+@name [ anicroches, anicroche ]
+
+@primary [ id ]
+
+@fields [
+    {
+        name : id
+        type : char
+        size : 1-48
+        rule : "$type != page | $id ~= /^[a-z0-9]+(?:-[a-z0-9]+)*$/"
+    }
+
+    {
+        name : type
+        type : page/
+    }
+
+    {
+        name   : textes
+        key    : id
+        count  : N-N
+        fields : [
+            { name : role , type : char , size : 1-32 }
+        ]
+    }
+
+    {
+        name  : versions
+        count : 0-N
+    }
+]
+
+@routes [
+    {
+        path   : "/page/:id"
+        method : get
+        action : $obtenir_page($request)
+    }
+
+    {
+        path   : /page/source
+        action : $enregistrer_source_page($body)
+    }
+
+    {
+        path   : /page/publication
+        action : $publier_page($body)
+    }
+]
+
+@script [
+    $obtenir_page = async ($request) =>
+    {
+        const page = await $lire_page($request.params.id)
+
+        if (!page)
+            return $indicate(404, "Page introuvable")
+
+        return $indicate(200, "Page récupérée", page)
+    }
+
+    // Ajoute ou remplace une source dans le brouillon de la page (créé si besoin)
+    $enregistrer_source_page = async ($body) =>
+    {
+        await $exiger_gerant_anicroche()
+
+        const id_page = $body.id_page
+        const role    = $body.role
+        const contenu = $body.contenu
+        const langue  = $body.langue ?? $langue_preferee().langue
+        const region  = $body.region ?? $langue_preferee().region
+
+        if (!id_page || !role || typeof contenu !== 'string')
+            return $indicate(400, "Corps incomplet")
+
+        const page = await $search_one('anicroche',
+            `
+            #id   = $id_page
+          & #type = page
+            `,
+            { $id_page: id_page }
+        )
+
+        if (!page)
+            return $indicate(404, "Page introuvable")
+
+        const brouillon = await $obtenir_brouillon(id_page)
+
+        const lien = await $search_one('texte_anicroche',
+            `
+            #id_anicroche = $id_page
+          & #role         = $role
+            `,
+            { $id_page: id_page, $role: role }
+        )
+
+        if (!lien)
+        {
+            const texte = await $create_one('texte', {
+                langue,
+                region,
+                version : brouillon.numero,
+                contenu
+            })
+
+            await $create_one('texte_anicroche', {
+                id_anicroche : id_page,
+                id_texte     : texte.id,
+                role
+            })
+
+            return $indicate(201, "Source ajoutée au brouillon", { version: brouillon.numero })
+        }
+
+        const valeurs = {
+            $id      : lien.id_texte,
+            $langue  : langue,
+            $region  : region,
+            $version : brouillon.numero
+        }
+
+        const existante = await $search_one('texte',
+            `
+            #id      = $id
+          & #langue  = $langue
+          & #region  = $region
+          & #version = $version
+            `,
+            valeurs
+        )
+
+        if (existante)
+            await $update_one('texte',
+                `
+                #id      = $id
+              & #langue  = $langue
+              & #region  = $region
+              & #version = $version
+                `,
+                { contenu },
+                valeurs
+            )
+        else
+            await $create_one('texte', {
+                id      : lien.id_texte,
+                langue,
+                region,
+                version : brouillon.numero,
+                contenu
+            })
+
+        return $indicate(200, "Source enregistrée dans le brouillon", { version: brouillon.numero })
+    }
+
+    // Publie le brouillon, maintenant ou à une date future
+    $publier_page = async ($body) =>
+    {
+        await $exiger_gerant_anicroche()
+
+        if (!$body.id_page)
+            return $indicate(400, "Corps incomplet")
+
+        const maintenant = new Date()
+        const date = $body.date_publication ? new Date($body.date_publication) : maintenant
+
+        if (Number.isNaN(date.getTime()))
+            return $indicate(400, "Date de publication invalide")
+
+        // Une date passée réécrirait l'historique (acceptations des conditions déjà enregistrées)
+        if (date < maintenant)
+            return $indicate(422, "La date de publication ne peut pas être passée")
+
+        const brouillon = await $search_one('version',
+            `
+            #id_anicroche     = $id_page
+          & #date_publication = null
+            `,
+            { $id_page: $body.id_page }
+        )
+
+        if (!brouillon)
+            return $indicate(404, "Aucun brouillon à publier")
+
+        const sources = await $search_all('textes',
+            `
+            #version                   = $numero
+          & #is_texte_of_anicroches.id = $id_page
+            `,
+            { $numero: brouillon.numero, $id_page: $body.id_page }
+        )
+
+        if (!sources.length)
+            return $indicate(422, "Le brouillon ne contient aucune source")
+
+        await $update_one('version',
+            `
+            #id_anicroche = $id_page
+          & #numero       = $numero
+            `,
+            { date_publication: date },
+            { $id_page: $body.id_page, $numero: brouillon.numero }
+        )
+
+        return $indicate(200, "Page publiée", {
+            version          : brouillon.numero,
+            date_publication : date
+        })
+    }
+
+    // Brouillon de la page : dernière version si elle n'a pas de date de publication,
+    // sinon une nouvelle version
+    $obtenir_brouillon = async (id_page) =>
+    {
+        const derniere = await $search_one('version',
+            `#id_anicroche = $id_page`,
+            { $id_page: id_page },
+            { order: 'numero', dir: 'desc' }
+        )
+
+        if (derniere && !derniere.date_publication)
+            return derniere
+
+        return await $create_one('version', {
+            id_anicroche : id_page,
+            numero       : (derniere?.numero ?? 0) + 1
+        })
+    }
+]

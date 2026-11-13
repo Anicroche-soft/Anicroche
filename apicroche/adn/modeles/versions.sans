@@ -1,0 +1,16 @@
+@name [ versions, version ]
+
+@primary [ id_anicroche, numero ]
+
+@fields [
+    {
+        name : numero
+        type : int
+    }
+
+    {
+        name  : date_publication
+        type  : datetime
+        count : 0-1
+    }
+]

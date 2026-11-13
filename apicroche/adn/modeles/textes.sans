@@ -1,0 +1,36 @@
+@name [ textes, texte ]
+
+@primary [ id, langue, region, version ]
+
+@fields [
+    {
+        name    : id
+        type    : char
+        size    : 27
+        default : auto
+    }
+
+    {
+        name : langue
+        type : char
+        size : 0-3
+        rule : "$langue ~= /^([a-z]{2,3})?$/"
+    }
+
+    {
+        name : region
+        type : char
+        size : 0-2
+        rule : "$region ~= /^([A-Z]{2})?$/"
+    }
+
+    {
+        name : version
+        type : int
+    }
+
+    {
+        name : contenu
+        type : text
+    }
+]

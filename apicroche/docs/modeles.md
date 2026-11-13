@@ -121,7 +121,7 @@ Déclare la liste des champs de la table. Chaque champ est un dictionnaire `{ }`
 | `boolean` | Valeur vraie ou fausse | `TINYINT(1)` |
 | `hash` | Valeur hachée (non réversible) | voir ci-dessous |
 | `crypt` | Valeur chiffrée en AES-256-GCM (réversible) | `BINARY(n)` si la taille est fixe, sinon `VARBINARY(max)` (`VARBINARY(255)` sans `size`) |
-| `a/b/c` | Type énuméré : la valeur doit être l'une des valeurs listées | `VARCHAR` (longueur de la plus longue valeur par défaut) |
+| `a/b/c` | Type énuméré : la valeur doit être l'une des valeurs listées. Une barre oblique finale déclare un énuméré à une seule valeur (`page/`) | `VARCHAR` (longueur de la plus longue valeur par défaut) |
 
 Une valeur hors énumération est refusée (code `ENUM_VIOLATION`, réponse `422`).
 
