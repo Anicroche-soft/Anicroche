@@ -231,7 +231,7 @@ Un modèle (y compris `index.sans`) peut déclarer des routes sur mesure, trait�
 
 | Propriété | Défaut | Description |
 |---|---|---|
-| `path` | — | Chemin de la route. Un segment `:nom` est un paramètre, disponible dans `$request.params.nom` ; un chemin qui en contient doit être entre guillemets (`path : "/page/:id"`), sinon le `:` est lu comme un séparateur |
+| `path` | — | Chemin de la route. Un segment `:nom` est un paramètre, disponible dans `$request.params.nom` ; un chemin qui en contient doit être entre guillemets (`path : "/anicroche/:id"`), sinon le `:` est lu comme un séparateur |
 | `method` | `post` | Méthode HTTP (`get`, `post`, `patch`, `delete`…) |
 | `action` | — | Appel de la fonction : `$fonction($arg, …)`. Arguments reconnus : `$body`, `$request`, `$context` |
 | `mode` | `all` | `dev`, `prod` ou `all` : la route n'existe que dans ce mode d'exécution |

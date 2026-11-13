@@ -30,14 +30,14 @@
             return
         }
 
-        // Seules les pages existent pour l instant
-        const reponse = await $search(`page/${encodeURIComponent(id)}`)
+        const reponse = await $search(`anicroche/${encodeURIComponent(id)}`)
 
         // Une réponse arrivée après une nouvelle navigation est ignorée
         if ($path !== chemin)
             return
 
-        if (reponse.code !== 200)
+        // Seules les pages ont un affichage pour l instant
+        if (reponse.code !== 200 || reponse.data?.type !== 'page')
         {
             $etat_anicroche = 'introuvable'
             return

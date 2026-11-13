@@ -327,21 +327,18 @@
             { order: 'numero', dir: 'desc' }
         )
 
-    // Page dans sa version en vigueur, avec une source par rôle :
+    // Anicroche dans sa version en vigueur, avec une source par rôle :
     // - une source non remplacée par une version plus récente reste valable
     // - préférence de langue : langue et région préférées, puis langue seule, puis sans langue
-    $lire_page = async (id) =>
+    $lire_anicroche = async (id) =>
     {
-        const page = await $search_one('anicroche',
-            `
-            #id   = $id
-          & #type = page
-            `,
+        const anicroche = await $search_one('anicroche',
+            `#id = $id`,
             { $id: id },
-            { select: 'id ; textes' }
+            { select: 'id ; type ; textes' }
         )
 
-        if (!page)
+        if (!anicroche)
             return null
 
         const version = await $version_en_vigueur(id)
@@ -357,7 +354,7 @@
         }
 
         const sources = {}
-        for (const texte of page.textes)
+        for (const texte of anicroche.textes)
         {
             if (texte.version > version.numero)
                 continue
@@ -372,7 +369,8 @@
         }
 
         return {
-            id               : page.id,
+            id               : anicroche.id,
+            type             : anicroche.type,
             version          : version.numero,
             date_publication : version.date_publication,
             sources          : Object.fromEntries(Object.entries(sources).map(([role, texte]) => [role, {

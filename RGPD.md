@@ -4,7 +4,7 @@ Ce document rassemble ce que le RGPD demande en dehors du code : le registre des
 
 Il doit être tenu à jour à chaque évolution des modèles `.sans` ou de l'hébergement. Les éléments marqués **À compléter** restent à définir.
 
-Dernière mise à jour : 12 novembre 2026.
+Dernière mise à jour : 13 novembre 2026.
 
 ---
 
@@ -30,7 +30,7 @@ En tant qu'éditeur non professionnel, la loi pour la confiance dans l'économie
 | Finalité | Créer un compte, se connecter (mot de passe ou code envoyé par courriel), maintenir la session |
 | Base légale | Exécution du contrat (CGU) — art. 6.1.b |
 | Personnes concernées | Utilisateurs inscrits, et personnes qui demandent un code sans terminer l'inscription |
-| Données | Adresse électronique (chiffrée AES-256-GCM + empreinte HMAC) ; mot de passe (haché Argon2id) ; date d'inscription ; code de connexion (haché, valable 15 min) |
+| Données | Adresse électronique (chiffrée AES-256-GCM + empreinte HMAC) ; mot de passe (haché Argon2id) ; date d'inscription ; date d'acceptation des conditions d'utilisation (preuve de l'acceptation, voir § 11) ; code de connexion (haché, valable 15 min) |
 | Destinataires | L'éditeur ; l'hébergeur ; le prestataire d'envoi de courriels (adresse et code) |
 | Durée de conservation | Compte : jusqu'à sa suppression, ou après inactivité (**À compléter**, voir § 4). Codes : 15 min de validité, supprimés au plus tard le lendemain (`$nettoyer_clefs`) |
 
@@ -81,7 +81,14 @@ La date de naissance sert à deux traitements distincts.
 - en France, un mineur ne peut consentir seul au traitement de ses données qu'à partir de 15 ans (RGPD art. 8, loi Informatique et Libertés art. 45) ;
 - la loi du 7 juillet 2023 sur la « majorité numérique » impose aux réseaux sociaux une autorisation parentale en dessous de 15 ans. Son entrée en vigueur dépend de textes d'application : **vérifier où elle en est avant le lancement**.
 
-Le plus simple est donc de refuser l'inscription en dessous de 15 ans, plutôt que de gérer une autorisation parentale. La collecte de la date de naissance n'est pas encore mise en place.
+L'inscription est donc refusée en dessous de 15 ans, en attendant les comptes sous contrôle parental (voir `taches.txt`).
+
+**Mise en œuvre :**
+
+- la date de naissance est demandée à l'inscription, juste après la clef de validation, avec une phrase qui explique pourquoi ;
+- en dessous de 15 ans, le site affiche une étape de refus, et l'API refuse aussi l'inscription (`403`), même si le site est contourné (`$calculer_age` et `$age_minimum` dans `index.sans`) ;
+- l'âge est déclaratif : rien n'empêche une personne de saisir une autre date. C'est le niveau de vérification habituel aujourd'hui pour ce type de service ;
+- la case des fonctionnalités liées à l'âge (b) n'existe pas encore : personne n'y a donc consenti, et aucune de ces fonctionnalités ne doit utiliser la date de naissance tant qu'elle n'est pas en place.
 
 ### 2.5. Stockage sur l'appareil de l'utilisateur
 
@@ -124,6 +131,7 @@ Avant d'ajouter un nouveau prestataire qui reçoit des données personnelles : v
 | Session | 30 jours au plus, suppression quotidienne après expiration ou révocation | `$nettoyer_sessions` (`index.sans`) |
 | Compte inactif | À définir avec la gestion des comptes inactifs (voir `taches.txt`) | À développer |
 | Compte supprimé | Suppression immédiate de la base ; disparition des sauvegardes au bout de leur durée de rotation | À développer |
+| Versions publiées des pages légales | Sans limite : elles prouvent ce que chaque utilisateur a accepté | Voir § 11 |
 | Sauvegardes | Celle d'Infomaniak (**À noter** : durée indiquée dans le Manager) | Voir § 7 |
 | Journaux du serveur | **À compléter** | Voir § 2.6 |
 
@@ -204,7 +212,7 @@ Les demandes arrivent à l'adresse de contact RGPD (§ 1). **Délai de réponse 
 
    | Droit | Traitement |
    |---|---|
-   | Accès / portabilité (art. 15 et 20) | Export des données du compte (route à développer) ; en attendant, extraction manuelle en JSON : compte, coordonnées, sessions, profils gérés |
+   | Accès / portabilité (art. 15 et 20) | Export des données du compte (route à développer) ; en attendant, extraction manuelle en JSON : compte (dont date de naissance et date d'acceptation des conditions d'utilisation), coordonnées, sessions, profils gérés |
    | Rectification (art. 16) | Fonctions à développer ; en attendant, modification manuelle en base par l'API (les champs `crypt` et `hash` doivent passer par sans.js, pas par du SQL direct) |
    | Effacement (art. 17) | Fonction à développer ; en attendant, suppression manuelle du compte, de ses coordonnées et sessions, et des profils dont il est le seul gérant |
    | Opposition (art. 21) et retrait du consentement | Arrêter le traitement concerné (ex. décocher les fonctionnalités liées à l'âge) |
@@ -233,3 +241,27 @@ Les demandes arrivent à l'adresse de contact RGPD (§ 1). **Délai de réponse 
 - ce document et la politique de confidentialité ont-ils été mis à jour ?
 
 Une analyse d'impact (AIPD) n'est pas nécessaire aujourd'hui. Elle le deviendrait en cas de traitement à grande échelle de données sensibles, de suivi des personnes ou de profilage.
+
+---
+
+## 11. Pages légales et preuve d'acceptation des conditions
+
+Les conditions d'utilisation, la politique de confidentialité et les mentions légales sont des anicroches de type `page` (`conditions-d-utilisation`, `politique-de-confidentialite`, `mentions-legales`), créées automatiquement au démarrage de l'API. Leur texte est versionné : chaque publication crée une version datée, et le site affiche toujours la version en vigueur (la plus récente dont la date de publication est passée).
+
+**Preuve de l'acceptation.** À l'inscription, l'utilisateur coche la case des conditions d'utilisation ; l'API enregistre alors la date (`comptes.date_acceptation_conditions`). La version acceptée est celle qui était en vigueur à cette date. Pour que cette preuve tienne :
+
+- **une version publiée n'est jamais modifiée ni supprimée** : une correction passe par une nouvelle version ;
+- **une version n'est jamais publiée avec une date passée** (l'API le refuse), car elle changerait après coup ce que les utilisateurs ont accepté ;
+- **une page légale n'est jamais supprimée** : la base l'empêche de toute façon tant qu'elle a des versions.
+
+**Publier une page.** Un gérant du profil `@anicroche` dépose le texte dans un brouillon (`POST /anicroche/source`), puis le publie (`POST /anicroche/publication`), immédiatement ou à une date future. Le brouillon reste invisible jusqu'à sa publication.
+
+**Avant le lancement.** En production, l'inscription est refusée (`503`) tant qu'aucune version des conditions d'utilisation n'est publiée : publier les trois pages avant d'ouvrir le service.
+
+**Quand les conditions d'utilisation changent :**
+
+1. publier la nouvelle version à une date future, pour laisser aux utilisateurs le temps d'en prendre connaissance (un mois est un délai courant) ;
+2. les prévenir avant cette date, par exemple par courriel ;
+3. pour un changement important, leur demander d'accepter à nouveau à leur prochaine connexion : un compte dont `date_acceptation_conditions` est antérieure à la publication en vigueur n'a pas accepté la nouvelle version. **À développer.**
+
+La politique de confidentialité n'a pas à être « acceptée » : elle informe. L'étape d'inscription y renvoie par un lien, ce qui répond à l'obligation d'information au moment de la collecte (art. 13).

@@ -2,7 +2,7 @@ Liste de tâches :
 - suppression de compte (droit à l'effacement)
 - rectification de compte et de profil
 - export des données
-- politique de confidentialité, mentions légales et conditions générales d'utilisation (présentes à l'inscription, âge minimum de 15 ans, usage de la date de naissance pour les limites d'accès, case à cocher des fonctionnalités liées à l'âge)
+- rédiger et publier les textes des pages légales (conditions d'utilisation, politique de confidentialité, mentions légales) avant le lancement, et ajouter des liens vers ces pages dans le site
 - sauvegarder secret_aes et secret_hmac hors du serveur (gestionnaire de mots de passe) : sans secret_aes, les adresses chiffrées sont perdues ; noter l'endroit dans RGPD.md § 6
 - compléter RGPD.md :
     - adresse de contact RGPD (§ 1)
@@ -15,9 +15,12 @@ Liste de tâches :
 - déplacer dans app.adn les éléments propres à Anicroche présents dans avec.js/index.html (titre, lang, canonical, description, couleurs de thème, nom pour Apple) ; la clef `langue` de app.adn n'est pas utilisée
 - chargement de la page côté serveur pour les lectures sans JavaScript
 - ajout des comptes sous contrôle parental
-- mettre en place la configuration de compte et de profils
+- mettre en place la configuration de compte et de profils (dont la case à cocher des fonctionnalités liées à l'âge, voir RGPD.md § 2.4)
 - ajouter un système de rôles d'utilisateurs
 - valider ou revoir la syntaxe `/:parametre`
 - analyseur .avec : ignorer le contenu des commentaires JS (// et /* */) des @script et CSS (/* */) des @style, où une apostrophe ou une parenthèse dérègle aujourd'hui l'analyse
 - avec.js : la valeur par défaut :o d'un argument (@args) n'arrive pas comme null dans les @script
 - vérifier le modèle de case à cocher
+- fixer la page d'édition de profil
+- après la création du premier profil d'un compte, le choix entre les deux types de profils (avec ou sans '.') s'affiche pendant la durée de la transition
+- demander une nouvelle acceptation des conditions d'utilisation à la connexion quand une version importante est publiée (date_acceptation_conditions antérieure à la version en vigueur), voir RGPD.md § 11
