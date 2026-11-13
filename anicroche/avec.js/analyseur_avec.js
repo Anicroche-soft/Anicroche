@@ -73,12 +73,54 @@ const sauter_operateurs_appartenance = (str, pos) =>
     return pos
 }
 
-const avancer_avec_blocs = (str, pos, fin, blocs, arret) =>
+// Le contenu de @script est du JavaScript, celui de @style du CSS : leurs commentaires sont
+// ignorés, pour qu'une apostrophe ou une parenthèse n'y dérègle pas l'analyse
+const lire_langage = (str, pos) =>
+{
+    const instruction = /^@(script|style)(?=[ \[\n]|$)/.exec(str.slice(pos, pos + 8))
+    if (!instruction)
+        return null
+    return instruction[1] === 'script' ? 'js' : 'css'
+}
+
+const sauter_commentaire = (str, pos, fin, langage) =>
+{
+    if (str[pos] !== '/')
+        return pos
+    if (str[pos + 1] === '*')
+    {
+        const fermeture = str.indexOf('*/', pos + 2)
+        return fermeture < 0 || fermeture > fin ? fin + 1 : fermeture + 2
+    }
+    if (str[pos + 1] === '/' && langage === 'js')
+    {
+        while (pos <= fin && str[pos] !== '\n')
+            pos++
+        return pos
+    }
+    return pos
+}
+
+const avancer_avec_blocs = (str, pos, fin, blocs, arret, langage = null) =>
 {
     while (pos <= fin && !arret(str, pos, blocs))
     {
+        const dans_chaine = /^["'`]$/.test(blocs.slice(-1))
+
+        if (langage && dans_chaine && str[pos] === '\\')
+        {
+            pos += 2
+            continue
+        }
+
+        if (langage && !dans_chaine)
+        {
+            const apres = sauter_commentaire(str, pos, fin, langage)
+            if (apres !== pos) { pos = apres; continue }
+        }
+
         // Sauter les tokens spéciaux en priorité, hors contexte de chaîne
-        if (!/^["'`]$/.test(blocs.slice(-1)))
+        if (!langage && !dans_chaine)
         {
             let apres = sauter_smileys(str, pos)
             if (apres !== pos) { pos = apres; continue }
@@ -248,7 +290,8 @@ const analyser_bloc_avec = (str, deb, fin, fichier, json) =>
     while (!fini)
     {
         const res = avancer_avec_blocs(str, pos, fin,  blocs,
-            (str, pos, blocs) => /^[ \n]$/.test(str[pos]) && blocs === '')
+            (str, pos, blocs) => /^[ \n]$/.test(str[pos]) && blocs === '',
+            lire_langage(str, deb + indentation))
         if (res.erreur)
             return erreur(res.erreur, fichier, str, res.pos)
         pos = res.pos
@@ -385,7 +428,8 @@ const analyser_enfants_avec = (str, deb, fin, fichier, json) =>
         {
             // Avancer jusqu'à la fin de la ligne courante
             const res = avancer_avec_blocs(str, pos, fin, blocs,
-                (str, pos, blocs) => str[pos] === '\n' && blocs === '')
+                (str, pos, blocs) => str[pos] === '\n' && blocs === '',
+                lire_langage(str, deb_enf))
             if (res.erreur)
                 return erreur(res.erreur, fichier, str, res.pos)
             pos   = res.pos

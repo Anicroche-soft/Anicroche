@@ -24,6 +24,8 @@ Un bloc peut être :
 
 Déclare les styles CSS du modèle. Ils sont injectés dans la page au montage du modèle et retirés à son démontage.
 
+Les commentaires CSS `/* … */` y sont permis : leur contenu (apostrophes, parenthèses, crochets…) est ignoré par l'analyseur.
+
 ```
 @style [
     .ma-classe {
@@ -37,6 +39,8 @@ Déclare les styles CSS du modèle. Ils sont injectés dans la page au montage d
 Déclare du code JavaScript exécuté une fois lors du premier chargement d'une instance de modèle. Typiquement utilisé pour initialiser des variables de scope ou déclarer des fonctions.
 
 Le bloc `@script` est du JavaScript standard : il utilise `true`, `false` et `null` comme n'importe quel code JS, et les chaînes `:)`, `:(`, `:x` ou `:o` y restent de simples textes.
+
+Les commentaires JavaScript `// …` et `/* … */` y sont permis, ainsi que les caractères échappés dans les chaînes (`'l\'été'`) : l'analyseur n'en tient pas compte pour repérer la fin du bloc. Seul le contenu des expressions régulières littérales (`/…/`) n'est pas reconnu : une apostrophe ou un crochet y reste à éviter, ou à écrire dans une chaîne passée à `new RegExp(…)`.
 
 ```
 @script [
