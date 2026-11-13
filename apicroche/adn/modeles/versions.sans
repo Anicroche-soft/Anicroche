@@ -29,9 +29,13 @@
     }
 ]
 
-# Une version publiée ne change plus : seul un brouillon peut être modifié
+# Une version publiée ne change plus : seul un brouillon peut être modifié ou supprimé
+# (DELETE /version/:id_anicroche/:numero supprime le brouillon et ses textes)
 @rules [
     restrict_update : "#date_publication = null"
+    can_delete      : "$context.compte"
+    restrict_delete : "#date_publication = null"
+    prior_delete    : $supprimer_textes_brouillon($values)
 ]
 
 @script [
@@ -60,6 +64,19 @@
             return $indicate(409, "Un brouillon existe déjà", { numero: derniere.numero })
 
         $values.numero = (derniere?.numero ?? 0) + 1
+    }
+
+    $supprimer_textes_brouillon = async ($values) =>
+    {
+        await $exiger_gerant_anicroche()
+
+        await $delete_all('textes',
+            `
+            #id_anicroche = $id_anicroche
+          & #version      = $numero
+            `,
+            { $id_anicroche: $values.id_anicroche, $numero: $values.numero }
+        )
     }
 
     $retourner_numero = ($values) =>

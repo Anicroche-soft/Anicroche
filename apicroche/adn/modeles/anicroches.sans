@@ -31,11 +31,11 @@
     }
 ]
 
-# Seules les anicroches qui ont une version publiée sont visibles ; chacune est complétée
-# par sa version en vigueur et ses sources
+# Chaque anicroche trouvée est complétée par sa version en vigueur et ses sources. Seules
+# celles qui ont une version publiée sont visibles, sauf pour les gérants de @anicroche,
+# qui voient aussi le brouillon en cours
 @rules [
-    restrict_search : "#versions.date_publication <= now"
-    post_search     : $completer_anicroches($results)
+    post_search : $completer_anicroches($results)
 ]
 
 @script [
@@ -49,11 +49,10 @@
             return $indicate(409, "Identifiant déjà utilisé")
     }
 
-    // Complète chaque anicroche trouvée par la route automatique de recherche avec sa version
-    // en vigueur et une source par rôle :
+    // Une source par rôle pour une version donnée :
     // - une source non remplacée par une version plus récente reste valable
     // - préférence de langue : langue et région préférées, puis langue seule, puis sans langue
-    $completer_anicroches = async ($results) =>
+    const resoudre_sources = (textes, numero) =>
     {
         const { langue, region } = $langue_preferee()
         const preferences = [ [ langue, region ], [ langue, '' ], [ '', '' ] ]
@@ -63,38 +62,63 @@
             return index < 0 ? preferences.length : index
         }
 
-        for (const anicroche of $results)
+        const sources = {}
+        for (const texte of textes)
         {
-            const version = await $version_en_vigueur(anicroche.id)
-            const textes  = version
-                ? await $search_all('textes',
-                    `
-                    #id_anicroche = $id
-                  & #version     <= $numero
-                    `,
-                    { $id: anicroche.id, $numero: version.numero }
-                )
-                : []
+            if (texte.version > numero)
+                continue
 
-            const sources = {}
-            for (const texte of textes)
+            const actuelle = sources[texte.role]
+            const meilleure = !actuelle
+                || rang(texte) < rang(actuelle)
+                || (rang(texte) === rang(actuelle) && texte.version > actuelle.version)
+
+            if (meilleure)
+                sources[texte.role] = texte
+        }
+
+        return Object.fromEntries(Object.entries(sources).map(([role, texte]) => [role, {
+            langue  : texte.langue,
+            region  : texte.region,
+            version : texte.version,
+            contenu : texte.contenu
+        }]))
+    }
+
+    $completer_anicroches = async ($results) =>
+    {
+        const gerant = await $est_gerant_anicroche()
+
+        for (let i = $results.length - 1; i >= 0; i--)
+        {
+            const anicroche = $results[i]
+            const version   = await $version_en_vigueur(anicroche.id)
+
+            if (!version && !gerant)
             {
-                const actuelle = sources[texte.role]
-                const meilleure = !actuelle
-                    || rang(texte) < rang(actuelle)
-                    || (rang(texte) === rang(actuelle) && texte.version > actuelle.version)
-
-                if (meilleure)
-                    sources[texte.role] = texte
+                $results.splice(i, 1)
+                continue
             }
+
+            const textes = await $search_all('textes', `#id_anicroche = $id`, { $id: anicroche.id })
 
             anicroche.version          = version?.numero ?? null
             anicroche.date_publication = version?.date_publication ?? null
-            anicroche.sources          = Object.fromEntries(Object.entries(sources).map(([role, texte]) => [role, {
-                langue  : texte.langue,
-                region  : texte.region,
-                contenu : texte.contenu
-            }]))
+            anicroche.sources          = version ? resoudre_sources(textes, version.numero) : {}
+
+            if (!gerant)
+                continue
+
+            const derniere = await $search_one('version',
+                `#id_anicroche = $id`,
+                { $id: anicroche.id },
+                { order: 'numero', dir: 'desc' }
+            )
+
+            // Le brouillon montre les sources telles qu elles seront une fois publiées
+            anicroche.brouillon = derniere && !derniere.date_publication
+                ? { numero: derniere.numero, sources: resoudre_sources(textes, derniere.numero) }
+                : null
         }
     }
 ]

@@ -1,3 +1,18 @@
+@script [
+    // Deux formes d adresse pour une anicroche :
+    // - un identifiant lisible en minuscules, tel quel : /conditions-d-utilisation
+    // - un identifiant en majuscules et chiffres, découpé en groupes de trois : /AB1-C2D
+    // Renvoie l identifiant, ou null si le chemin ne correspond à aucune des deux formes
+    $lire_identifiant_anicroche = (chemin) =>
+    {
+        if (/^(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/.test(chemin))
+            return chemin
+        if (/^[A-Z0-9]{3}(?:-[A-Z0-9]{3})*$/.test(chemin))
+            return chemin.replaceAll('-', '')
+        return null
+    }
+]
+
 @if [$phase = chargement]
     page-chargement
 
@@ -26,6 +41,9 @@
     -page-chargement
 
 # Anicroches : identifiant lisible en minuscules, ou majuscules et chiffres par groupes de trois
+@else-if [$path ~= '/<$chemin_anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->/edition']
+    -page-edition-anicroche
+
 @else-if [$path ~= '/<$chemin_anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->']
     -page-anicroche
 

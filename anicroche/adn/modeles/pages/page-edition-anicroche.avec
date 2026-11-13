@@ -1,0 +1,225 @@
+@script [
+    // chargement, interdite, introuvable ou prete
+    $etat_edition           = 'chargement'
+    $anicroche_edition      = null
+    $chemin_edition_charge  = null
+    $contenu_publie_edition = ''
+    $contenu_brouillon      = ''
+    $succes_edition         = false
+    $erreur_edition         = false
+
+    const SUFFIXE = '/edition'
+
+    const lire_id = () => $lire_identifiant_anicroche($path.slice(1, -SUFFIXE.length))
+
+    // Une valeur vide s écrit - dans une adresse de l API
+    const segment = (valeur) => valeur === '' ? '-' : encodeURIComponent(valeur)
+
+    // Provisoire : seuls les gérants de @anicroche modifient les pages
+    const est_gerant = () => ($compte?.is_gerant_of_profils ?? []).some(profil => profil.identifiant === 'anicroche')
+
+    // Le modèle reste en place quand on passe d une anicroche à une autre :
+    // le chargement suit donc $path plutôt que l exécution du script
+    $charger_edition = async () =>
+    {
+        const chemin = $path
+        if ($chemin_edition_charge !== chemin)
+            $etat_edition = 'chargement'
+        $chemin_edition_charge = chemin
+
+        // Le droit est vérifié avant tout appel : une page non publiée reste cachée aux autres
+        if (!est_gerant())
+        {
+            $etat_edition = 'interdite'
+            return
+        }
+
+        const id = lire_id()
+        if (!id)
+        {
+            $etat_edition = 'introuvable'
+            return
+        }
+
+        const reponse = await $search(`anicroche/${encodeURIComponent(id)}`)
+
+        // Une réponse arrivée après une nouvelle navigation est ignorée
+        if ($path !== chemin)
+            return
+
+        // Seules les pages sont modifiables pour l instant
+        if (reponse.code !== 200 || reponse.data?.type !== 'page')
+        {
+            $etat_edition = 'introuvable'
+            return
+        }
+
+        $anicroche_edition      = reponse.data
+        $contenu_publie_edition = reponse.data.sources?.contenu?.contenu ?? ''
+        $contenu_brouillon      = reponse.data.brouillon?.sources?.contenu?.contenu ?? ''
+        $etat_edition           = 'prete'
+    }
+
+    const afficher_erreur = (reponse) =>
+    {
+        $succes_edition = false
+        $erreur_edition = reponse.error ?? "Erreur serveur"
+    }
+
+    const afficher_succes = (message) =>
+    {
+        $erreur_edition = false
+        $succes_edition = message
+    }
+
+    // Enregistre le contenu dans le brouillon : la source est corrigée si le brouillon a déjà
+    // la sienne, sinon elle est créée, dans la langue de la source héritée
+    const enregistrer = async (contenu) =>
+    {
+        const brouillon = $anicroche_edition.brouillon
+        const source    = brouillon.sources?.contenu
+        const langue    = source?.langue ?? 'fr'
+        const region    = source?.region ?? 'FR'
+
+        if (source?.version === brouillon.numero)
+            return await $update(
+                `texte/${encodeURIComponent($anicroche_edition.id)}/contenu/${brouillon.numero}/${segment(langue)}/${segment(region)}`,
+                { contenu }
+            )
+
+        return await $create('texte', {
+            id_anicroche : $anicroche_edition.id,
+            role         : 'contenu',
+            version      : brouillon.numero,
+            langue,
+            region,
+            contenu
+        })
+    }
+
+    const lire_contenu = () => $node.closest('form').querySelector('textarea[name=contenu]').value
+
+    $creer_brouillon = async () =>
+    {
+        const reponse = await $create('version', { id_anicroche: $anicroche_edition.id })
+        if (reponse.error)
+            return afficher_erreur(reponse)
+
+        await $charger_edition()
+        afficher_succes(`Brouillon de la version ${reponse.data.numero} créé`)
+    }
+
+    $enregistrer_brouillon = async () =>
+    {
+        const reponse = await enregistrer(lire_contenu())
+        if (reponse.error)
+            return afficher_erreur(reponse)
+
+        await $charger_edition()
+        afficher_succes("Brouillon enregistré")
+    }
+
+    // Le contenu affiché est enregistré avant la publication, pour ne rien perdre
+    $publier_brouillon = async () =>
+    {
+        const numero = $anicroche_edition.brouillon.numero
+
+        let reponse = await enregistrer(lire_contenu())
+        if (reponse.error)
+            return afficher_erreur(reponse)
+
+        reponse = await $update(
+            `version/${encodeURIComponent($anicroche_edition.id)}/${numero}`,
+            { date_publication: 'now' }
+        )
+        if (reponse.error)
+        {
+            await $charger_edition()
+            return afficher_erreur(reponse)
+        }
+
+        await $charger_edition()
+        afficher_succes(`Version ${numero} publiée`)
+    }
+
+    $supprimer_brouillon = async () =>
+    {
+        const numero = $anicroche_edition.brouillon.numero
+        if (!confirm(`Supprimer le brouillon de la version ${numero} ?`))
+            return
+
+        const reponse = await $delete(`version/${encodeURIComponent($anicroche_edition.id)}/${numero}`)
+        if (reponse.error)
+            return afficher_erreur(reponse)
+
+        await $charger_edition()
+        afficher_succes("Brouillon supprimé")
+    }
+]
+
+@if [$path != $chemin_edition_charge]
+    <div hidden @mount="$charger_edition()">
+
+page [$authentification : requise_sans_profil]
+    navigation
+        <div .gauche>
+            fleche-retour
+
+        <div .centre>
+            <span>
+                "Édition"
+
+    onglet
+        @if [$etat_edition = chargement]
+            section-chargement
+
+        @else-if [$etat_edition = interdite]
+            section [edition-interdite, centree]
+                titre [centre]
+                    "Vous ne pouvez pas modifier cette page"
+
+        @else-if [$etat_edition = introuvable]
+            section [edition-introuvable, centree]
+                titre [centre]
+                    "Contenu introuvable !"
+
+        @else-if [$anicroche_edition.brouillon]
+            section [edition]
+                titre [centre]
+                    "Brouillon de la version $anicroche_edition.brouillon.numero"
+                carte
+                    formulaire [$enregistrer_brouillon]
+                        @if [$succes_edition]
+                            succes-formulaire
+                                "$succes_edition"
+                        @if [$erreur_edition]
+                            erreur-formulaire
+                                "$erreur_edition"
+                        champ-texte-long ["Contenu", contenu, $valeur : $contenu_brouillon]
+                        ligne
+                            bouton-action [$supprimer_brouillon]
+                                "Supprimer le brouillon"
+                            bouton-soumission
+                                "Enregistrer"
+                            bouton-action [$publier_brouillon]
+                                "Publier"
+
+        @else
+            section [edition]
+                titre [centre]
+                    @if [$anicroche_edition.version]
+                        "Version $anicroche_edition.version en ligne"
+                    @else
+                        "Page sans version publiée"
+                carte
+                    @if [$succes_edition]
+                        succes-formulaire
+                            "$succes_edition"
+                    @if [$erreur_edition]
+                        erreur-formulaire
+                            "$erreur_edition"
+                    @if [$contenu_publie_edition]
+                        texte-mis-en-forme [$contenu_publie_edition]
+                    ligne
+                        bouton-action [$creer_brouillon]
+                            "Créer un brouillon"

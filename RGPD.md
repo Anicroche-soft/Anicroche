@@ -254,7 +254,7 @@ Les conditions d'utilisation, la politique de confidentialité et les mentions l
 - **une version n'est jamais publiée avec une date passée** (l'API le refuse), car elle changerait après coup ce que les utilisateurs ont accepté ;
 - **une page légale n'est jamais supprimée** : la base l'empêche de toute façon tant qu'elle a des versions.
 
-**Publier une page.** Avec un compte gérant du profil `@anicroche`, par les routes automatiques de l'API :
+**Publier une page.** Le plus simple est la page d'édition du site, `/<identifiant>/edition` (par exemple `/conditions-d-utilisation/edition`), réservée aux gérants du profil `@anicroche` : elle crée, enregistre, publie ou supprime un brouillon. Elle s'appuie sur les routes automatiques de l'API :
 
 1. `POST /version { id_anicroche }` ouvre un brouillon et renvoie son `numero` ;
 2. `POST /texte { id_anicroche, role : contenu, version, langue, region, contenu }` y dépose le texte (`PATCH /texte/<id_anicroche>/contenu/<version>/<langue>/<region> { contenu }` le corrige tant que la version n'est pas publiée ; une langue ou une région vide s'écrit `-`) ;

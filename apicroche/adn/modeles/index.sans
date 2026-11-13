@@ -252,9 +252,10 @@
 
     // Provisoire (dev) : seuls les gérants du profil @anicroche modifient les pages,
     // en attendant les rôles d'utilisateurs
-    $exiger_gerant_anicroche = async () =>
+    $est_gerant_anicroche = async () =>
     {
-        await $exiger_compte()
+        if (!$context.compte)
+            return false
 
         const profil = await $search_one('profil',
             `
@@ -264,7 +265,14 @@
             { $id_compte: $context.compte.id }
         )
 
-        if (!profil)
+        return !!profil
+    }
+
+    $exiger_gerant_anicroche = async () =>
+    {
+        await $exiger_compte()
+
+        if (!(await $est_gerant_anicroche()))
             return $indicate(403, 'Accès refusé')
     }
 
