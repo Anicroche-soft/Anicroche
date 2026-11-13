@@ -112,7 +112,7 @@
             return $indicate(422, "Conditions d'utilisation non acceptées")
 
         // En dev, l'inscription reste possible tant qu'aucune version des conditions n'est publiée
-        const conditions = await $version_en_vigueur('conditions-d-utilisation')
+        const conditions = await $version_en_vigueur('conditions-generales-d-utilisation')
 
         if (!conditions && (process.env.mode || 'prod') !== 'dev')
             return $indicate(503, "Conditions d'utilisation indisponibles")

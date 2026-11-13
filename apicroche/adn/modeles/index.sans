@@ -311,7 +311,7 @@
 
     $creer_pages_obligatoires = async () =>
     {
-        const pages = [ 'conditions-d-utilisation', 'mentions-legales', 'politique-de-confidentialite' ]
+        const pages = [ 'conditions-generales-d-utilisation', 'mentions-legales', 'politique-de-confidentialite' ]
 
         for (const id of pages)
         {

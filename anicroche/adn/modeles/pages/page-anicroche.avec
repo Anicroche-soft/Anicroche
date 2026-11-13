@@ -1,6 +1,8 @@
 @script [
+    // chargement, introuvable, non_publiee ou trouvee
     $etat_anicroche          = 'chargement'
     $anicroche               = null
+    $contenu_anicroche       = ''
     $chemin_anicroche_charge = null
 
     // Le modèle reste en place quand on passe d une anicroche à une autre :
@@ -31,8 +33,11 @@
             return
         }
 
-        $anicroche      = reponse.data
-        $etat_anicroche = 'trouvee'
+        $anicroche         = reponse.data
+        $contenu_anicroche = reponse.data.sources?.contenu?.contenu ?? ''
+
+        // Seuls les gérants de @anicroche reçoivent une page qui n a pas encore de version publiée
+        $etat_anicroche = reponse.data.version === null ? 'non_publiee' : 'trouvee'
     }
 ]
 
@@ -49,14 +54,18 @@
                 fleche-retour
 
             <div .centre>
-                @if [$anicroche.sources.titre]
-                    <span>
-                        "$anicroche.sources.titre.contenu"
+                <span>
+                    "Page"
 
         onglet
             @if [$etat_anicroche = chargement]
                 section-chargement
 
+            @else-if [$etat_anicroche = non_publiee]
+                section [anicroche-non-publiee, centree]
+                    titre [centre]
+                        "Cette page n'est pas encore publiée"
+
             @else
                 section [anicroche]
-                    texte-mis-en-forme [$anicroche.sources.contenu.contenu]
+                    texte-mis-en-forme [$contenu_anicroche]

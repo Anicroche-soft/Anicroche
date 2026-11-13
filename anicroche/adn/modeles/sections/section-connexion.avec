@@ -332,7 +332,7 @@
                         "$erreur_conditions"
                 case-a-cocher [$nom : conditions, $requis : :)]
                     "J'ai lu et j'accepte les "
-                    <a href="/conditions-d-utilisation" target="_blank" rel="noopener">
+                    <a href="/conditions-generales-d-utilisation" target="_blank" rel="noopener">
                         "conditions d'utilisation"
                     "."
                 <p .information>
