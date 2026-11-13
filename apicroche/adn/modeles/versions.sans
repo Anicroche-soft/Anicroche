@@ -41,7 +41,7 @@
 @script [
     $preparer_brouillon = async ($values) =>
     {
-        await $exiger_gerant_anicroche()
+        await $exiger_maitre()
 
         const anicroche = await $search_one('anicroche',
             `
@@ -68,7 +68,7 @@
 
     $supprimer_textes_brouillon = async ($values) =>
     {
-        await $exiger_gerant_anicroche()
+        await $exiger_maitre()
 
         await $delete_all('textes',
             `
@@ -86,7 +86,7 @@
 
     $verifier_publication = async ($values, $request) =>
     {
-        await $exiger_gerant_anicroche()
+        await $exiger_maitre()
 
         if (!('date_publication' in $values))
             return

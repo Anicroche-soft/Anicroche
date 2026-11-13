@@ -886,6 +886,7 @@ export const construire_routes = (schemas, index = null, options = {}) =>
             $body,
             $request,
             $context,
+            $mode          : mode,
             $sign_token    : creer_sign_token(),
             $verify_token  : creer_verify_token(),
             $set_cookie    : creer_set_cookie(rep),

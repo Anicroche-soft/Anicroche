@@ -34,6 +34,13 @@
         can_create : ':)'
     }
 
+    # Rôle du profil sur le site : appelé à recevoir d autres valeurs
+    {
+        name    : role
+        type    : visiteur/maitre
+        default : visiteur
+    }
+
     {
         name    : date_creation
         type    : date
@@ -107,6 +114,9 @@
             if (!est_gerant)
                 return $indicate(403, "Profil racine inaccessible")
         }
+
+        // En dev, @anicroche administre le site dès sa création
+        $values.role = $mode === 'dev' && $values.identifiant === 'anicroche' ? 'maitre' : 'visiteur'
     }
 
     $lier_createur_au_profil = async ($values) =>

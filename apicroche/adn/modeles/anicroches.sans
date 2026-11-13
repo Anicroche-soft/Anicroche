@@ -33,17 +33,17 @@
 ]
 
 # Chaque anicroche trouvée est complétée par sa version en vigueur et ses sources. Seules
-# celles qui ont une version publiée sont visibles, sauf pour les gérants de @anicroche,
+# celles qui ont une version publiée sont visibles, sauf pour les profils maîtres,
 # qui voient aussi le brouillon en cours
 @rules [
     post_search : $completer_anicroches($results)
 ]
 
 @script [
-    // Seules les pages existent pour l instant : elles sont réservées aux gérants de @anicroche
+    // Seules les pages existent pour l instant : elles sont réservées aux profils maîtres
     $verifier_creation_anicroche = async ($values) =>
     {
-        await $exiger_gerant_anicroche()
+        await $exiger_maitre()
 
         const existante = await $search_one('anicroche', `#id = $id`, { $id: $values.id })
         if (existante)
@@ -94,14 +94,14 @@
 
     $completer_anicroches = async ($results) =>
     {
-        const gerant = await $est_gerant_anicroche()
+        const maitre = await $est_maitre()
 
         for (let i = $results.length - 1; i >= 0; i--)
         {
             const anicroche = $results[i]
             const version   = await $version_en_vigueur(anicroche.id)
 
-            if (!version && !gerant)
+            if (!version && !maitre)
             {
                 $results.splice(i, 1)
                 continue
@@ -113,7 +113,7 @@
             anicroche.date_publication = version?.date_publication ?? null
             anicroche.sources          = version ? resoudre_sources(textes, version.numero) : {}
 
-            if (!gerant)
+            if (!maitre)
                 continue
 
             const derniere = await $search_one('version',

@@ -15,8 +15,8 @@
     // Une valeur vide s écrit - dans une adresse de l API
     const segment = (valeur) => valeur === '' ? '-' : encodeURIComponent(valeur)
 
-    // Provisoire : seul le profil @anicroche, sélectionné, modifie les pages
-    const est_gerant = () => $profil?.identifiant === 'anicroche'
+    // Le rôle est celui du profil sélectionné
+    const est_maitre = () => $profil?.role === 'maitre'
 
     // Le modèle reste en place quand on passe d une anicroche à une autre :
     // le chargement suit donc $path plutôt que l exécution du script
@@ -28,7 +28,7 @@
         $chemin_edition_charge = chemin
 
         // Le droit est vérifié avant tout appel : une page non publiée reste cachée aux autres
-        if (!est_gerant())
+        if (!est_maitre())
         {
             $etat_edition = 'interdite'
             return

@@ -36,7 +36,7 @@
         $anicroche         = reponse.data
         $contenu_anicroche = reponse.data.sources?.contenu?.contenu ?? ''
 
-        // Seuls les gérants de @anicroche reçoivent une page qui n a pas encore de version publiée
+        // Seuls les profils maîtres reçoivent une page qui n a pas encore de version publiée
         $etat_anicroche = reponse.data.version === null ? 'non_publiee' : 'trouvee'
     }
 ]

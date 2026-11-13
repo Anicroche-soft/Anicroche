@@ -16,7 +16,6 @@ Liste de tâches :
 - chargement de la page côté serveur pour les lectures sans JavaScript
 - ajout des comptes sous contrôle parental
 - mettre en place la configuration de compte et de profils (dont la case à cocher des fonctionnalités liées à l'âge, voir RGPD.md § 2.4)
-- ajouter un système de rôles d'utilisateurs
 - valider ou revoir la syntaxe `/:parametre`
 - analyseur .avec : ignorer le contenu des commentaires JS (// et /* */) des @script et CSS (/* */) des @style, où une apostrophe ou une parenthèse dérègle aujourd'hui l'analyse
 - fixer la page d'édition de profil

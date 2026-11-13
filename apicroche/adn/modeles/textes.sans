@@ -71,7 +71,7 @@
 
     $verifier_source = async ($values) =>
     {
-        await $exiger_gerant_anicroche()
+        await $exiger_maitre()
 
         const anicroche = await $search_one('anicroche', `#id = $id`, { $id: $values.id_anicroche })
         if (!anicroche)
@@ -106,7 +106,7 @@
 
     $verifier_modification_source = async ($request) =>
     {
-        await $exiger_gerant_anicroche()
+        await $exiger_maitre()
 
         const brouillon = await lire_brouillon($request.params.id_anicroche)
         if (!brouillon || brouillon.numero !== Number($request.params.version))

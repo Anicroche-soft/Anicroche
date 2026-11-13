@@ -32,6 +32,7 @@ Le bloc `@script` d'un modèle contient du JavaScript. Les fonctions déclarées
 | `$body` | Corps JSON de la requête (`{}` s'il est absent ou invalide) |
 | `$request` | La requête (voir ci-dessous) |
 | `$context` | Objet partagé pendant toute la requête, initialement vide ; typiquement rempli par une action `prior_respond` (ex. `$context.compte`) |
+| `$mode` | Mode d'exécution : `dev` ou `prod` (variable d'environnement `mode`) |
 
 ### `$request`
 

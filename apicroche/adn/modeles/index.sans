@@ -273,15 +273,14 @@
             return $indicate(401, 'Non authentifié')
     }
 
-    // Provisoire (dev) : seul le profil @anicroche, sélectionné, modifie les pages,
-    // en attendant les rôles d'utilisateurs
-    $est_gerant_anicroche = () => $context.profil?.identifiant === 'anicroche'
+    // Le rôle est celui du profil sélectionné
+    $est_maitre = () => $context.profil?.role === 'maitre'
 
-    $exiger_gerant_anicroche = async () =>
+    $exiger_maitre = async () =>
     {
         await $exiger_compte()
 
-        if (!$est_gerant_anicroche())
+        if (!$est_maitre())
             return $indicate(403, 'Accès refusé')
     }
 

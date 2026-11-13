@@ -81,7 +81,7 @@
             #id = $id_compte
             `,
             { $id_compte: $context.compte.id },
-            { select: 'id ; date_inscription ; coordonnees.type,coordonnee,est_principale ; is_gerant_of_profils.id,identifiant,pseudonyme,date_creation' }
+            { select: 'id ; date_inscription ; coordonnees.type,coordonnee,est_principale ; is_gerant_of_profils.id,identifiant,pseudonyme,role,date_creation' }
         )
 
         return $indicate(200, "Compte récupéré", compte)

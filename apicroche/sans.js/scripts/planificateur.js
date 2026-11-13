@@ -96,6 +96,7 @@ const creer_contexte_base = (schemas) => ({
         user_agent: null
     },
     $context: {},
+    $mode: process.env.mode || 'prod',
     $q: citer_condition
 })
 
