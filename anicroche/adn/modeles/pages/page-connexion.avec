@@ -1,8 +1,11 @@
 @script [
     $mode_formulaire = null
 
-    $courriel_formulaire = ''
-    $clef_formulaire     = ''
+    $courriel_formulaire       = ''
+    $clef_formulaire           = ''
+    $date_naissance_formulaire = ''
+    $mot_de_passe_formulaire   = ''
+    $age_insuffisant           = false
     $ids           = []
 
     $courriels_clefs     = new Set()
@@ -11,7 +14,7 @@
     $erreur_mot_de_passe = false
     $succes_clef         = false
     $erreur_clef         = false
-    $erreur_inscription  = false
+    $erreur_conditions   = false
 ]
 
 page [:(, $authentification : interdite]
@@ -37,4 +40,13 @@ page [:(, $authentification : interdite]
             section-connexion [mot_de_passe]
 
     onglet
-        section-connexion [inscription]
+        section-connexion [naissance]
+
+    onglet
+        @if [$age_insuffisant]
+            section-connexion [age_insuffisant]
+        @else
+            section-connexion [inscription]
+
+    onglet
+        section-connexion [conditions]

@@ -111,34 +111,68 @@
         }
     }
 
-    $envoyer_formulaire_inscription = async () =>
+    // Même âge minimum que l API, qui vérifie aussi : voir age_minimum dans index.sans
+    const AGE_MINIMUM = 15
+
+    const calculer_age = (date_naissance) =>
     {
-        data = new FormData($node)
+        const [annee, mois, jour] = String(date_naissance).split('-').map(Number)
+        const maintenant = new Date()
+        const anniversaire_passe = maintenant.getMonth() + 1 > mois
+                                || (maintenant.getMonth() + 1 === mois && maintenant.getDate() >= jour)
+        return maintenant.getFullYear() - annee - (anniversaire_passe ? 0 : 1)
+    }
+
+    $envoyer_formulaire_naissance = () =>
+    {
+        const data = new FormData($node)
+        $date_naissance_formulaire = data.get('date_naissance')
+        $age_insuffisant = calculer_age($date_naissance_formulaire) < AGE_MINIMUM
+        $basculer_vers_onglet_suivant()
+    }
+
+    $envoyer_formulaire_inscription = () =>
+    {
+        const data = new FormData($node)
+        $mot_de_passe_formulaire = data.get('mot_de_passe')
+        $erreur_conditions = false
+        $basculer_vers_onglet_suivant()
+    }
+
+    $envoyer_formulaire_conditions = async () =>
+    {
+        const data = new FormData($node)
 
         let reponse = await $create('inscription', {
-            type_coordonnee: 'courriel',
-            coordonnee: data.get('courriel'),
-            clef: $clef_formulaire,
-            mot_de_passe: data.get('mot_de_passe'),
-            ids: $ids
+            type_coordonnee    : 'courriel',
+            coordonnee         : $courriel_formulaire,
+            clef               : $clef_formulaire,
+            mot_de_passe       : $mot_de_passe_formulaire,
+            date_naissance     : $date_naissance_formulaire,
+            accepte_conditions : data.get('conditions') === 'oui',
+            ids                : $ids
         })
 
-        if (!reponse.error)
+        if (reponse.error)
         {
-            reponse = await $create('connexion', {
-                coordonnee: data.get('courriel'),
-                mot_de_passe: data.get('mot_de_passe')
-            })
+            $erreur_conditions = reponse.code === 403 && reponse.error === 'Accès refusé'
+                ? "La clef de validation a expiré"
+                : reponse.error ?? "Erreur serveur"
+            return
+        }
 
-            if (reponse.error)
-            {
-                $erreur_inscription = "La connexion a échoué"
-            }
-        }
-        else
-        {
-            $erreur_inscription = "La clef de validation a expiré"
-        }
+        reponse = await $create('connexion', {
+            coordonnee   : $courriel_formulaire,
+            mot_de_passe : $mot_de_passe_formulaire
+        })
+
+        if (reponse.error)
+            $erreur_conditions = "La connexion a échoué"
+    }
+
+    $revenir_a_l_etape_precedente = () =>
+    {
+        $basculer_vers_onglet_precedant()
     }
 
     $basculer_vers_section_courriel = () =>
@@ -227,15 +261,46 @@
                             "Continuer"
                         icone-fleche-droite
 
+@else-if [$etape = naissance]
+    section [connexion, centree]
+        titre [centre]
+            "Indiquez votre date de naissance"
+        carte
+            formulaire [$envoyer_formulaire_naissance]
+                champ-date [
+                    "Date de naissance", date_naissance
+                    $valeur : $date_naissance_formulaire
+                    $indice : "Elle sert à vérifier votre âge et à adapter l'accès à certains contenus."
+                ]
+                ligne
+                    bouton-action [$basculer_vers_section_clef]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+                    bouton-soumission
+                        <span>
+                            "Continuer"
+                        icone-fleche-droite
+
+@else-if [$etape = age_insuffisant]
+    section [connexion, centree]
+        titre [centre]
+            "Inscription impossible pour le moment"
+        carte
+            <p>
+                "Anicroche est réservé aux personnes de 15 ans et plus. Les comptes sous contrôle parental, qui permettront aux plus jeunes de s'inscrire, ne sont pas encore disponibles."
+            ligne
+                bouton-action [$revenir_a_l_etape_precedente]
+                    icone-fleche-gauche
+                    alt
+                        "Retour"
+
 @else-if [$etape = inscription]
     section [connexion, centree]
         titre [centre]
             "Définissez un mot de passe fort"
         carte
             formulaire [$envoyer_formulaire_inscription]
-                @if [$erreur_inscription]
-                    erreur-formulaire
-                        "$erreur_inscription"
                 champ-courriel [
                     "Adresse électronique", courriel
                     $valeur : $courriel_formulaire
@@ -247,7 +312,36 @@
                     $longueur_maximale : 128
                 ]
                 ligne
-                    bouton-action [$basculer_vers_section_clef]
+                    bouton-action [$revenir_a_l_etape_precedente]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+                    bouton-soumission
+                        <span>
+                            "Continuer"
+                        icone-fleche-droite
+
+@else-if [$etape = conditions]
+    section [connexion, centree]
+        titre [centre]
+            "Acceptez les conditions d'utilisation"
+        carte
+            formulaire [$envoyer_formulaire_conditions]
+                @if [$erreur_conditions]
+                    erreur-formulaire
+                        "$erreur_conditions"
+                case-a-cocher [$nom : conditions, $requis : :)]
+                    "J'ai lu et j'accepte les "
+                    <a href="/conditions-d-utilisation" target="_blank" rel="noopener">
+                        "conditions d'utilisation"
+                    "."
+                <p .information>
+                    "Vos données sont traitées comme l'explique la "
+                    <a href="/politique-de-confidentialite" target="_blank" rel="noopener">
+                        "politique de confidentialité"
+                    "."
+                ligne
+                    bouton-action [$revenir_a_l_etape_precedente]
                         icone-fleche-gauche
                         alt
                             "Retour"

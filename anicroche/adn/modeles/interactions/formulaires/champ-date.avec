@@ -7,8 +7,17 @@
         'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
     ].map((nom, i) => ({ numero: i + 1, nom }))
 
+    // Sans annee_max valable, la liste va jusqu à l année en cours
+    const lire_annee = (valeur, defaut) =>
+    {
+        const annee = Number(valeur)
+        return valeur !== null && valeur !== '' && Number.isInteger(annee) && annee > 0 ? annee : defaut
+    }
+
     $annees_champ_date = []
-    for (let annee = $annee_max ?? new Date().getFullYear(); annee >= $annee_min; annee--)
+    const annee_fin   = lire_annee($annee_max, new Date().getFullYear())
+    const annee_debut = lire_annee($annee_min, 1900)
+    for (let annee = annee_fin; annee >= annee_debut; annee--)
         $annees_champ_date.push(annee)
 
     const lire_parties = (conteneur) =>
