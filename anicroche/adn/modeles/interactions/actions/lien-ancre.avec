@@ -1,0 +1,28 @@
+@style [
+    .lien-ancre {
+        display: inline;
+        width: fit-content;
+
+        text-decoration: underline transparent;
+
+        transition: text-decoration-color var(--d-animation),
+                    outline-color var(--d-animation);
+    }
+
+    .lien-ancre:hover {
+        text-decoration-color: var(--c-flux);
+    }
+]
+
+@args [
+    $adresse
+    $nouvel_onglet : :(
+]
+
+<a
+    .lien-ancre
+    href="$adresse"
+    [$nouvel_onglet] ? target="_blank"
+    [$nouvel_onglet] ? rel="noopener"
+>
+    @stud

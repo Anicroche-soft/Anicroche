@@ -332,12 +332,12 @@
                         "$erreur_conditions"
                 case-a-cocher [$nom : conditions, $requis : :)]
                     "J'ai lu et j'accepte les "
-                    <a href="/conditions-generales-d-utilisation" target="_blank" rel="noopener">
+                    lien-ancre [/conditions-generales-d-utilisation, $nouvel_onglet : :)]
                         "conditions d'utilisation"
                     "."
                 <p .information>
                     "Vos données sont traitées comme l'explique la "
-                    <a href="/politique-de-confidentialite" target="_blank" rel="noopener">
+                    lien-ancre [/politique-de-confidentialite, $nouvel_onglet : :)]
                         "politique de confidentialité"
                     "."
                 ligne
