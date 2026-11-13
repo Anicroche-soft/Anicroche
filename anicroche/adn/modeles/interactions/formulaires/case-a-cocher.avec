@@ -1,6 +1,8 @@
 @style [
     .case-a-cocher {
-        flex: 1024;
+        flex: 0 1 auto;
+        width: fit-content;
+        max-width: 100%;
 
         flex-direction: row;
         align-items: center;
