@@ -1,4 +1,10 @@
 @script [
+    // Le champ est dans son <label> : un clic sur l'étiquette lui donnerait le focus
+    $bloquer_focus_lecture_seule = () =>
+    {
+        $event.preventDefault()
+    }
+
     $type = 'password'
     $visible = true
 
@@ -84,6 +90,12 @@
         --c-flux: var(--c-vif);
     }
 
+    .champ-mot-de-passe > div > input[readonly] {
+        pointer-events: none;
+        caret-color: transparent;
+        user-select: none;
+    }
+
     .champ-mot-de-passe > div:focus-within {
         outline-color: var(--c-focus);
     }
@@ -147,6 +159,7 @@
     .champ
     .champ-mot-de-passe
     for="champ-$nom"
+    [! $modifiable] ? @click="$bloquer_focus_lecture_seule()"
 >
     "$etiquette"
     <div>
@@ -158,6 +171,7 @@
             value="$valeur"
             [$requis] ? required
             [! $modifiable] ? readonly
+            [! $modifiable] ? tabindex="-1"
             [$longueur_minimale] ? minlength="$longueur_minimale"
             [$longueur_maximale] ? maxlength="$longueur_maximale"
             [$longueur_minimale] ? @input="$mettre_a_jour_barre_progression()"

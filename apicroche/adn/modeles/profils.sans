@@ -24,6 +24,10 @@
         can_create   : ':)'
         prior_create : $valider_creation_profil($values)
         post_create  : $lier_createur_au_profil($values)
+
+        can_update   : "$context.compte"
+        prior_update : "$valider_modification_identifiant($values, $request)"
+        post_update  : "$renommer_profils_derives($values, $request)"
     }
 
     {
@@ -60,7 +64,78 @@
     restrict_update : "#gerants.id = $context.compte.id"
 ]
 
+@routes [
+    {
+        path   : /profil/<$id>/derives
+        method : get
+        action : $compter_profils_derives($request)
+    }
+]
+
 @script [
+    // Au plus 5 profils racines (sans .) par compte
+    const LIMITE_RACINES = 5
+
+    const lire_racine = (identifiant) =>
+    {
+        const separateur = identifiant.indexOf('.')
+        return separateur > 0 ? identifiant.slice(0, separateur) : null
+    }
+
+    const chercher_derives = (identifiant) =>
+        $search_all('profils',
+            `#identifiant ~= $motif`,
+            { $motif: new RegExp(`^${identifiant}\\.`) },
+            { select: 'id ; identifiant' }
+        )
+
+    const compter_racines_gerees = async () =>
+    {
+        const profils = await $search_all('profils',
+            `#gerants.id = $id_compte`,
+            { $id_compte: $context.compte.id },
+            { select: 'identifiant' }
+        )
+        return profils.filter(profil => !(profil.identifiant ?? '').includes('.')).length
+    }
+
+    const est_gerant = async (id_profil) =>
+        !!await $search_one('gerant_profil',
+            `
+            #id_compte = $id_compte
+          & #id_profil = $id_profil
+            `,
+            { $id_compte: $context.compte.id, $id_profil: id_profil }
+        )
+
+    // Vérifie qu'un identifiant peut être pris : disponible, et selon son type,
+    // racine dans la limite du compte ou dérivé d'un profil racine géré par le compte
+    const verifier_identifiant = async (identifiant, profil_actuel = null) =>
+    {
+        const existant = await $search_one('profil', `#identifiant = $identifiant`, { $identifiant: identifiant })
+        if (existant && existant.id !== profil_actuel?.id)
+            return $indicate(409, "Identifiant déjà utilisé")
+
+        const racine = lire_racine(identifiant)
+
+        if (!racine)
+        {
+            const deja_racine = profil_actuel && !profil_actuel.identifiant.includes('.')
+            if (!deja_racine && await compter_racines_gerees() >= LIMITE_RACINES)
+                return $indicate(403, "Limite de profils racines atteinte")
+            return
+        }
+
+        const parent = await $search_one('profil', `#identifiant = $racine`, { $racine: racine })
+        if (!parent || parent.id === profil_actuel?.id)
+            return $indicate(422, "Profil racine introuvable")
+
+        // Garder sa base reste permis à un profil dérivé dont le compte ne gère pas la racine
+        const meme_racine = profil_actuel && lire_racine(profil_actuel.identifiant) === racine
+        if (!meme_racine && !await est_gerant(parent.id))
+            return $indicate(403, "Profil racine inaccessible")
+    }
+
     $valider_creation_profil = async ($values) =>
     {
         await $exiger_compte()
@@ -68,60 +143,7 @@
         if (!$values.identifiant || !$values.pseudonyme)
             return $indicate(400, "Corps incomplet")
 
-        const profil_existant = await $search_one('profil',
-            `#identifiant = $values.identifiant`,
-            { $values }
-        )
-
-        if (profil_existant)
-            return $indicate(409, "Identifiant déjà utilisé")
-
-        const separateur = $values.identifiant.indexOf('.')
-
-        if (separateur <= 0)
-        {
-            const profils_geres_racines = await $search_all('profils',
-                `#gerants.id = $id_compte`,
-                { $id_compte: $context.compte.id },
-                { select: 'identifiant' }
-            )
-
-            const nombre_profils_sans_point = profils_geres_racines
-                .filter(profil => !(profil.identifiant ?? '').includes('.'))
-                .length
-
-            if (nombre_profils_sans_point >= 5)
-                return $indicate(403, "Limite de profils racines atteinte")
-        }
-        else
-        {
-            const identifiant_parent = $values.identifiant.slice(0, separateur)
-
-            const parent = await $search_one('profil',
-                `#identifiant = $identifiant_parent`,
-                { $identifiant_parent: identifiant_parent }
-            )
-
-            if (!parent)
-                return $indicate(422, "Profil racine introuvable")
-
-            const est_gerant = await $search_one('gerant_profil',
-                `
-                #id_compte = $id_compte
-              & #id_profil = $id_profil
-                `,
-                {
-                    $id_compte: $context.compte.id,
-                    $id_profil: parent.id
-                }
-            )
-
-            if (!est_gerant)
-                return $indicate(403, "Profil racine inaccessible")
-        }
-
-        // En dev, @anicroche administre le site dès sa création
-        $values.role = $mode === 'dev' && $values.identifiant === 'anicroche' ? 'maitre' : 'visiteur'
+        await verifier_identifiant($values.identifiant)
     }
 
     $lier_createur_au_profil = async ($values) =>
@@ -130,5 +152,63 @@
             id_compte: $context.compte.id,
             id_profil: $values.id
         })
+    }
+
+    // Un profil racine qui a des profils dérivés garde son type : le renommer renomme aussi
+    // ses dérivés, y compris ceux que le compte ne gère pas
+    $valider_modification_identifiant = async ($values, $request) =>
+    {
+        const profil = await $search_one('profil', `#id = $id`, { $id: $request.params.id })
+        if (!profil || $values.identifiant === profil.identifiant)
+            return
+
+        await verifier_identifiant($values.identifiant, profil)
+
+        if (profil.identifiant.includes('.'))
+            return
+
+        const derives = await chercher_derives(profil.identifiant)
+        if (!derives.length)
+            return
+
+        if ($values.identifiant.includes('.'))
+            return $indicate(422, "Un profil qui a des profils dérivés ne peut pas devenir un profil dérivé")
+
+        for (const derive of derives)
+        {
+            const nouveau = $values.identifiant + derive.identifiant.slice(profil.identifiant.length)
+            if (await $search_one('profil', `#identifiant = $nouveau`, { $nouveau: nouveau }))
+                return $indicate(409, `L'identifiant ${nouveau} est déjà utilisé`)
+        }
+
+        $context.renommage_profil = { ancien: profil.identifiant, derives }
+    }
+
+    $renommer_profils_derives = async ($values, $request) =>
+    {
+        const renommage = $context.renommage_profil
+        if (!renommage)
+            return
+
+        for (const derive of renommage.derives)
+            await $update_one('profil',
+                `#id = $id`,
+                { identifiant: $values.identifiant + derive.identifiant.slice(renommage.ancien.length) },
+                { $id: derive.id }
+            )
+    }
+
+    $compter_profils_derives = async ($request) =>
+    {
+        await $exiger_compte()
+
+        const id = $request.params.id
+        if (!await est_gerant(id))
+            return $indicate(404, "Introuvable")
+
+        const profil = await $search_one('profil', `#id = $id`, { $id: id })
+        const derives = profil.identifiant.includes('.') ? [] : await chercher_derives(profil.identifiant)
+
+        return $indicate(200, "Profils dérivés comptés", { nombre: derives.length })
     }
 ]

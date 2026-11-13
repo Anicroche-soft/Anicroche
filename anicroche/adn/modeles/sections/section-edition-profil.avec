@@ -1,11 +1,60 @@
 @script [
+    const LIMITE_RACINES = 5
+
     $erreur_edition_profil = false
+
+    const id_profil_edite   = $profil.id
+    const identifiant_actuel = $profil.identifiant
+    const separateur         = identifiant_actuel.indexOf('.')
+    const base_actuelle      = separateur > 0 ? identifiant_actuel.slice(0, separateur) : null
+
+    $type_edition       = base_actuelle ? 'derive' : 'racine'
+    $base_edition       = base_actuelle
+    $nom_edition        = base_actuelle ? identifiant_actuel.slice(separateur + 1) : identifiant_actuel
+    $choix_type_edition = false
+    $avertissement_derives_edition = false
+
+    const racines_gerees = $compte.is_gerant_of_profils.filter(profil => !profil.identifiant.includes('.'))
+
+    // La base actuelle reste proposée même si le compte ne gère pas ce profil racine
+    const bases = racines_gerees
+        .filter(profil => profil.id !== id_profil_edite)
+        .map(profil => profil.identifiant)
+    if (base_actuelle && !bases.includes(base_actuelle))
+        bases.unshift(base_actuelle)
+    $options_edition = bases.map(base => ({ etiquette: base, nom: base }))
+
+    const charger_derives = async () =>
+    {
+        if (base_actuelle)
+        {
+            $choix_type_edition = racines_gerees.length < LIMITE_RACINES
+            return
+        }
+
+        const reponse = await $search(`profil/${encodeURIComponent(id_profil_edite)}/derives`)
+        const nombre  = reponse.error ? 0 : reponse.data?.nombre ?? 0
+
+        $choix_type_edition = nombre === 0 && $options_edition.length > 0
+        if (nombre > 0)
+            $avertissement_derives_edition = nombre === 1
+                ? `Un profil est dérivé de @${identifiant_actuel} : si vous modifiez l'identifiant, il sera renommé lui aussi, même s'il n'est pas lié à votre compte.`
+                : `${nombre} profils sont dérivés de @${identifiant_actuel} : si vous modifiez l'identifiant, ils seront renommés eux aussi, même s'ils ne sont pas liés à votre compte.`
+    }
+    charger_derives()
+
+    $mettre_a_jour_type_edition = () =>
+    {
+        $type_edition = $node.value
+    }
 
     $envoyer_formulaire_edition = async () =>
     {
-        const data       = new FormData($node)
-        const id_profil  = $profil.id
-        const pseudonyme = String(data.get('pseudonyme') ?? '').trim()
+        const data        = new FormData($node)
+        const pseudonyme  = String(data.get('pseudonyme') ?? '').trim()
+        const identifiant = $type_edition == 'derive'
+            ? `${data.get('base')}.${data.get('identifiant')}`
+            : data.get('identifiant')
 
         if (!pseudonyme)
         {
@@ -13,7 +62,7 @@
             return
         }
 
-        const reponse = await $update(`profil/${encodeURIComponent(id_profil)}`, { pseudonyme })
+        const reponse = await $update(`profil/${encodeURIComponent(id_profil_edite)}`, { identifiant, pseudonyme })
 
         if (reponse.error)
         {
@@ -25,9 +74,15 @@
         if (!reponse_compte.error)
         {
             $compte = reponse_compte.data
-            $selectionner_profil(id_profil)
+            $selectionner_profil(id_profil_edite)
         }
         $navigate_to('/profil')
+    }
+]
+
+@style [
+    .section-edition-profil .champ[data-disabled] {
+        display: none;
     }
 ]
 
@@ -39,13 +94,35 @@ section [edition-profil, centree]
             @if [$erreur_edition_profil]
                 erreur-formulaire
                     "$erreur_edition_profil"
-            champ-texte [
-                "Identifiant", identifiant
-                $valeur : $profil.identifiant
-                $modifiable : :(
-                $prefixe : @
-                $indice : "L'identifiant ne peut pas être modifié"
-            ]
+            @if [$choix_type_edition]
+                choix-unique [
+                    "Type de profil", type
+                    $choix : [
+                        {etiquette : "Nouveau", nom : racine}
+                        {etiquette : "Suffixé", nom : derive}
+                    ]
+                    $valeur : $type_edition
+                    $action : $mettre_a_jour_type_edition()
+                ]
+            ligne
+                choix-option [
+                    "Base", base
+                    $choix : $options_edition
+                    $valeur : $base_edition
+                    $desactive : $type_edition = racine
+                    $prefixe : @
+                ]
+                champ-texte [
+                    $etiquette : [$type_edition = racine] ? "Identifiant unique" : "Suffixe"
+                    identifiant
+                    $valeur : $nom_edition
+                    $prefixe : [$type_edition = racine] ? @ : .
+                    $regle : "/^(?=.{1,32}$)(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/"
+                    $indice : "Autorisés : a-z, 0-9, -"
+                ]
+            @if [$avertissement_derives_edition]
+                <p .information>
+                    "$avertissement_derives_edition"
             champ-texte [
                 "Nom d'affichage", pseudonyme
                 $valeur : $profil.pseudonyme

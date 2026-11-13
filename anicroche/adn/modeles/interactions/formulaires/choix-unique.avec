@@ -170,7 +170,7 @@
     }
 ]
 
-@args [$etiquette, $nom, $choix, $action : :(]
+@args [$etiquette, $nom, $choix, $action : :(, $valeur : :o]
 
 <fieldset
     .champ
@@ -191,6 +191,6 @@
                     name="$nom"
                     type="radio"
                     value="$ch.nom"
-                    [$i = 0s] ? checked
+                    [($valeur != :o & $ch.nom = $valeur) | ($valeur = :o & $i = 0)] ? checked
                     [$action] ? @change="$action()"
                 >

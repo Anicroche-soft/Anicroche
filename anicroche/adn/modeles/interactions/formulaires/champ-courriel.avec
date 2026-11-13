@@ -1,4 +1,10 @@
 @script [
+    // Le champ est dans son <label> : un clic sur l'étiquette lui donnerait le focus
+    $bloquer_focus_lecture_seule = () =>
+    {
+        $event.preventDefault()
+    }
+
     $tester_regle = () =>
     {
         const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
@@ -60,6 +66,12 @@
         --c-flux: var(--c-vif);
     }
 
+    .champ-courriel > div > input[readonly] {
+        pointer-events: none;
+        caret-color: transparent;
+        user-select: none;
+    }
+
     .champ-courriel > div:focus-within {
         outline-color: var(--c-focus);
     }
@@ -84,6 +96,7 @@
     .champ
     .champ-courriel
     for="champ-$nom"
+    [! $modifiable] ? @click="$bloquer_focus_lecture_seule()"
 >
     "$etiquette"
     <div>
@@ -94,5 +107,6 @@
             value="$valeur"
             [$requis] ? required
             [! $modifiable] ? readonly
+            [! $modifiable] ? tabindex="-1"
             @input="$tester_regle()"
         >
