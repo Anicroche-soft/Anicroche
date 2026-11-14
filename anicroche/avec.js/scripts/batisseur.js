@@ -26,6 +26,14 @@ export const initialiser_batisseur = async () =>
 {
     const corps = document.querySelector(`#avec`)
 
+    // Page rendue côté serveur : le client repart de zéro
+    if (corps.hasAttribute(`data-pre-rendu`))
+    {
+        corps.replaceChildren()
+        corps.removeAttribute(`data-pre-rendu`)
+        document.querySelectorAll(`style[data-pre-rendu]`).forEach((style) => style.remove())
+    }
+
     initialiser_sculpteur()
 
     const index = await charger_modele(`index`)
@@ -1366,6 +1374,19 @@ const extraire_appel_fonction = (str) =>
     return { nom_fn, args_bruts }
 }
 
+// Le nœud qui porte la liste des modèles d'un groupe de nœuds racines : le premier élément,
+// à défaut le premier nœud (ancre d'un @if ou d'un modèle différé)
+const porteur_modeles = (noeuds) => noeuds.find(noeud => noeud.nodeType === 1) ?? noeuds[0] ?? null
+
+const ajouter_modeles = (noeuds, entrees) =>
+{
+    const porteur = porteur_modeles(noeuds)
+    if (!porteur || entrees.length === 0)
+        return
+    porteur._avec_modeles ??= []
+    porteur._avec_modeles.push(...entrees)
+}
+
 const construire_modele = (bloc, donnees) =>
 {
     const nom_complet = bloc.args[0]
@@ -1395,6 +1416,13 @@ const construire_modele = (bloc, donnees) =>
 
         const ancre = document.createComment(`-${nom}`)
 
+        // Les modèles englobants inscriront les leurs sur ce porteur, après ceux du modèle
+        // d'attente : ils seront reportés sur les nœuds qui le remplacent
+        const porteur_attente = porteur_modeles([ancre, ...noeuds_attente])
+        const nb_modeles_attente = porteur_attente?._avec_modeles?.length ?? 0
+        const reprendre_modeles_englobants = () =>
+            porteur_attente?._avec_modeles?.splice(nb_modeles_attente) ?? []
+
         if (!chargements_en_cours.has(nom))
         {
             const promesse = charger_modele(nom, Object.keys(donnees.dependances)).then(json =>
@@ -1416,6 +1444,8 @@ const construire_modele = (bloc, donnees) =>
 
             if (!ancre.parentNode) return
 
+            const modeles_englobants = reprendre_modeles_englobants()
+
             // Supprimer le modèle d'attente
             for (const n of noeuds_attente)
             {
@@ -1436,6 +1466,7 @@ const construire_modele = (bloc, donnees) =>
                       )
                     : []
                 appliquer_classes_racine(noeuds_repli, classes)
+                ajouter_modeles(noeuds_repli, modeles_englobants)
                 ancre.after(...noeuds_repli)
                 ancre.remove()
                 queueMicrotask(() => noeuds_repli.forEach(n => {
@@ -1446,6 +1477,7 @@ const construire_modele = (bloc, donnees) =>
 
             const noeuds = construire_modele({ ...bloc, args: [nom, ...bloc.args.slice(1)] }, donnees)
             appliquer_classes_racine(noeuds, classes)
+            ajouter_modeles(noeuds, modeles_englobants)
             ancre.after(...noeuds)
             ancre.remove()
 
@@ -1710,7 +1742,9 @@ const construire_modele = (bloc, donnees) =>
 
     const noeuds = construire_bloc(modele, donnees_modele)
     appliquer_classes_racine(noeuds, classes)
-    noeuds.forEach(noeud => { if (!noeud._avec_modele) noeud._avec_modele = nom })
+    // Le porteur garde la liste des modèles qu'il représente (un modèle dont la racine est un
+    // autre modèle en ajoute un), pour désactiver leurs styles et scripts au retrait
+    ajouter_modeles(noeuds, [{ nom, scope: scope_modele }])
 
     return noeuds
 }
@@ -1748,15 +1782,16 @@ const demonter_noeud = async (noeud) =>
 
 const nettoyer_noeud = (noeud) =>
 {
+    for (const { nom, scope } of noeud._avec_modeles ?? [])
+    {
+        desactiver_style(nom)
+        desactiver_script(nom, scope)
+    }
+    noeud._avec_modeles = null
+
     if (noeud.nodeType === 1)
     {
-        if (noeud._avec_modele)
-        {
-            desactiver_style(noeud._avec_modele)
-            desactiver_script(noeud._avec_modele, noeud._avec_scope)
-        }
-
-        for (const enfant of noeud.children)
+        for (const enfant of noeud.childNodes)
         {
             nettoyer_noeud(enfant)
         }

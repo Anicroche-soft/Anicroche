@@ -9,6 +9,7 @@ services:
             - .env
         environment:
             - PORT=4030
+            - internal_api_url=http://apicroche:5030
 
     apicroche:
         build: ./apicroche

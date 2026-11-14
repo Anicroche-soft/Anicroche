@@ -13,8 +13,11 @@ Liste de tâches :
 - ajouter la gestion des comptes inactifs (définir aussi la durée avant suppression, à reporter dans RGPD.md § 4)
 - permettre la définition de l'ordre de récupération dans les modèles .sans du cadriciel d'API
 - déplacer dans app.adn les éléments propres à Anicroche présents dans avec.js/index.html (titre, lang, canonical, description, couleurs de thème, nom pour Apple) ; la clef `langue` de app.adn n'est pas utilisée
-- chargement de la page côté serveur pour les lectures sans JavaScript
 - ajout des comptes sous contrôle parental
 - mettre en place la configuration de compte et de profils (dont la case à cocher des fonctionnalités liées à l'âge, voir RGPD.md § 2.4)
 - demander une nouvelle acceptation des conditions d'utilisation à la connexion quand une version importante est publiée (date_acceptation_conditions antérieure à la version en vigueur), voir RGPD.md § 11
-- remplacer la ligne d'indication au déut de l'édition de page par une boîte de notifications généralisée à toute l'application
+- remplacer la ligne d'indication au début de l'édition de page par une boîte de notifications généralisée à toute l'application
+- référencement des pages construites par le serveur : titre et description propres à chaque page (instruction ou variable d'avec.js, à documenter), vrai code 404 quand le routeur affiche page-404, sitemap.xml des anicroches publiées
+- mentionner le cookie technique `avec-js` (rendu côté serveur, sans donnée personnelle) dans RGPD.md et dans la politique de confidentialité
+- sans JavaScript, les pages construites par le serveur sont toujours au format `grand` et au thème clair : prévoir des règles CSS @media quand les classes posées par index.avec sont absentes
+- ajouter `internal_api_url=http://localhost:4005` au .env du serveur de production

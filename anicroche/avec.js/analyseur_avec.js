@@ -1,6 +1,6 @@
 import fs   from "fs"
 
-import {rechercher_fichier} from "./avec.js"
+import {rechercher_fichier} from "./composants.js"
 
 const erreur = (message, fichier, str, pos) =>
 {

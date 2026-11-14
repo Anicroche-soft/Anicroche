@@ -33,6 +33,7 @@ Toute évolution d'un cadriciel visible par son utilisateur (nouvelle instructio
 - `adn/modeles/**/*.avec` : modèles rangés par rôle (`pages`, `sections`, `structures`, `organiseurs`, `interactions`, `contenus`, `identites`, `icones`, `logos`, `animations`). Le point d'entrée est `index.avec`.
 - Les modèles sont appelés par leur seul nom, quel que soit leur dossier : **deux modèles ne doivent jamais porter le même nom**.
 - `avec.js/scripts/` : moteur client (`batisseur`, `augure`, `sculpteur`, `navigateur`, `heraut`, `scribe`, `architecte`, `decorateur`, `service-worker`)
+- `avec.js/avec.js` : serveur HTTP ; `avec.js/composants.js` : résolution des fichiers servis (`/systeme/…`) ; `avec.js/rendu/` : rendu côté serveur (sans le cookie `avec-js` posé par le JavaScript, ou avec `?sans-js`) — mini-DOM maison (`dom.js`), environnement de navigateur simulé (`environnement.js`), un worker par rendu (`ouvrier.js`, `rendu.js`)
 
 ## Commandes
 
@@ -51,7 +52,7 @@ En mode dev, les dossiers `adn/` et du moteur sont montés dans les conteneurs :
 
 ## Déploiement (hébergement sans Docker)
 
-En production, chaque partie tourne directement avec Node (`npm start` dans `anicroche/` et `apicroche/`). Le `.env` à la racine du dépôt est lu par les cadriciels eux-mêmes. Sur le serveur, `./deployer.sh` fait un `git pull`, réinstalle les dépendances si `package*.json` a changé, puis relance les deux applications avec PM2 (`pm2 startOrReload ecosystem.config.cjs`). `ecosystem.config.cjs` fixe les ports (4004 pour anicroche, 4005 pour apicroche) : HAProxy (Fast Installer d'Infomaniak) envoie chaque domaine vers son port. Penser à changer la `VERSION` de `avec.js/scripts/service-worker.js` quand anicroche change.
+En production, chaque partie tourne directement avec Node (`npm start` dans `anicroche/` et `apicroche/`). Le `.env` à la racine du dépôt est lu par les cadriciels eux-mêmes. Sur le serveur, `./deployer.sh` fait un `git pull`, réinstalle les dépendances si `package*.json` a changé, puis relance les deux applications avec PM2 (`pm2 startOrReload ecosystem.config.cjs`). `ecosystem.config.cjs` fixe les ports (4004 pour anicroche, 4005 pour apicroche) : HAProxy (Fast Installer d'Infomaniak) envoie chaque domaine vers son port. Penser à changer la `VERSION` de `avec.js/scripts/service-worker.js` quand anicroche change. Pour le rendu côté serveur, le `.env` du serveur doit contenir `internal_api_url=http://localhost:4005` : l'API est alors jointe en local, ce qui lui permet de croire l'IP du visiteur transmise par anicroche (`X-Forwarded-For`) et de lui appliquer ses propres limites.
 
 ## Conventions de code
 

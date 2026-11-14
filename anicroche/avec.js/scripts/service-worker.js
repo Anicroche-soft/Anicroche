@@ -3,7 +3,7 @@
  * Gère le caching et le mode hors-ligne
  */
 
-const VERSION = 'v26'
+const VERSION = 'v29'
 const CACHE_ASSETS = `${VERSION}-assets`
 
 const ASSETS_A_CACHER = [
@@ -67,6 +67,7 @@ self.addEventListener('activate', event => {
 /**
  * Stratégie de fetch
  * - Autres origines (dont l'API) : jamais interceptées ni mises en cache
+ * - Pages (navigations) : réseau d'abord, jamais mises en cache ; hors ligne, la page '/' du cache
  * - Assets: cache-first (cache d'abord, réseau en fallback)
  */
 self.addEventListener('fetch', event => {
@@ -81,6 +82,16 @@ self.addEventListener('fetch', event => {
     // Ignorer les requêtes vers une autre origine (l'API notamment) :
     // leurs réponses dépendent de la session et ne doivent pas être mises en cache
     if (url.origin !== self.location.origin) {
+        return
+    }
+
+    // Pages : réseau d'abord, jamais mises en cache. Le serveur peut renvoyer une page
+    // construite pour cette adresse : une copie gardée finirait par être périmée.
+    // Hors ligne, la page de l'application mise en cache à l'installation prend le relais
+    if (request.mode === 'navigate') {
+        event.respondWith(
+            fetch(request).catch(() => caches.match('/'))
+        )
         return
     }
 

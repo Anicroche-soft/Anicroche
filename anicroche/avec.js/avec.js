@@ -1,11 +1,11 @@
 import "./environnement.js"
 
 import http from "http"
-import path from "path"
 import fs   from "fs"
 
-import {generer_adn, analyser_adn} from "./analyseur_adn.js"
-import {analyser_avec} from "./analyseur_avec.js"
+import {generer_adn} from "./analyseur_adn.js"
+import {resoudre_composant} from "./composants.js"
+import {rendre_page, assembler_page} from "./rendu/rendu.js"
 
 console.log(`\
 ╔══════╗
@@ -14,203 +14,175 @@ console.log(`\
 
 const adn = generer_adn()
 
+// Délai artificiel (en secondes) avant l'envoi des composants, pour tester les chargements
 const delai = 0
 
-const composants = {
-    "/robots.txt": {
-        chemin: "adn/robots.txt",
-    },
-    "/systeme/app.adn": {
-        chemin: "adn/app.adn",
-        composant: true,
-        script: analyser_adn,
-        ext: ".json",
-        env_supp: ['api_url']
-    },
-    "/systeme/scripts": {
-        chemin: "avec.js/scripts",
-    },
-    "/systeme/modeles": {
-        chemin: "adn/modeles",
-        recursif: true,
-        composant: true,
-        script: analyser_avec,
-        ext: ".json"
-    },
-    "/systeme/images": {
-        chemin: "adn/images",
-        recursif: true
-    },
-    "/systeme/fontes": {
-        chemin: "adn/fontes",
-        recursif: true
-    },
-    "/systeme/app.webmanifest": {
-        chemin: "adn/app.webmanifest"
-    }
-}
+// Les pages sont construites par le serveur, sauf pour un navigateur qui a déjà exécuté
+// JavaScript sur le site : le script en ligne d'index.html pose alors ce cookie.
+// Le paramètre `?sans-js` force la construction et efface le cookie (JavaScript désactivé depuis)
+const PARAMETRE_SANS_JS = `sans-js`
+const COOKIE_JS         = `avec-js`
 
-const types_mime = {
-    ".html":  "text/html",
-    ".css":   "text/css",
-    ".js":    "application/javascript",
-    ".json":  "application/json",
+const sans_prefixe_ipv4 = (adresse) =>
+    String(adresse ?? ``).trim().toLowerCase().replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/, ``)
 
-    ".ico":   "image/x-icon",
-    ".png":   "image/png",
-    ".jpg":   "image/jpeg",
-    ".jpeg":  "image/jpeg",
-    ".svg":   "image/svg+xml",
+// Mêmes règles que l'API (sans.js) : l'en-tête X-Forwarded-For n'est cru que s'il vient
+// d'un mandataire de confiance, dont l'adresse ajoutée en dernier est celle du visiteur
+const mandataires_confiance = new Set(
+    String(process.env.trusted_proxies ?? `127.0.0.1,::1`)
+        .split(`,`)
+        .map(sans_prefixe_ipv4)
+        .filter(Boolean)
+)
 
-    ".mp3":   "audio/mpeg",
-    ".mp4":   "video/mp4",
-
-    ".ttf":   "font/ttf",
-    ".otf":   "font/otf",
-    ".woff":  "font/woff",
-    ".woff2": "font/woff2"
-}
-
-const types_utf8 = [
-    ".html",
-    ".css",
-    ".js",
-    ".json"
-]
-
-export const rechercher_fichier = (dossier, nom, recursif) =>
+const lire_ip = (req) =>
 {
-    const fichiers = fs.readdirSync(dossier, {withFileTypes: true})
+    const adresse_socket = sans_prefixe_ipv4(req.socket.remoteAddress)
+    const en_tete        = req.headers[`x-forwarded-for`]
 
-    for (const fichier of fichiers)
+    if (!en_tete || !mandataires_confiance.has(adresse_socket))
+        return adresse_socket
+
+    return en_tete.split(`,`).at(-1).trim() || adresse_socket
+}
+
+const lire_cookies = (req) =>
+{
+    const cookies = {}
+    for (const morceau of String(req.headers.cookie ?? ``).split(`;`))
     {
-        const chemin_complet = path.join(dossier, fichier.name)
-        if (fichier.isFile() && fichier.name === nom)
-            return (chemin_complet)
-        if (fichier.isDirectory() && recursif)
-        {
-            const trouve = rechercher_fichier(chemin_complet, nom, recursif)
-            if (trouve)
-                return trouve
-        }
+        const position = morceau.indexOf(`=`)
+        if (position > 0)
+            cookies[morceau.slice(0, position).trim()] = morceau.slice(position + 1).trim()
     }
-    return (false)
+    return cookies
+}
+
+const echapper_attribut = (texte) => texte
+    .replaceAll(`&`, `&amp;`)
+    .replaceAll(`"`, `&quot;`)
+    .replaceAll(`<`, `&lt;`)
+
+// Adresse sans le paramètre `?sans-js`, chemin et paramètres compris
+const chemin_complet = (adresse) => adresse.pathname + adresse.search
+
+const ajouter_sans_js = (adresse) =>
+{
+    const copie = new URL(adresse)
+    copie.searchParams.set(PARAMETRE_SANS_JS, ``)
+    return chemin_complet(copie).replace(`${PARAMETRE_SANS_JS}=`, PARAMETRE_SANS_JS)
+}
+
+// L'adresse canonique de la page, sur le domaine public du site (app_url) s'il est connu
+const fixer_adresse_canonique = (html, adresse) =>
+{
+    const base = process.env.app_url || adresse.origin
+    const canonique = new URL(chemin_complet(adresse), base).href
+    return html.replace(
+        /<link rel="canonical"[^>]*>/,
+        `<link rel="canonical" href="${echapper_attribut(canonique)}" />`
+    )
+}
+
+const entetes_page = (entetes = {}) => ({
+    "Content-Type": "text/html; charset=utf-8",
+    // La réponse dépend du cookie : un cache intermédiaire ne doit pas la servir à un autre
+    "Vary": "Cookie",
+    ...entetes
+})
+
+// La page vide habituelle, construite par le navigateur. Sans JavaScript, la balise <noscript>
+// renvoie vers la même adresse avec `?sans-js`
+const envoyer_page_vide = (rep, adresse = null, entetes = {}) =>
+{
+    let html = fs.readFileSync("avec.js/index.html", "utf-8")
+    if (adresse)
+    {
+        html = fixer_adresse_canonique(html, adresse)
+        const refresh = `<noscript><meta http-equiv="refresh" content="0; url=${echapper_attribut(ajouter_sans_js(adresse))}"></noscript>`
+        html = html.replace(`</head>`, `    ${refresh}\n    </head>`)
+    }
+    rep.writeHead(200, entetes_page(entetes))
+    rep.end(html)
+}
+
+const servir_page = async (req, rep) =>
+{
+    const adresse = new URL(req.url, `http://${req.headers.host ?? `localhost`}`)
+    const force   = adresse.searchParams.has(PARAMETRE_SANS_JS)
+    adresse.searchParams.delete(PARAMETRE_SANS_JS)
+
+    const js_actif = lire_cookies(req)[COOKIE_JS] === `1`
+    if (js_actif && !force)
+        return envoyer_page_vide(rep, adresse)
+
+    // Le script en ligne d'index.html reposera le cookie si JavaScript est actif
+    const entetes = force && js_actif
+        ? {"Set-Cookie": `${COOKIE_JS}=; Path=/; Max-Age=0; SameSite=Lax`}
+        : {}
+
+    const rendu = await rendre_page(adresse.href, lire_ip(req))
+    if (!rendu)
+        return envoyer_page_vide(rep, adresse, entetes)
+
+    // La page a changé d'adresse pendant sa construction ($navigate_to, barre oblique finale…) :
+    // le visiteur y est redirigé
+    const arrivee = new URL(rendu.adresse)
+    if (arrivee.origin === adresse.origin && chemin_complet(arrivee) !== chemin_complet(adresse))
+    {
+        rep.writeHead(302, {
+            ...entetes,
+            "Location": force ? ajouter_sans_js(arrivee) : chemin_complet(arrivee)
+        })
+        rep.end()
+        return
+    }
+
+    const html = fixer_adresse_canonique(assembler_page(rendu), adresse)
+    rep.writeHead(200, entetes_page(entetes))
+    rep.end(html)
 }
 
 const serveur = http.createServer(async (req, rep) =>
     {
-        let chemin = "avec.js/index.html"
-        let infos = null
-        for (const prefixe in composants)
+        let reponse
+        try
         {
-            if ((req.url.startsWith(`${prefixe}/`) || req.url === prefixe)
-             && (!composants[prefixe].composant
-              || req.headers['x-ac-composant'] === `true`))
-            {
-                chemin = req.url === prefixe
-                    ? composants[prefixe].chemin
-                    : `${composants[prefixe].chemin}${req.url.slice(prefixe.length)}`
-                infos = composants[prefixe]
-                break
-            }
+            reponse = resoudre_composant(req.url, req.headers)
         }
-        if (delai > 0 && infos?.composant)
-            await new Promise(r => setTimeout(r, delai * 1000))
-        const chemin_complet = path.join("./", decodeURIComponent(chemin.split('?')[0]))
-        const dossier = path.dirname(chemin_complet)
-        const fichier = path.basename(chemin_complet)
-        const racine  = path.resolve(infos?.chemin ?? chemin)
-        const autorise = !infos
-            || path.resolve(chemin_complet) === racine
-            || path.resolve(chemin_complet).startsWith(racine + path.sep)
-        const chemin_reel = autorise && fs.existsSync(dossier) && rechercher_fichier(dossier, fichier, infos?.recursif)
-
-        if (chemin_reel)
+        catch (erreur)
         {
-            let contenu
-            const ext = infos?.ext || path.extname(chemin).toLowerCase()
-            if (types_utf8.includes(ext))
-            {
-                contenu = fs.readFileSync(chemin_reel, "utf-8")
-            }
-            else
-            {
-                contenu = fs.readFileSync(chemin_reel)
-            }
-            if (typeof infos?.script === "function")
-            {
-                try
-                {
-                    contenu = infos.script(contenu, fichier, req)
-                }
-                catch (erreur)
-                {
-                    console.error(erreur)
-                    rep.writeHead(500)
-                    rep.end("Erreur serveur")
-                    return
-                }
-            }
-
-            if (ext === ".json" && Array.isArray(infos?.env_supp) && infos.env_supp.length > 0)
-            {
-                let json = null
-
-                if (typeof contenu === "string")
-                {
-                    try
-                    {
-                        json = JSON.parse(contenu)
-                    }
-                    catch (erreur)
-                    {
-                        json = null
-                    }
-                }
-                else if (typeof contenu === "object"
-                      && contenu !== null
-                      && !Buffer.isBuffer(contenu)
-                      && !(contenu instanceof Uint8Array))
-                {
-                    json = contenu
-                }
-
-                if (json && typeof json === "object" && !Array.isArray(json))
-                {
-                    infos.env_supp.forEach((cle_env) => {
-                        if (typeof cle_env !== "string" || cle_env.length === 0)
-                            return
-
-                        if (process.env[cle_env] !== undefined)
-                            json[cle_env] = process.env[cle_env]
-                    })
-                    contenu = json
-                }
-            }
-
-            let type = types_mime[ext] || "application/octet-stream"
-            if (types_utf8.includes(ext))
-            {
-                type += "; charset=utf-8"
-            }
-
-            if (ext === ".json"
-             && typeof contenu === "object"
-             && !Buffer.isBuffer(contenu)
-             && !(contenu instanceof Uint8Array))
-            {
-                contenu = JSON.stringify(contenu)
-            }
-
-            rep.writeHead(200, {"Content-Type": type})
-            rep.end(contenu)
+            console.error(erreur)
+            reponse = {statut: 500}
         }
-        else
+
+        if (reponse.page)
+        {
+            try
+            {
+                await servir_page(req, rep)
+            }
+            catch (erreur)
+            {
+                console.error(erreur)
+                if (!rep.headersSent)
+                    envoyer_page_vide(rep)
+            }
+            return
+        }
+
+        if (reponse.statut !== 200)
         {
             rep.writeHead(500)
             rep.end("Erreur serveur")
             return
         }
+
+        if (delai > 0 && req.headers['x-ac-composant'] === `true`)
+            await new Promise(r => setTimeout(r, delai * 1000))
+
+        rep.writeHead(200, {"Content-Type": reponse.type})
+        rep.end(reponse.contenu)
     }
 )
 
