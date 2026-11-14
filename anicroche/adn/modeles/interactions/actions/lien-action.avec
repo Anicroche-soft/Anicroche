@@ -1,17 +1,17 @@
 @script [
-    const demarrer_compte_a_rebours = (delai) =>
+    const demarrer_compte_a_rebours = (delai, noeud, vars) =>
     {
-        const compte_a_rebours = $node.querySelector('.compte-a-rebours')
+        const compte_a_rebours = noeud.querySelector('.compte-a-rebours')
 
-        if ($vars.chronometre)
+        if (vars.chronometre)
         {
-            clearInterval($vars.chronometre)
-            $vars.chronometre = null
+            clearInterval(vars.chronometre)
+            vars.chronometre = null
         }
 
         if (delai <= 0)
         {
-            $node.disabled = false
+            noeud.disabled = false
 
             if (compte_a_rebours)
             {
@@ -29,7 +29,7 @@
             compte_a_rebours.textContent = ` (${restant} s)`
         }
 
-        $node.disabled = true
+        noeud.disabled = true
         actualiser()
 
         const chronometre = setInterval(() =>
@@ -39,8 +39,8 @@
             if (restant <= 0)
             {
                 clearInterval(chronometre)
-                $vars.chronometre = null
-                $node.disabled = false
+                vars.chronometre = null
+                noeud.disabled = false
 
                 if (compte_a_rebours)
                 {
@@ -53,7 +53,7 @@
             actualiser()
         }, 1000)
 
-        $vars.chronometre = chronometre
+        vars.chronometre = chronometre
     }
 
     $monter_lien_action = ($delai) =>
@@ -62,7 +62,7 @@
 
         $vars.delai = delai
 
-        demarrer_compte_a_rebours(delai)
+        demarrer_compte_a_rebours(delai, $node, $vars)
     }
 
     $demonter_lien_action = () =>
@@ -75,13 +75,16 @@
 
     $clic_lien_action = async () =>
     {
-        if ($node.disabled) return
+        const noeud = $node
+        const vars  = $vars
+
+        if (noeud.disabled) return
 
         await $fonction()
 
-        if ($vars.delai > 0)
+        if (vars.delai > 0)
         {
-            demarrer_compte_a_rebours($vars.delai)
+            demarrer_compte_a_rebours(vars.delai, noeud, vars)
         }
     }
 ]

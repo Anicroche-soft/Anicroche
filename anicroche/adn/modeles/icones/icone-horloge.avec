@@ -22,19 +22,21 @@
             ]
         }
 
-        actualiser(horloge)
+        const vars = $vars
+
+        actualiser(horloge, vars)
 
         const maintenant = new Date()
         const temps_restant = (60 - maintenant.getSeconds()) * 1000 - maintenant.getMilliseconds()
 
         const chrono_timeout = setTimeout(() => {
-            actualiser(horloge)
+            actualiser(horloge, vars)
 
             const chrono_interval = setInterval(() => {
-                actualiser(horloge)
+                actualiser(horloge, vars)
             }, 3000)
 
-            $vars.chronometre = chrono_interval
+            vars.chronometre = chrono_interval
         }, temps_restant)
 
         $vars.chronometre = chrono_timeout
@@ -49,7 +51,7 @@
         }
     }
 
-    const actualiser = (horloge) =>
+    const actualiser = (horloge, vars) =>
     {
         const maintenant = new Date()
 
@@ -67,15 +69,15 @@
 
         const angle_heures_continu = normaliser_angle_continu(
             angle_heures_cible,
-            $vars.angle_heures_precedent
+            vars.angle_heures_precedent
         )
         const angle_minutes_continu = normaliser_angle_continu(
             angle_minutes_cible,
-            $vars.angle_minutes_precedent
+            vars.angle_minutes_precedent
         )
 
-        $vars.angle_heures_precedent = angle_heures_continu
-        $vars.angle_minutes_precedent = angle_minutes_continu
+        vars.angle_heures_precedent = angle_heures_continu
+        vars.angle_minutes_precedent = angle_minutes_continu
 
         horloge.aiguilles.heures.style.transform = `rotate(${angle_heures_continu}deg)`
         horloge.aiguilles.minutes.style.transform = `rotate(${angle_minutes_continu}deg)`

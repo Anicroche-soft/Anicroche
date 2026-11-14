@@ -1,28 +1,29 @@
 @script [
     $monter_defilement = () =>
     {
-        const piste      = $node.querySelector('.piste')
-        const poigne     = $node.querySelector('.poignee')
-        const horizontal = $node.classList.contains('horizontal')
+        const noeud      = $node
+        const piste      = noeud.querySelector('.piste')
+        const poigne     = noeud.querySelector('.poignee')
+        const horizontal = noeud.classList.contains('horizontal')
 
         const calculer_geometrie = () =>
         {
-            const style = getComputedStyle($node)
+            const style = getComputedStyle(noeud)
 
             if (horizontal)
             {
                 const padding_gauche  = parseFloat(style.paddingLeft)
                 const padding_droite  = parseFloat(style.paddingRight)
-                const largeur_piste   = $node.clientWidth - padding_gauche - padding_droite
-                const largeur_poigne  = Math.max(32, ($node.clientWidth / $node.scrollWidth) * largeur_piste)
+                const largeur_piste   = noeud.clientWidth - padding_gauche - padding_droite
+                const largeur_poigne  = Math.max(32, (noeud.clientWidth / noeud.scrollWidth) * largeur_piste)
                 return { padding_debut: padding_gauche, padding_fin: padding_droite, taille_piste: largeur_piste, taille_poigne: largeur_poigne }
             }
             else
             {
                 const padding_haut   = parseFloat(style.paddingTop)
                 const padding_bas    = parseFloat(style.paddingBottom)
-                const hauteur_piste  = $node.clientHeight - padding_haut - padding_bas
-                const hauteur_poigne = Math.max(32, ($node.clientHeight / $node.scrollHeight) * hauteur_piste)
+                const hauteur_piste  = noeud.clientHeight - padding_haut - padding_bas
+                const hauteur_poigne = Math.max(32, (noeud.clientHeight / noeud.scrollHeight) * hauteur_piste)
                 return { padding_debut: padding_haut, padding_fin: padding_bas, taille_piste: hauteur_piste, taille_poigne: hauteur_poigne }
             }
         }
@@ -33,16 +34,16 @@
 
             if (horizontal)
             {
-                const scroll_max = $node.scrollWidth - $node.clientWidth
+                const scroll_max = noeud.scrollWidth - noeud.clientWidth
                 const invisible  = scroll_max <= 0
 
                 piste.classList.toggle('cachee', invisible)
-                piste.style.left   = `${$node.scrollLeft + padding_debut}px`
+                piste.style.left   = `${noeud.scrollLeft + padding_debut}px`
                 piste.style.width  = `${taille_piste}px`
 
                 if (invisible) return
 
-                const ratio = $node.scrollLeft / scroll_max
+                const ratio = noeud.scrollLeft / scroll_max
                 const left  = ratio * (taille_piste - taille_poigne)
 
                 poigne.style.width = `${taille_poigne}px`
@@ -50,16 +51,16 @@
             }
             else
             {
-                const scroll_max = $node.scrollHeight - $node.clientHeight
+                const scroll_max = noeud.scrollHeight - noeud.clientHeight
                 const invisible  = scroll_max <= 0
 
                 piste.classList.toggle('cachee', invisible)
-                piste.style.top    = `${$node.scrollTop + padding_debut}px`
+                piste.style.top    = `${noeud.scrollTop + padding_debut}px`
                 piste.style.height = `${taille_piste}px`
 
                 if (invisible) return
 
-                const ratio = $node.scrollTop / scroll_max
+                const ratio = noeud.scrollTop / scroll_max
                 const top   = ratio * (taille_piste - taille_poigne)
 
                 poigne.style.height = `${taille_poigne}px`
@@ -78,14 +79,14 @@
                 ? evenement.clientX - glissement.depart_x
                 : evenement.clientY - glissement.depart_y
             const scroll_max = horizontal
-                ? $node.scrollWidth  - $node.clientWidth
-                : $node.scrollHeight - $node.clientHeight
+                ? noeud.scrollWidth  - noeud.clientWidth
+                : noeud.scrollHeight - noeud.clientHeight
             const ratio      = delta / (taille_piste - taille_poigne)
 
             if (horizontal)
-                $node.scrollLeft = glissement.depart_scroll + ratio * scroll_max
+                noeud.scrollLeft = glissement.depart_scroll + ratio * scroll_max
             else
-                $node.scrollTop  = glissement.depart_scroll + ratio * scroll_max
+                noeud.scrollTop  = glissement.depart_scroll + ratio * scroll_max
         }
 
         const sur_souris_relachee = () =>
@@ -100,7 +101,7 @@
             glissement = {
                 depart_x      : evenement.clientX,
                 depart_y      : evenement.clientY,
-                depart_scroll : horizontal ? $node.scrollLeft : $node.scrollTop
+                depart_scroll : horizontal ? noeud.scrollLeft : noeud.scrollTop
             }
             evenement.preventDefault()
             document.addEventListener('mousemove', sur_souris_bougee)
@@ -108,13 +109,13 @@
         })
 
         const evenement_scroll = horizontal ? 'scroll' : 'scroll'
-        $node.addEventListener('scroll', actualiser_poigne)
+        noeud.addEventListener('scroll', actualiser_poigne)
 
         $vars.observateur_taille  = new ResizeObserver(actualiser_poigne)
         $vars.observateur_contenu = new MutationObserver(actualiser_poigne)
 
-        $vars.observateur_taille.observe($node)
-        $vars.observateur_contenu.observe($node, { childList: true, subtree: true })
+        $vars.observateur_taille.observe(noeud)
+        $vars.observateur_contenu.observe(noeud, { childList: true, subtree: true })
 
         $vars.actualiser_poigne   = actualiser_poigne
         $vars.sur_souris_bougee   = sur_souris_bougee
@@ -123,7 +124,7 @@
         requestAnimationFrame(() =>
             requestAnimationFrame(() =>
             {
-                if ($node.isConnected)
+                if (noeud.isConnected)
                     actualiser_poigne()
             })
         )

@@ -1,10 +1,11 @@
 @script [
     $monter_corps = () =>
     {
-        $node.classList.add('entree')
-        requestAnimationFrame(() => 
-            requestAnimationFrame(() => 
-                $node.classList.remove('entree')
+        const noeud = $node
+        noeud.classList.add('entree')
+        requestAnimationFrame(() =>
+            requestAnimationFrame(() =>
+                noeud.classList.remove('entree')
             )
         )
     }
@@ -19,7 +20,7 @@
 
         height: 100%;
 
-        transition: opacity var(--d-animation);
+        transition: opacity var(--d-animation-page);
     }
 
     #corps.entree {
@@ -52,7 +53,7 @@
 
         pointer-events: none;
         opacity: 0;
-        transition: opacity var(--d-animation);
+        transition: opacity var(--d-animation-page);
 
         --f-fond: var(--f-degrade-vif);
         --c-fond: var(--c-vif);
@@ -72,7 +73,7 @@
 
         pointer-events: none;
         opacity: 0;
-        transition: opacity var(--d-animation);
+        transition: opacity var(--d-animation-page);
 
         --f-fond: var(--c-theme);
         --c-fond: var(--c-theme);

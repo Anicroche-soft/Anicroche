@@ -1,10 +1,11 @@
 @script [
     $monter_chargement = () =>
     {
-        $node.classList.add('entree')
-        requestAnimationFrame(() => 
-            requestAnimationFrame(() => 
-                $node.classList.remove('entree')
+        const noeud = $node
+        noeud.classList.add('entree')
+        requestAnimationFrame(() =>
+            requestAnimationFrame(() =>
+                noeud.classList.remove('entree')
             )
         )
     }

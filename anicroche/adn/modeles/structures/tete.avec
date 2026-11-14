@@ -1,10 +1,11 @@
 @script [
     $monter_tete = async () =>
     {
-        $node.classList.add('entree')
-        requestAnimationFrame(() => 
-            requestAnimationFrame(() => 
-                $node.classList.remove('entree')
+        const noeud = $node
+        noeud.classList.add('entree')
+        requestAnimationFrame(() =>
+            requestAnimationFrame(() =>
+                noeud.classList.remove('entree')
             )
         )
 
@@ -24,7 +25,7 @@
         padding: 1rem;
 
 
-        transition: opacity var(--d-animation), background var(--d-animation);
+        transition: opacity var(--d-animation), background var(--d-animation-page);
 
         --c-fond: var(--c-analogue);
         --l-ecart: 2rem;

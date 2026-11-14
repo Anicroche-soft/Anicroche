@@ -98,6 +98,19 @@ Les variables de nœud (`$vars`) permettent de stocker des données associées �
 >
 ```
 
+> **Attention :** `$event`, `$node` et `$vars` ne sont pas capturés par les fonctions : ils sont relus à chaque accès et désignent le gestionnaire **en cours d'exécution**. Dans un rappel différé (`requestAnimationFrame`, `setTimeout`, `setInterval`, écouteur ajouté par `addEventListener`, observateur, suite d'un `await`), ils peuvent donc désigner un autre nœud, celui du dernier gestionnaire exécuté. Copiez-les dans des constantes avant :
+>
+> ```
+> $monter = () =>
+> {
+>     const noeud = $node
+>     const vars  = $vars
+>     noeud.classList.add('entree')
+>     requestAnimationFrame(() => noeud.classList.remove('entree'))
+>     vars.intervalle = setInterval(() => { ... }, 1000)
+> }
+> ```
+
 ### Accès profond
 
 Les variables de type liste ou dictionnaire supportent l'accès à leurs éléments par notation pointée ou par index :

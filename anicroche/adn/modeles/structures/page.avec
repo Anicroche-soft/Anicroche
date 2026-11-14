@@ -1,21 +1,24 @@
 @script [
     $monter_page = () =>
     {
-        $node.classList.add('entree')
-        void $node.offsetWidth
+        const noeud = $node
+        const vars  = $vars
+
+        noeud.classList.add('entree')
+        void noeud.offsetWidth
         requestAnimationFrame(() =>
             requestAnimationFrame(() =>
-                $node.classList.remove('entree')
+                noeud.classList.remove('entree')
             )
         )
 
-        marquer_onglet_actif($node, 1)
+        marquer_onglet_actif(noeud, 1, vars)
 
-        $node.addEventListener('scroll', () =>
+        noeud.addEventListener('scroll', () =>
         {
-            const ratio = $node.scrollLeft / ($node.scrollWidth - $node.clientWidth)
+            const ratio = noeud.scrollLeft / (noeud.scrollWidth - noeud.clientWidth)
 
-            const barre = $node.querySelector(':scope .barre-onglets')
+            const barre = noeud.querySelector(':scope .barre-onglets')
             if (barre)
             {
                 const boutons = barre.querySelectorAll(':scope > .bouton-onglet')
@@ -28,9 +31,9 @@
                 }
             }
 
-            const onglets = $node.querySelectorAll(':scope > .onglet')
+            const onglets = noeud.querySelectorAll(':scope > .onglet')
             const n = Math.round(ratio * (onglets.length - 1)) + 1
-            marquer_onglet_actif($node, n)
+            marquer_onglet_actif(noeud, n, vars)
         })
     }
 
@@ -97,7 +100,7 @@
         $basculer_vers_onglet(actif, noeud)
     }
 
-    const marquer_onglet_actif = (page, n) =>
+    const marquer_onglet_actif = (page, n, vars = null) =>
     {
         const boutons_onglets = page.querySelectorAll(':scope .bouton-onglet')
         boutons_onglets.forEach((bouton_onglet, i) =>
@@ -113,19 +116,19 @@
             onglet.classList.toggle('actif', actif)
             onglet.inert = !actif
 
-            if (actif && $vars)
+            if (actif && vars)
             {
-                if ($vars.onglet_actif && $vars.onglet_actif !== onglet)
-                    $vars.onglet_actif.removeEventListener('scroll', $vars.sur_scroll_onglet)
+                if (vars.onglet_actif && vars.onglet_actif !== onglet)
+                    vars.onglet_actif.removeEventListener('scroll', vars.sur_scroll_onglet)
 
-                $vars.onglet_actif = onglet
+                vars.onglet_actif = onglet
 
-                $vars.sur_scroll_onglet = () =>
+                vars.sur_scroll_onglet = () =>
                 {
                     $actualiser_defilement(onglet.scrollTop > 0 ? `interieur` : `sommet`)
                 }
 
-                onglet.addEventListener('scroll', $vars.sur_scroll_onglet)
+                onglet.addEventListener('scroll', vars.sur_scroll_onglet)
 
                 $actualiser_defilement(onglet.scrollTop > 0 ? `interieur` : `sommet`)
             }
@@ -144,7 +147,7 @@
         gap: 0;
         padding-left: var(--l-tete);
 
-        transition: opacity var(--d-animation);
+        transition: opacity var(--d-animation-page);
         scroll-behavior: smooth;
     }
 

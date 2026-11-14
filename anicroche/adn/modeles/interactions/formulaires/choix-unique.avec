@@ -1,7 +1,8 @@
 @script [
     $monter_choix_unique = () =>
     {
-        const conteneur = $node.querySelector(':scope > div')
+        const noeud     = $node
+        const conteneur = noeud.querySelector(':scope > div')
         if (!conteneur)
             return
 
@@ -56,12 +57,12 @@
         $vars.observateur_choix_unique.observe(conteneur)
         labels.forEach(label => $vars.observateur_choix_unique.observe(label))
         inputs.forEach(input => input.addEventListener('change', sur_changement))
-        $node.addEventListener('click', sur_clic)
+        noeud.addEventListener('click', sur_clic)
 
         requestAnimationFrame(() =>
             requestAnimationFrame(() =>
             {
-                if ($node.isConnected)
+                if (noeud.isConnected)
                     actualiser()
             })
         )
