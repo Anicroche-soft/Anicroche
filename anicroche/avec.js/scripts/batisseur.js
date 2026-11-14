@@ -837,31 +837,13 @@ const construire_conditionnel = (chaine, donnees) =>
     if (deps_condition.size > 0)
     {
         let transition_en_cours = false
-        let branche_en_attente  = null
+        let branche_en_attente  = undefined
 
         const executer_transition = async (cible) =>
         {
             transition_en_cours = true
 
-            const noeuds_a_supprimer = []
-            let noeud = ancre_debut.nextSibling
-            while (noeud && noeud !== ancre_fin)
-            {
-                noeuds_a_supprimer.push(noeud)
-                noeud = noeud.nextSibling
-            }
-
-            await Promise.all(noeuds_a_supprimer.map(n => demonter_noeud(n)))
-
-            for (const n of noeuds_a_supprimer)
-            {
-                if (n.parentNode) n.parentNode.removeChild(n)
-            }
-
-            for (const n of noeuds_a_supprimer)
-            {
-                nettoyer_noeud(n)
-            }
+            await vider_entre_ancres(ancre_debut, ancre_fin)
 
             if (cible)
             {
@@ -878,10 +860,11 @@ const construire_conditionnel = (chaine, donnees) =>
 
             transition_en_cours = false
 
-            if (branche_en_attente !== null)
+            // La branche demandée pendant la transition (null : aucune branche à afficher)
+            if (branche_en_attente !== undefined)
             {
-                const prochaine   = branche_en_attente
-                branche_en_attente = null
+                const prochaine    = branche_en_attente
+                branche_en_attente = undefined
                 executer_transition(prochaine)
             }
         }
@@ -902,6 +885,7 @@ const construire_conditionnel = (chaine, donnees) =>
                 {
                     if (!deps_null.has(propriete)) return
                     if (!ancre_debut.parentNode) { desabonner(); return }
+                    if (en_retrait(ancre_debut)) return
 
                     const val = lire_dependance_par_clef(propriete, donnees.args)
                     if (val === null || val === undefined) return
@@ -931,6 +915,8 @@ const construire_conditionnel = (chaine, donnees) =>
                     desabonner()
                     return
                 }
+                if (en_retrait(ancre_debut))
+                    return
 
                 // Les dépendances sont relevées à chaque évaluation : avec & et |, une variable
                 // non lue la première fois (court-circuit) doit pouvoir être suivie ensuite
@@ -1124,24 +1110,7 @@ const construire_for_each = (bloc, donnees) =>
 
     const rendre = async () =>
     {
-        const noeuds_a_supprimer = []
-        let noeud = ancre_debut.nextSibling
-        while (noeud && noeud !== ancre_fin)
-        {
-            noeuds_a_supprimer.push(noeud)
-            noeud = noeud.nextSibling
-        }
-
-        await Promise.all(noeuds_a_supprimer.map(n => demonter_noeud(n)))
-
-        for (const n of noeuds_a_supprimer)
-        {
-            if (n.parentNode)
-                n.parentNode.removeChild(n)
-        }
-
-        for (const n of noeuds_a_supprimer)
-            nettoyer_noeud(n)
+        await vider_entre_ancres(ancre_debut, ancre_fin)
 
         noeuds_rendus = construire_noeuds()
         ancre_fin.before(...noeuds_rendus)
@@ -1189,6 +1158,8 @@ const construire_for_each = (bloc, donnees) =>
                 desabonner()
                 return
             }
+            if (en_retrait(ancre_debut))
+                return
 
             executer_rendu()
         })
@@ -1219,6 +1190,8 @@ const construire_texte = (bloc, donnees) =>
                 desabonner()
                 return
             }
+            if (en_retrait(noeud))
+                return
 
             definir_noeud_courant(noeud)
             noeud.textContent = valoriser(decapsuler(bloc.args[0]), donnees)
@@ -1277,6 +1250,7 @@ const construire_balise = (bloc, donnees) =>
                 {
                     if (!noeud._avec_deps.has(propriete)) return
                     if (!document.contains(noeud)) { desabonner(); return }
+                    if (en_retrait(noeud)) return
 
                     definir_noeud_courant(noeud)
                     appliquer_conditionnel()
@@ -1319,6 +1293,7 @@ const construire_balise = (bloc, donnees) =>
                 {
                     if (!noeud._avec_deps.has(propriete)) return
                     if (!document.contains(noeud)) { desabonner(); return }
+                    if (en_retrait(noeud)) return
 
                     definir_noeud_courant(noeud)
                     const nouvelle_valeur = valoriser(decapsuler(valeur_brute), donnees)
@@ -1442,14 +1417,19 @@ const construire_modele = (bloc, donnees) =>
         {
             await chargements_en_cours.get(nom)
 
-            if (!ancre.parentNode) return
+            // Bloc retiré, ou en cours de retrait : celui qui le retire nettoie le modèle d'attente
+            if (!ancre.parentNode || en_retrait(ancre)) return
 
-            const modeles_englobants = reprendre_modeles_englobants()
+            await Promise.all(noeuds_attente.map(n => demonter_noeud(n)))
+
+            // Le bloc a été retiré pendant le démontage (navigation entre-temps) : celui qui l'a
+            // retiré a nettoyé le modèle d'attente, le modèle chargé n'est pas construit
+            if (!ancre.parentNode || en_retrait(ancre)) return
 
             // Supprimer le modèle d'attente
+            const modeles_englobants = reprendre_modeles_englobants()
             for (const n of noeuds_attente)
             {
-                await demonter_noeud(n)
                 nettoyer_noeud(n)
                 n.parentNode?.removeChild(n)
             }
@@ -1753,7 +1733,8 @@ const monter_noeud = (noeud) =>
 {
     if (noeud.nodeType === 1)
     {
-        if (noeud._avec_monte)
+        // Un nœud en cours de retrait a déjà été démonté : il ne doit pas être remonté
+        if (noeud._avec_monte || en_retrait(noeud))
             return
 
         noeud._avec_monte = true
@@ -1763,6 +1744,50 @@ const monter_noeud = (noeud) =>
             executer_script(noeud._avec_actions.mount, null, noeud, noeud._avec_scope, noeud._avec_args)
         }
     }
+}
+
+const noeuds_entre = (ancre_debut, ancre_fin) =>
+{
+    const noeuds = []
+    for (let noeud = ancre_debut.nextSibling; noeud && noeud !== ancre_fin; noeud = noeud.nextSibling)
+        noeuds.push(noeud)
+    return noeuds
+}
+
+// Un nœud en cours de retrait (ou placé dans un tel nœud) ne réagit plus aux changements de
+// variables : pendant son démontage (animation de sortie…), il garde l'état qu'il avait
+const en_retrait = (noeud) =>
+{
+    for (let courant = noeud; courant; courant = courant.parentNode)
+        if (courant._avec_retrait)
+            return true
+    return false
+}
+
+// Démonte puis retire les nœuds placés entre deux ancres (@if, @for). Pendant le démontage,
+// un modèle différé qui finit de se charger peut remplacer les siens : les nœuds sont relevés
+// à nouveau jusqu'à ce qu'aucun nouveau n'apparaisse, pour ne rien laisser derrière
+const vider_entre_ancres = async (ancre_debut, ancre_fin) =>
+{
+    const demontes = new Set()
+    for (;;)
+    {
+        const nouveaux = noeuds_entre(ancre_debut, ancre_fin).filter(n => !demontes.has(n))
+        if (nouveaux.length === 0)
+            break
+        nouveaux.forEach(n =>
+        {
+            n._avec_retrait = true
+            demontes.add(n)
+        })
+        await Promise.all(nouveaux.map(n => demonter_noeud(n)))
+    }
+
+    const noeuds = noeuds_entre(ancre_debut, ancre_fin)
+    for (const n of noeuds)
+        n.parentNode.removeChild(n)
+    for (const n of noeuds)
+        nettoyer_noeud(n)
 }
 
 const demonter_noeud = async (noeud) =>
