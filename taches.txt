@@ -18,4 +18,3 @@ Liste de tâches :
 - mettre en place la configuration de compte et de profils (dont la case à cocher des fonctionnalités liées à l'âge, voir RGPD.md § 2.4)
 - demander une nouvelle acceptation des conditions d'utilisation à la connexion quand une version importante est publiée (date_acceptation_conditions antérieure à la version en vigueur), voir RGPD.md § 11
 - remplacer la ligne d'indication au déut de l'édition de page par une boîte de notifications généralisée à toute l'application
-- corriger l'outline au focus du bouton pour afficher le mot de passe dans le modèle de champ de mot de passe

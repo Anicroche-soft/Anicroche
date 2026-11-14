@@ -96,7 +96,8 @@
         user-select: none;
     }
 
-    .champ-mot-de-passe > div:focus-within {
+    /* Seul le focus du champ lui-même entoure le cadre, pas celui du bouton de bascule */
+    .champ-mot-de-passe > div:has(> input:focus-visible) {
         outline-color: var(--c-focus);
     }
 
@@ -122,11 +123,11 @@
         position: absolute;
         right: 0.125rem;
         top: 0.125rem;
-        bottom: 10.25rem;
+        bottom: 0.125rem;
 
         display: flex;
 
-        border-radius: 0 0.25rem 0.25rem 0;
+        border-radius: 0.25rem;
 
         --c-flux: var(--c-plus);
     }

@@ -123,6 +123,15 @@
         margin: -0.25rem 0;
     }
 
+    /* Boutons et liens à icône (les onglets texte de la barre d'onglets sont exclus) */
+    .navigation :is(a, button):not(.bouton-onglet) {
+        display: flex;
+        align-items: center;
+
+        height: 1.5rem;
+
+        border-radius: 0.1875rem;
+    }
 ]
 
 <div .navigation>
