@@ -1,0 +1,48 @@
+@script [
+    $erreur_annulation_effacement = false
+
+    $date_effacement_en_cours = $compte?.date_effacement
+        ? new Date($compte.date_effacement).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+        : ''
+
+    $annuler_effacement = async () =>
+    {
+        const reponse = await $create('restauration')
+
+        if (reponse.error)
+        {
+            $erreur_annulation_effacement = reponse.error ?? "L'annulation a échoué"
+            return
+        }
+
+        // Les vérifications de page sont statiques : la page du compte est reconstruite
+        // en passant par l accueil
+        await $obtenir_compte()
+        $navigate_to('/')
+    }
+
+    $deconnecter_compte_effacement = async () =>
+    {
+        const reponse = await $create('deconnexion')
+
+        if (!reponse.error)
+            $navigate_to('/')
+    }
+]
+
+section [effacement-en-cours, centree]
+    titre [centre]
+        "Votre compte va être effacé"
+    carte
+        @if [$erreur_annulation_effacement]
+            erreur-formulaire
+                "$erreur_annulation_effacement"
+        <p>
+            "L'effacement de votre compte a été demandé. Il sera effacé définitivement le $date_effacement_en_cours, et il est suspendu d'ici là."
+        <p>
+            "Si vous avez changé d'avis, ou si vous n'êtes pas à l'origine de cette demande, vous pouvez encore restaurer votre compte. Pensez alors à changer votre mot de passe."
+        ligne
+            bouton-action [$deconnecter_compte_effacement]
+                "Déconnexion"
+            bouton-action [$annuler_effacement]
+                "Restauration"

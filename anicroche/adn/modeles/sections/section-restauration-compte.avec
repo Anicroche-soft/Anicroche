@@ -1,0 +1,79 @@
+@script [
+    $etat_restauration   = 'attente'
+    $erreur_restauration = false
+
+    // Le jeton est dans le fragment de l'adresse, que le navigateur n'envoie pas au serveur.
+    // Il est retiré de l'adresse dès le chargement (historique, favoris, partage) et n'est
+    // utilisé qu'au clic : un analyseur de liens qui ouvre la page ne restaure rien
+    const jeton = String($hash ?? '').replace(/^#/, '')
+
+    if (location.hash)
+        history.replaceState(history.state, '', location.pathname + location.search)
+
+    if (!jeton)
+        $etat_restauration = 'invalide'
+
+    $restaurer_compte = async () =>
+    {
+        const reponse = await $create('restauration', { jeton })
+
+        // Jeton invalide ou expiré, effacement déjà annulé, compte disparu : la connexion
+        // reste le moyen de restaurer le compte
+        if ([403, 404, 409].includes(reponse.code))
+        {
+            $etat_restauration = 'invalide'
+            return
+        }
+
+        if (reponse.error)
+        {
+            $erreur_restauration = reponse.error ?? "Erreur serveur"
+            return
+        }
+
+        $etat_restauration = reponse.data?.motif === 'effacement' ? 'effacement_annule' : 'restaure'
+    }
+]
+
+section [restauration-compte, centree]
+    @if [$etat_restauration = invalide]
+        titre [centre]
+            "Connectez-vous pour restaurer votre compte"
+        carte
+            bouton-ancre [/connexion]
+                "Connexion"
+
+    @else-if [$etat_restauration = effacement_annule]
+        titre [centre]
+            "Effacement annulé"
+        carte
+            succes-formulaire
+                "Votre compte est restauré : il est de nouveau actif."
+            <p>
+                "Si vous n'êtes pas à l'origine de la demande d'effacement, changez votre mot de passe."
+            ligne
+                bouton-ancre [/connexion]
+                    "Connexion"
+
+    @else-if [$etat_restauration = restaure]
+        titre [centre]
+            "Compte restauré"
+        carte
+            succes-formulaire
+                "Votre compte est restauré : merci !"
+            ligne
+                bouton-ancre [/]
+                    "Accueil"
+
+    @else
+        titre [centre]
+            "Restaurer votre compte"
+        carte
+            @if [$erreur_restauration]
+                erreur-formulaire
+                    "$erreur_restauration"
+            <p>
+                "Votre compte Anicroche doit être supprimé prochainement. Pour le restaurer, il suffit de confirmer ici, sans vous connecter."
+            ligne
+                bouton-action [$restaurer_compte]
+                    "Restauration"

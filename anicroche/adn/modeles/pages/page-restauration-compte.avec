@@ -1,0 +1,13 @@
+page [:(, $authentification : ouverte]
+    navigation
+        <div .gauche>
+
+        <div .centre>
+            <span>
+                "Restauration du compte"
+
+        <div .droite>
+            icone-horloge
+
+    onglet
+        section-restauration-compte

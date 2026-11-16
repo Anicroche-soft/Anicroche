@@ -15,10 +15,13 @@
         default : auto
     }
 
+    # Un profil sans gérant est anonymisé : il n a plus d identifiant ni de pseudonyme
+    # (voir effacement.sans)
     {
-        name : identifiant
-        type : char
-        size : 1-65
+        name  : identifiant
+        type  : char
+        size  : 1-65
+        count : 0-1
         rule : "$identifiant ~= /^(?=.{1,32}(?:\.|$))(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*(?:\.(?=.{1,32}$)(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*)?$/"
 
         can_create   : ':)'
@@ -31,9 +34,10 @@
     }
 
     {
-        name : pseudonyme
-        type : char
-        size : 1-64
+        name  : pseudonyme
+        type  : char
+        size  : 1-64
+        count : 0-1
 
         can_create : ':)'
         can_update : "$context.compte"
@@ -50,6 +54,13 @@
         name    : date_creation
         type    : date
         default : now
+    }
+
+    # Choix fait à la demande d effacement du compte de son seul gérant (anonymisation par défaut)
+    {
+        name  : sort_a_l_effacement
+        type  : anonymisation/suppression
+        count : 0-1
     }
 
     {
@@ -117,6 +128,10 @@
             return $indicate(409, "Identifiant déjà utilisé")
 
         const racine = lire_racine(identifiant)
+
+        // Les dérivés d un profil anonymisé ou supprimé gardent leur base : elle reste réservée
+        if (!racine && profil_actuel?.identifiant !== identifiant && (await chercher_derives(identifiant)).length)
+            return $indicate(409, "Identifiant déjà utilisé")
 
         if (!racine)
         {

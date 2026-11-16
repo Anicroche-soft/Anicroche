@@ -37,6 +37,11 @@
     }
 
     {
+        path  : [ /desinscription, /restauration ]
+        limit : 10/1m
+    }
+
+    {
         path   : /clef
         method : post
         limit  : 3/10m
@@ -123,30 +128,33 @@
             $body.coordonnee = $body.coordonnee.trim().toLowerCase()
     }
 
-    $verifier_clef = async () =>
+    // Une clef ne sert qu à l usage de son type : une clef de connexion ne confirme pas un effacement
+    $verifier_clef = async (type = 'authentification') =>
     {
         // Décrémenter avant de vérifier : des essais simultanés ne peuvent pas dépasser le quota
         await $update_all('clefs',
             `
             #id                 -{ $body.ids
           & #hachage_coordonnee  = $body.coordonnee
-          & #type                = authentification
+          & #type                = $type
           & #nombre_tentatives  >= 0
             `,
             {
                 nombre_tentatives : 'nombre_tentatives - 1'
-            }
+            },
+            { $type: type }
         )
 
         return await $search_one('clef',
             `
             #id                 -{ $body.ids
           & #hachage_coordonnee  = $body.coordonnee
-          & #type                = authentification
+          & #type                = $type
           & #clef                = $body.clef
           & #nombre_tentatives  >= 0
           & #date_validite       > now
-            `
+            `,
+            { $type: type }
         )
     }
 
@@ -161,7 +169,8 @@
         {
             const payload = await $verify_token(jeton_acces)
 
-            if (payload?.id_compte)
+            // Les liens des courriels sont aussi des jetons signés : seul un jeton d accès authentifie
+            if (payload?.type === 'acces' && payload.id_compte)
             {
                 const compte = await $search_one('compte',
                     `#id = $payload.id_compte`,
@@ -171,6 +180,7 @@
                 if (compte)
                 {
                     $context.compte = compte
+                    await $noter_activite()
                     await $resoudre_profil()
                     return
                 }
@@ -228,7 +238,7 @@
             const cookie_rotation = `${nouvelle_session.id}.${nouvelle_session.jeton}`
             $set_cookie('jeton', cookie_rotation, { lifetime: '30d' })
 
-            const nouveau_jeton_acces = await $sign_token({ id_compte: session.id_compte })
+            const nouveau_jeton_acces = await $sign_token({ type: 'acces', id_compte: session.id_compte })
             $add_to_data('jeton_acces', nouveau_jeton_acces)
         }
 
@@ -237,8 +247,31 @@
             { $session: session }
         )
 
+        if (!compte)
+            return
+
         $context.compte = compte
+        await $noter_activite()
         await $resoudre_profil()
+    }
+
+    // Date de dernière activité, pour la suppression des comptes inactifs (voir effacement.sans) :
+    // écrite au plus une fois par jour
+    $noter_activite = async () =>
+    {
+        const compte = $context.compte
+        if (!compte || new Date(compte.date_derniere_activite) > new Date(Date.now() - 24 * 60 * 60 * 1000))
+            return
+
+        await $update_one('compte',
+            `#id = $id`,
+            {
+                date_derniere_activite     : 'now',
+                nombre_avertissements      : 0,
+                date_premier_avertissement : null
+            },
+            { $id: compte.id }
+        )
     }
 
     // Le profil sélectionné sur le site arrive dans l en-tête X-Profil : seul celui-ci compte
@@ -267,10 +300,15 @@
         $add_to_respond('est_connecte', !!$context.compte)
     }
 
-    $exiger_compte = () =>
+    // Un compte dont l effacement est demandé est gelé : seules les routes qui le permettent
+    // explicitement (consultation, déconnexion, annulation) lui restent ouvertes
+    $exiger_compte = (options = {}) =>
     {
         if (!$context.compte)
             return $indicate(401, 'Non authentifié')
+
+        if ($context.compte.date_demande_effacement && !options.effacement_demande)
+            return $indicate(403, "Effacement du compte en cours")
     }
 
     // Le rôle est celui du profil sélectionné

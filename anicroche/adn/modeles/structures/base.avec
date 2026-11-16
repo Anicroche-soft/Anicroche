@@ -7,6 +7,10 @@
     $compte = null
     $profil = null
 
+    // Faux pour un compte dont l effacement est demandé : les pages le traitent alors comme
+    // déconnecté, sauf la page du compte, qui affiche l effacement en cours
+    $compte_actif = false
+
     $add_action('prior_requested', async (options) =>
     {
         if ($jeton_acces)
@@ -26,7 +30,7 @@
         {
             if (await $obtenir_compte())
             {
-                $navigate_to('/')
+                $navigate_to($compte_actif ? '/' : '/profil')
             }
             else
             {
@@ -49,8 +53,9 @@
             $connecte = data.est_connecte ? true : false
             if (!$connecte)
             {
-                $compte = null
-                $profil = null
+                $compte       = null
+                $profil       = null
+                $compte_actif = false
             }
         }
     })
@@ -60,7 +65,15 @@
         const reponse = await $search('moi')
         if (!reponse.error)
         {
-            $compte = reponse.data
+            $compte       = reponse.data
+            $compte_actif = !$compte.date_demande_effacement
+        }
+
+        // Sans profil sélectionné, l API traite aussi le compte en cours d effacement comme déconnecté
+        if (!reponse.error && !$compte_actif)
+        {
+            $profil = null
+            return true
         }
 
         if (!reponse.error)

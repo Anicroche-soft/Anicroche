@@ -30,9 +30,9 @@ En tant qu'éditeur non professionnel, la loi pour la confiance dans l'économie
 | Finalité | Créer un compte, se connecter (mot de passe ou code envoyé par courriel), maintenir la session |
 | Base légale | Exécution du contrat (CGU) — art. 6.1.b |
 | Personnes concernées | Utilisateurs inscrits, et personnes qui demandent un code sans terminer l'inscription |
-| Données | Adresse électronique (chiffrée AES-256-GCM + empreinte HMAC) ; mot de passe (haché Argon2id) ; date d'inscription ; date d'acceptation des conditions d'utilisation (preuve de l'acceptation, voir § 11) ; code de connexion (haché, valable 15 min) |
+| Données | Adresse électronique (chiffrée AES-256-GCM + empreinte HMAC) ; mot de passe (haché Argon2id) ; date d'inscription ; date d'acceptation des conditions d'utilisation (preuve de l'acceptation, voir § 11) ; date de dernière activité, avertissements d'inactivité envoyés, date de demande d'effacement (voir § 4) ; code de connexion ou de confirmation d'effacement (haché, valable 15 min) |
 | Destinataires | L'éditeur ; l'hébergeur ; le prestataire d'envoi de courriels (adresse et code) |
-| Durée de conservation | Compte : jusqu'à sa suppression, ou après inactivité (**À compléter**, voir § 4). Codes : 15 min de validité, supprimés au plus tard le lendemain (`$nettoyer_clefs`) |
+| Durée de conservation | Compte : jusqu'à son effacement (30 jours après la demande), ou 3 ans après la dernière activité (voir § 4). Codes : 15 min de validité, supprimés au plus tard le lendemain (`$nettoyer_clefs`) |
 
 ### 2.2. Sécurité des sessions et prévention des abus
 
@@ -49,9 +49,9 @@ En tant qu'éditeur non professionnel, la loi pour la confiance dans l'économie
 |---|---|
 | Finalité | Permettre à l'utilisateur de créer et gérer des profils publics |
 | Base légale | Exécution du contrat — art. 6.1.b |
-| Données | Identifiant ; pseudonyme ; date de création ; comptes gérants |
+| Données | Identifiant ; pseudonyme ; date de création ; comptes gérants ; anicroches dont le profil est l'auteur ; choix fait pour le profil lors d'une demande d'effacement |
 | Visibilité | Identifiant et pseudonyme : publics. Le lien entre un profil et le compte qui le gère n'est pas public |
-| Durée de conservation | Jusqu'à la suppression du profil ou du dernier compte gérant (**À compléter** quand la suppression de compte sera faite) |
+| Durée de conservation | Jusqu'à la suppression du profil. À l'effacement de son dernier gérant, le profil est supprimé, ou anonymisé si l'utilisateur ne l'a pas demandé ou si le compte est supprimé pour inactivité (voir § 4.1) |
 
 ### 2.4. Âge
 
@@ -129,11 +129,38 @@ Avant d'ajouter un nouveau prestataire qui reçoit des données personnelles : v
 |---|---|---|
 | Code de connexion | 15 min de validité, suppression quotidienne | `$nettoyer_clefs` (`index.sans`) |
 | Session | 30 jours au plus, suppression quotidienne après expiration ou révocation | `$nettoyer_sessions` (`index.sans`) |
-| Compte inactif | À définir avec la gestion des comptes inactifs (voir `taches.txt`) | À développer |
-| Compte supprimé | Suppression immédiate de la base ; disparition des sauvegardes au bout de leur durée de rotation | À développer |
+| Compte inactif | 3 ans après la dernière activité (requête authentifiée, notée au plus une fois par jour), avec au moins 30 jours de préavis : courriels 1 an, 6 mois, 3 mois, 1 mois, 2 semaines, 1 semaine et 1 jour avant | `$traiter_fins_de_comptes` (`effacement.sans`), voir § 4.1 |
+| Compte dont l'effacement est demandé | Suspendu dès la demande, effacé 30 jours après (rappels 14, 7, 3 et 1 jours avant) ; disparition des sauvegardes au bout de leur durée de rotation | `$traiter_fins_de_comptes` (`effacement.sans`), voir § 4.1 |
 | Versions publiées des pages légales | Sans limite : elles prouvent ce que chaque utilisateur a accepté | Voir § 11 |
 | Sauvegardes | Celle d'Infomaniak (**À noter** : durée indiquée dans le Manager) | Voir § 7 |
 | Journaux du serveur | **À compléter** | Voir § 2.6 |
+
+### 4.1. Fin des comptes
+
+**Effacement demandé** (page `/compte/suppression`, route `POST /desinscription`) :
+
+- la demande exige à la fois le mot de passe et un code de type `effacement`, envoyé à l'adresse principale seulement après vérification du mot de passe : une session volée ou un mot de passe volé ne suffit pas ;
+- dès la demande, toutes les sessions sont fermées et le compte est gelé (l'API ne lui ouvre plus que la consultation, la déconnexion et l'annulation) ; toutes les adresses du compte reçoivent un courriel avec un lien « Restauration du compte » ;
+- pendant 30 jours, l'utilisateur peut annuler en se connectant ou avec ce lien, sans se connecter (`POST /restauration`, page `/compte/restauration#…`) ; des rappels sont envoyés 14, 7, 3 et 1 jours avant l'échéance ;
+- ce délai reste dans le mois de l'art. 12.3. Il doit être annoncé dans la politique de confidentialité.
+
+**Compte inactif** : avertissements par courriel (§ 4), chacun avec le lien « Restauration du compte », qui remet la date d'activité à zéro sans connexion. Le premier avertissement précède toujours la suppression d'au moins 30 jours. Ne sont jamais supprimés pour inactivité :
+
+- les comptes gérants d'un profil `maitre` (liste `ROLES_PROTEGES` d'`effacement.sans`) : comptes d'administration du service ;
+- les comptes dont `date_conservation` est dans le futur : champ renseigné à la main en cas de litige, de réquisition judiciaire, de somme due ou de solde restant (relation contractuelle en cours, art. 17.3.b et e). Le motif est noté dans le registre des demandes (§ 9).
+
+**Ce qui est effacé** : le compte, ses coordonnées, ses sessions et ses codes. Pour un profil que le compte gérait avec d'autres, seul le lien de gérance disparaît. Pour un profil dont il était le seul gérant :
+
+| Choix | Effet |
+|---|---|
+| Anonymisation (par défaut, et toujours après inactivité) | Le profil perd ses gérants, son identifiant et son pseudonyme ; il reste l'auteur de ses anicroches, qui restent visibles sans nom |
+| Suppression (cochée à la demande d'effacement) | Le profil est supprimé et n'est plus l'auteur de ses anicroches ; une anicroche qui n'a plus d'auteur est vidée de ses textes et n'est plus visible (une page, qui n'a pas d'auteur, n'est jamais concernée) |
+
+Un profil anonymisé n'est plus une donnée personnelle **à condition que ses publications ne permettent pas d'identifier leur auteur** : une personne qui le demande peut toujours obtenir le retrait d'une publication qui l'identifie (art. 17). Garder des publications après le départ de leur auteur suppose aussi une licence dans les conditions d'utilisation (non exclusive, gratuite, maintenue après la suppression du compte, publication sans nom), avec les règles ci-dessus annoncées clairement.
+
+L'identifiant d'un profil racine anonymisé ou supprimé reste réservé tant que des profils dérivés le portent.
+
+**Confirmation** : un dernier courriel confirme l'effacement. Le journal n'enregistre que le motif (`COMPTE effacé (demande)` ou `(inactivité)`), sans identifiant.
 
 ---
 
@@ -214,7 +241,7 @@ Les demandes arrivent à l'adresse de contact RGPD (§ 1). **Délai de réponse 
    |---|---|
    | Accès / portabilité (art. 15 et 20) | Export des données du compte (route à développer) ; en attendant, extraction manuelle en JSON : compte (dont date de naissance et date d'acceptation des conditions d'utilisation), coordonnées, sessions, profils gérés |
    | Rectification (art. 16) | Fonctions à développer ; en attendant, modification manuelle en base par l'API (les champs `crypt` et `hash` doivent passer par sans.js, pas par du SQL direct) |
-   | Effacement (art. 17) | Fonction à développer ; en attendant, suppression manuelle du compte, de ses coordonnées et sessions, et des profils dont il est le seul gérant |
+   | Effacement (art. 17) | L'utilisateur le demande lui-même depuis son compte (§ 4.1). Une demande reçue par courriel depuis l'adresse du compte : l'inviter à le faire en ligne, ou, si ce n'est pas possible, renseigner `date_demande_effacement` du compte (effacement au bout du délai). Retrait d'une publication anonymisée qui identifie son auteur : vider ses textes |
    | Opposition (art. 21) et retrait du consentement | Arrêter le traitement concerné (ex. décocher les fonctionnalités liées à l'âge) |
    | Limitation (art. 18) | Marquer le compte et suspendre le traitement contesté le temps de la vérification |
 

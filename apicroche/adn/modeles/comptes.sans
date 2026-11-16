@@ -37,6 +37,40 @@
         default : now
     }
 
+    # Activité et fin de compte : voir effacement.sans
+    {
+        name    : date_derniere_activite
+        type    : datetime
+        default : now
+    }
+
+    # Avertissements envoyés : d inactivité depuis la dernière activité, ou rappels de l effacement demandé
+    {
+        name    : nombre_avertissements
+        type    : tinyint
+        default : 0
+    }
+
+    {
+        name  : date_premier_avertissement
+        type  : datetime
+        count : 0-1
+    }
+
+    {
+        name  : date_demande_effacement
+        type  : datetime
+        count : 0-1
+    }
+
+    # Suspend la suppression pour inactivité (litige, réquisition, somme due…) : renseignée
+    # à la main, jamais par une route
+    {
+        name  : date_conservation
+        type  : datetime
+        count : 0-1
+    }
+
     {
         name  : coordonnees
         count : 0-N
@@ -74,15 +108,17 @@
 @script [
     $obtenir_compte = async () =>
     {
-        await $exiger_compte()
+        await $exiger_compte({ effacement_demande: true })
 
         const compte = await $search_one('comptes',
             `
             #id = $id_compte
             `,
             { $id_compte: $context.compte.id },
-            { select: 'id ; date_inscription ; coordonnees.type,coordonnee,est_principale ; is_gerant_of_profils.id,identifiant,pseudonyme,role,date_creation' }
+            { select: 'id ; date_inscription ; date_demande_effacement ; coordonnees.type,coordonnee,est_principale ; is_gerant_of_profils.id,identifiant,pseudonyme,role,date_creation' }
         )
+
+        compte.date_effacement = $date_effacement(compte)
 
         return $indicate(200, "Compte récupéré", compte)
     }
@@ -229,7 +265,7 @@
         $set_cookie('jeton', cookie_session, { lifetime: '30d' })
 
 
-        const jeton_acces = await $sign_token({ id_compte: coordonnee.id_compte })
+        const jeton_acces = await $sign_token({ type: 'acces', id_compte: coordonnee.id_compte })
 
         $add_to_respond('est_connecte', true)
 
@@ -238,7 +274,7 @@
 
     $deconnecter_compte = async ($request) =>
     {
-        await $exiger_compte()
+        await $exiger_compte({ effacement_demande: true })
 
         const cookie_session = $request.cookies?.jeton ?? null
 

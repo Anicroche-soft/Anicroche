@@ -30,11 +30,20 @@
         name  : textes
         count : 0-N
     }
+
+    # Les pages n ont pas d auteur. Pour les autres types, une anicroche sans auteurs est
+    # supprimée : ses textes ont été vidés (voir effacement.sans)
+    {
+        name  : auteurs
+        entry : auteur
+        ref   : profils
+        count : N-N
+    }
 ]
 
 # Chaque anicroche trouvée est complétée par sa version en vigueur et ses sources. Seules
 # celles qui ont une version publiée sont visibles, sauf pour les profils maîtres,
-# qui voient aussi le brouillon en cours
+# qui voient aussi le brouillon en cours. Une anicroche supprimée n est jamais visible
 @rules [
     post_search : $completer_anicroches($results)
 ]
@@ -101,7 +110,7 @@
             const anicroche = $results[i]
             const version   = await $version_en_vigueur(anicroche.id)
 
-            if (!version && !maitre)
+            if ((!version && !maitre) || await $est_anicroche_supprimee(anicroche))
             {
                 $results.splice(i, 1)
                 continue

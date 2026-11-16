@@ -22,20 +22,26 @@
         name : hachage_coordonnee
         type : hash
 
+        # Une clef d effacement n est envoyée qu à la coordonnée principale du compte connecté,
+        # avec son mot de passe (mot_de_passe dans le corps)
         can_create  : "
-            $type = authentification
-          & $hachage_coordonnee ~= /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+            (
+                $type = authentification
+              & $hachage_coordonnee ~= /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+            )
+          | ($type = effacement & $context.compte)
         "
-        prior_create : $supprimer_clefs_anciennes($values)
+        prior_create : $preparer_clef($values)
     }
 
     {
         name : type
-        type : authentification/autre
+        type : authentification/effacement
         size : 1-32
 
         can_create : "
             $type = authentification
+          | ($type = effacement & $context.compte)
         "
     }
 
@@ -77,8 +83,28 @@
 ]
 
 @script [
-    $supprimer_clefs_anciennes = async ($values) =>
+    $preparer_clef = async ($values) =>
     {
+        if ($values.type === 'effacement')
+        {
+            await $exiger_compte()
+
+            const principale = await $search_one('coordonnee',
+                `
+                #hachage_coordonnee = $values.hachage_coordonnee
+              & #id_compte          = $id_compte
+              & #est_principale
+                `,
+                { $values, $id_compte: $context.compte.id }
+            )
+
+            if (!principale)
+                return $indicate(403, "Accès refusé")
+
+            if (!await $verifier_mot_de_passe())
+                return $indicate(403, "Mot de passe invalide")
+        }
+
         const clef_recente = await $search_one('clef',
             `
             #hachage_coordonnee = $values.hachage_coordonnee
@@ -116,6 +142,17 @@
             `,
             { $values }
         )
+
+        if ($values.type === 'effacement')
+        {
+            await $send_email({
+                to      : $values.hachage_coordonnee,
+                subject : "Votre code de confirmation d'effacement",
+                content : `<p>Votre code de confirmation : <strong>${clef_affichee}</strong></p>`
+                        + `<p>Il permet de demander l'effacement de votre compte Anicroche. Si vous n'êtes pas à l'origine de cette demande, ne le communiquez à personne et changez votre mot de passe.</p>`
+            })
+            return
+        }
 
         await $send_email({
             to      : $values.hachage_coordonnee,

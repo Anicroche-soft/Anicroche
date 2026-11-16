@@ -165,7 +165,11 @@
     }
 ]
 
-@args [$defilable : :), $authentification : libre]
+# $authentification : libre, interdite (déconnecté seulement), requise, requise_sans_profil,
+# ou ouverte (aucune vérification : pages reçues par courriel). Un compte dont l'effacement
+# est demandé est traité comme déconnecté, sauf sur la page du compte ($page_compte), qui
+# affiche l'effacement en cours
+@args [$defilable : :), $authentification : libre, $page_compte : :(]
 
 <div
     .page
@@ -174,7 +178,21 @@
     @unmount="await $demonter_page()"
 >
     @static
-        @if [$authentification = interdite & $connecte]
+        @if [$page_compte & $connecte & ! $compte_actif]
+            navigation
+                <div .gauche>
+
+                <div .centre>
+                    <span>
+                        "Effacement du compte"
+
+                <div .droite>
+                    icone-horloge
+
+            onglet
+                section-effacement-en-cours
+
+        @else-if [$authentification = interdite & $connecte]
             navigation
                 <div .gauche>
                     fleche-retour
@@ -187,7 +205,7 @@
             onglet
                 section-deja-connecte
 
-        @else-if [$authentification -{ [requise, requise_sans_profil] & ! $connecte]
+        @else-if [$authentification -{ [requise, requise_sans_profil] & ! $compte_actif]
             navigation
                 <div .gauche>
                     fleche-retour
@@ -200,7 +218,7 @@
             onglet
                 section-pas-encore-connecte
 
-        @else-if [$authentification -{ [requise, libre] & $connecte & ! $profil]
+        @else-if [$authentification -{ [requise, libre] & $compte_actif & ! $profil]
             navigation
                 <div .gauche>
                     fleche-retour

@@ -1,0 +1,193 @@
+@script [
+    const coordonnee_principale = () =>
+        $compte?.coordonnees?.find(coordonnee => coordonnee.est_principale)?.coordonnee ?? null
+
+    const charger_profils = async () =>
+    {
+        if ($profils_suppression !== null)
+            return
+
+        const reponse = await $search('desinscription')
+        $profils_suppression = reponse.error ? [] : reponse.data.profils
+    }
+
+    // La clef n'est envoyée qu'avec le bon mot de passe
+    const envoyer_clef = async (mot_de_passe) =>
+    {
+        const reponse = await $create('clef', {
+            type         : 'effacement',
+            coordonnee   : coordonnee_principale(),
+            mot_de_passe
+        })
+
+        if (!reponse.error)
+            $ids_suppression.push(reponse.data.id)
+        return reponse
+    }
+
+    const lire_erreur_clef = (reponse) =>
+    {
+        if (!reponse.error)
+            return false
+        if (reponse.code === 403)
+            return "Mot de passe invalide"
+        if (reponse.code === 429)
+            return "Veuillez réessayer dans trente secondes"
+        return reponse.error ?? "Erreur serveur"
+    }
+
+    $envoyer_formulaire_profils_suppression = () =>
+    {
+        const data = new FormData($node)
+        $profils_a_supprimer = ($profils_suppression ?? [])
+            .filter(profil => data.get(profil.id) === 'oui')
+            .map(profil => profil.id)
+
+        $basculer_vers_onglet_suivant()
+    }
+
+    $envoyer_formulaire_mot_de_passe_suppression = async () =>
+    {
+        const mot_de_passe = new FormData($node).get('mot_de_passe')
+        const reponse      = await envoyer_clef(mot_de_passe)
+
+        // Le mot de passe est vérifié avant le délai entre deux clefs : une clef envoyée il y a
+        // moins de trente secondes reste valable
+        if (reponse.error && !(reponse.code === 429 && $ids_suppression.length))
+        {
+            $erreur_mot_de_passe_suppression = lire_erreur_clef(reponse)
+            return
+        }
+
+        $mot_de_passe_suppression        = mot_de_passe
+        $erreur_mot_de_passe_suppression = false
+        $basculer_vers_onglet_suivant()
+    }
+
+    $renvoyer_clef_suppression = async () =>
+    {
+        const erreur = lire_erreur_clef(await envoyer_clef($mot_de_passe_suppression))
+
+        $succes_clef_suppression = erreur ? false : "Une nouvelle clef a été envoyée"
+        $erreur_clef_suppression = erreur
+    }
+
+    $envoyer_formulaire_clef_suppression = async () =>
+    {
+        const reponse = await $create('desinscription', {
+            clef                : new FormData($node).get('clef'),
+            ids                 : $ids_suppression,
+            profils_a_supprimer : $profils_a_supprimer
+        })
+
+        if (reponse.error)
+        {
+            $succes_clef_suppression = false
+            $erreur_clef_suppression = reponse.code === 403
+                ? "La clef de validation est invalide"
+                : reponse.error ?? "Erreur serveur"
+            return
+        }
+
+        $mot_de_passe_suppression = null
+        $date_suppression         = new Date(reponse.data.date_effacement)
+            .toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+        $basculer_vers_onglet_suivant()
+    }
+
+    $revenir_etape_suppression = () =>
+    {
+        $erreur_mot_de_passe_suppression = false
+        $erreur_clef_suppression         = false
+        $succes_clef_suppression         = false
+        $basculer_vers_onglet_precedant()
+    }
+
+    if ($etape === 'profils')
+        charger_profils()
+]
+
+@args [$etape]
+
+@if [$etape = profils]
+    section [suppression-compte, centree]
+        titre [centre]
+            "Supprimer votre compte"
+        carte
+            formulaire [$envoyer_formulaire_profils_suppression]
+                <p>
+                    "Votre compte sera suspendu dès votre demande, puis effacé définitivement au bout de 30 jours avec vos données personnelles. D'ici là, vous pourrez changer d'avis en vous connectant, ou avec le lien envoyé par courriel."
+                @if [_ $profils_suppression > 0]
+                    <p>
+                        "Vous êtes le seul gérant de ces profils. Par défaut, ils sont anonymisés : leur nom disparaît, mais ce qu'ils ont publié reste visible. Cochez ceux que vous voulez supprimer avec leurs publications."
+                    @for-each [$p] of [$profils_suppression]
+                        case-a-cocher [$nom : $p.id]
+                            "Supprimer @$p.identifiant ($p.pseudonyme)"
+                information-formulaire
+                    "Les profils que vous gérez avec d'autres comptes leur restent."
+                bouton-soumission
+                    <span>
+                        "Continuer"
+                    icone-fleche-droite
+
+@else-if [$etape = mot_de_passe]
+    section [suppression-compte, centree]
+        titre [centre]
+            "Votre mot de passe"
+        carte
+            formulaire [$envoyer_formulaire_mot_de_passe_suppression]
+                @if [$erreur_mot_de_passe_suppression]
+                    erreur-formulaire
+                        "$erreur_mot_de_passe_suppression"
+                <p>
+                    "Confirmez votre identité : une clef de validation sera ensuite envoyée à votre adresse électronique principale."
+                champ-mot-de-passe ["Mot de passe", mot_de_passe]
+                ligne
+                    bouton-action [$revenir_etape_suppression]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+                    bouton-soumission
+                        <span>
+                            "Continuer"
+                        icone-fleche-droite
+
+@else-if [$etape = clef]
+    section [suppression-compte, centree]
+        titre [centre]
+            "Confirmez la suppression"
+        carte
+            formulaire [$envoyer_formulaire_clef_suppression]
+                @if [$succes_clef_suppression]
+                    succes-formulaire
+                        "$succes_clef_suppression"
+                @if [$erreur_clef_suppression]
+                    erreur-formulaire
+                        "$erreur_clef_suppression"
+                <p>
+                    "Une clef de validation a été envoyée à votre adresse électronique principale."
+                champ-clef ["Clef de validation", clef]
+                lien-action [$renvoyer_clef_suppression, 30]
+                    "Renvoyer la clef"
+                alerte-formulaire
+                    "Toutes vos sessions seront fermées, celle-ci comprise."
+                ligne
+                    bouton-action [$revenir_etape_suppression]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+                    bouton-soumission
+                        "Suppression"
+
+@else-if [$etape = resultat]
+    section [suppression-compte, centree]
+        titre [centre]
+            "Suppression demandée"
+        carte
+            <p>
+                "Votre compte est suspendu et sera effacé définitivement le $date_suppression. Un courriel de confirmation vous a été envoyé."
+            <p>
+                "Si vous changez d'avis d'ici là, connectez-vous ou utilisez le lien « Restauration du compte » du courriel."
+            ligne
+                bouton-ancre [/]
+                    "Accueil"

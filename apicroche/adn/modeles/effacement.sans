@@ -1,0 +1,556 @@
+# Fin des comptes : effacement demandé par l utilisateur (RGPD art. 17) et suppression des
+# comptes inactifs. Dans les deux cas, le compte, ses coordonnées, ses sessions et ses clefs
+# sont supprimés. Pour un profil dont le compte était le seul gérant :
+# - à l effacement, l utilisateur choisit de le supprimer ou de l anonymiser (par défaut) ;
+# - après inactivité, il est toujours anonymisé.
+# Un profil anonymisé n a plus de gérant, d identifiant ni de pseudonyme, et reste l auteur
+# de ses anicroches. Un profil supprimé n en est plus l auteur : une anicroche qui n a plus
+# d auteur est vidée de ses textes, et considérée comme supprimée.
+
+@actions [
+    {
+        periodically : $traiter_fins_de_comptes()
+        period       : 1d
+    }
+]
+
+@routes [
+    {
+        path   : /desinscription
+        method : get
+        action : $consulter_effacement()
+    }
+
+    {
+        path   : /desinscription
+        action : $demander_effacement($body)
+    }
+
+    # Restaure le compte : avec le jeton du lien d un courriel d effacement ou d inactivité,
+    # sans connexion, ou sans jeton pour le compte connecté dont l effacement est demandé
+    {
+        path   : /restauration
+        action : $restaurer_compte($body)
+    }
+]
+
+@script [
+    // Délai entre la demande d effacement et l effacement, en jours
+    const DELAI_EFFACEMENT = 30
+
+    // Rappels de l effacement, en jours avant l échéance, après le courriel de la demande
+    const RAPPELS_EFFACEMENT = [ 14, 7, 3, 1 ]
+
+    // Durée d inactivité avant la suppression, en années. Le premier avertissement précède
+    // toujours la suppression d au moins PREAVIS_MINIMUM jours, même pour un compte qui
+    // n a pas pu être averti à temps (compte protégé qui ne l est plus, tâche interrompue…)
+    const DUREE_INACTIVITE = 3
+    const PREAVIS_MINIMUM  = 30
+
+    // Avertissements d inactivité, en jours avant la suppression
+    const AVERTISSEMENTS = [ 365, 180, 90, 30, 14, 7, 1 ]
+
+    // Les comptes gérants d un profil de l un de ces rôles ne sont jamais supprimés pour inactivité
+    const ROLES_PROTEGES = [ 'maitre' ]
+
+    // Types d anicroches qui n ont pas d auteur
+    const TYPES_SANS_AUTEURS = [ 'page' ]
+
+    const JOUR = 24 * 60 * 60 * 1000
+
+    // MySQL ne garde pas les millisecondes : une date écrite puis relue reste ainsi identique
+    const maintenant = () => new Date(Math.floor(Date.now() / 1000) * 1000)
+
+    const ajouter_jours = (date, jours) => new Date(new Date(date).getTime() + jours * JOUR)
+
+    const formater_date = (date) => new Date(date).toLocaleDateString('fr-FR', {
+        day      : 'numeric',
+        month    : 'long',
+        year     : 'numeric',
+        timeZone : 'Europe/Paris'
+    })
+
+    // ─── Courriels ───────────────────────────────────────────────────────────
+
+    const lire_adresses = async (id_compte) =>
+        (await $search_all('coordonnees',
+            `
+            #id_compte = $id_compte
+          & #type      = courriel
+            `,
+            { $id_compte: id_compte }
+        )).map(coordonnee => coordonnee.coordonnee)
+
+    // Toutes les adresses du compte sont prévenues : un voleur qui aurait changé l adresse
+    // principale n empêche pas l ancienne d être avertie
+    const ecrire = async (adresses, sujet, contenu) =>
+    {
+        for (const adresse of adresses)
+        {
+            try
+            {
+                await $send_email({ to: adresse, subject: sujet, content: contenu })
+            }
+            catch (erreur)
+            {
+                console.log(`/!\\ courriel de fin de compte non envoyé : ${erreur.message}`)
+            }
+        }
+    }
+
+    // Le jeton ne fait que restaurer le compte : il ne permet pas de s y connecter. Il est placé
+    // dans le fragment de l adresse, que le navigateur n envoie jamais au serveur
+    const creer_lien = async (id_compte, motif, jours, demande = null) =>
+    {
+        const jeton = await $sign_token(
+            { type: 'restauration', motif, id_compte, demande },
+            { lifetime: `${Math.max(1, Math.ceil(jours))}d` }
+        )
+        return `${process.env.app_url ?? ''}/compte/restauration#${jeton}`
+    }
+
+    const bouton = (lien, texte) => `<p><a href="${lien}"><strong>${texte}</strong></a></p>`
+
+    // ─── Dates ───────────────────────────────────────────────────────────────
+
+    $date_effacement = (compte) =>
+        compte.date_demande_effacement
+            ? ajouter_jours(compte.date_demande_effacement, DELAI_EFFACEMENT)
+            : null
+
+    // Date de suppression d un compte inactif, en supposant, s il n a pas encore été averti,
+    // qu il l est maintenant
+    const echeance_inactivite = (compte) =>
+    {
+        const echeance = new Date(compte.date_derniere_activite)
+        echeance.setFullYear(echeance.getFullYear() + DUREE_INACTIVITE)
+
+        const preavis = ajouter_jours(compte.date_premier_avertissement ?? maintenant(), PREAVIS_MINIMUM)
+        return echeance > preavis ? echeance : preavis
+    }
+
+    // ─── Profils et anicroches ───────────────────────────────────────────────
+
+    const lire_profils_geres = (id_compte) =>
+        $search_all('profils',
+            `#gerants.id = $id_compte`,
+            { $id_compte: id_compte },
+            { select: 'id ; identifiant ; pseudonyme ; sort_a_l_effacement ; gerants.id' }
+        )
+
+    const est_seul_gerant = (profil) => profil.gerants.length === 1
+
+    $est_anicroche_supprimee = async (anicroche) =>
+    {
+        if (TYPES_SANS_AUTEURS.includes(anicroche.type))
+            return false
+
+        return !await $search_one('auteur_anicroche', `#id_anicroche = $id`, { $id: anicroche.id })
+    }
+
+    // Les versions restent : une conversation garde la place d un message supprimé
+    const vider_anicroche = async (id_anicroche) =>
+    {
+        await $delete_all('textes', `#id_anicroche = $id`, { $id: id_anicroche })
+    }
+
+    const anonymiser_profil = async (id_profil) =>
+    {
+        await $delete_all('gerants_profils', `#id_profil = $id`, { $id: id_profil })
+        await $update_one('profil',
+            `#id = $id`,
+            {
+                identifiant         : null,
+                pseudonyme          : null,
+                sort_a_l_effacement : null
+            },
+            { $id: id_profil }
+        )
+    }
+
+    const supprimer_profil = async (id_profil) =>
+    {
+        const liens = await $search_all('auteurs_anicroches', `#id_profil = $id`, { $id: id_profil })
+        await $delete_all('auteurs_anicroches', `#id_profil = $id`, { $id: id_profil })
+
+        for (const lien of liens)
+        {
+            const anicroche = await $search_one('anicroche', `#id = $id`, { $id: lien.id_anicroche })
+            if (anicroche && await $est_anicroche_supprimee(anicroche))
+                await vider_anicroche(anicroche.id)
+        }
+
+        await $delete_one('profil', `#id = $id`, { $id: id_profil })
+    }
+
+    // ─── Effacement ──────────────────────────────────────────────────────────
+
+    const effacer_compte = async (compte, motif) =>
+    {
+        const adresses = await lire_adresses(compte.id)
+
+        for (const profil of await lire_profils_geres(compte.id))
+        {
+            if (!est_seul_gerant(profil))
+                continue
+
+            if (motif === 'demande' && profil.sort_a_l_effacement === 'suppression')
+                await supprimer_profil(profil.id)
+            else
+                await anonymiser_profil(profil.id)
+        }
+
+        // Les liens de gérance des profils partagés sont supprimés avec le compte
+        await $delete_all('sessions', `#id_compte = $id`, { $id: compte.id })
+        if (adresses.length)
+            await $delete_all('clefs', `#hachage_coordonnee -{ $adresses`, { $adresses: adresses })
+        await $delete_all('coordonnees', `#id_compte = $id`, { $id: compte.id })
+        await $delete_one('compte', `#id = $id`, { $id: compte.id })
+
+        console.log(`  COMPTE effacé (${motif === 'demande' ? 'demande' : 'inactivité'})`)
+
+        await ecrire(adresses,
+            "Votre compte Anicroche a été effacé",
+            motif === 'demande'
+                ? `<p>Comme vous l'avez demandé, votre compte Anicroche et vos données personnelles ont été effacés.</p>`
+                + `<p>Les profils que vous gériez seul ont été supprimés ou anonymisés, selon votre choix. Vous ne recevrez plus de courriel de notre part.</p>`
+                : `<p>Faute d'activité depuis ${DUREE_INACTIVITE} ans, votre compte Anicroche et vos données personnelles ont été effacés.</p>`
+                + `<p>Les profils que vous gériez seul ont été anonymisés : ce qu'ils ont publié reste visible, sans leur nom. Vous ne recevrez plus de courriel de notre part.</p>`
+        )
+    }
+
+    const annuler = async (compte) =>
+    {
+        for (const profil of await lire_profils_geres(compte.id))
+            if (profil.sort_a_l_effacement)
+                await $update_one('profil', `#id = $id`, { sort_a_l_effacement: null }, { $id: profil.id })
+
+        await $update_one('compte',
+            `#id = $id`,
+            {
+                date_demande_effacement    : null,
+                date_derniere_activite     : 'now',
+                nombre_avertissements      : 0,
+                date_premier_avertissement : null
+            },
+            { $id: compte.id }
+        )
+
+        await ecrire(await lire_adresses(compte.id),
+            "L'effacement de votre compte est annulé",
+            `<p>L'effacement de votre compte Anicroche a été annulé : votre compte et vos profils sont de nouveau actifs.</p>`
+          + `<p>Si vous n'êtes pas à l'origine de la demande d'effacement, changez votre mot de passe.</p>`
+        )
+    }
+
+    // ─── Routes ──────────────────────────────────────────────────────────────
+
+    // Profils que le compte gère seul : ceux dont le sort est à choisir
+    $consulter_effacement = async () =>
+    {
+        await $exiger_compte({ effacement_demande: true })
+
+        const profils = (await lire_profils_geres($context.compte.id))
+            .filter(est_seul_gerant)
+            .map(profil => ({
+                id                  : profil.id,
+                identifiant         : profil.identifiant,
+                pseudonyme          : profil.pseudonyme,
+                sort_a_l_effacement : profil.sort_a_l_effacement ?? 'anonymisation'
+            }))
+
+        return $indicate(200, "Effacement consulté", {
+            date_demande_effacement : $context.compte.date_demande_effacement ?? null,
+            date_effacement         : $date_effacement($context.compte),
+            delai_effacement        : DELAI_EFFACEMENT,
+            profils
+        })
+    }
+
+    // Vérifie $body.mot_de_passe pour le compte connecté, avec la limite des échecs (POST /clef)
+    $verifier_mot_de_passe = async () =>
+    {
+        await $limit('echecs_mot_de_passe', '20/1h', { count: false })
+
+        const compte = typeof $body.mot_de_passe === 'string' && await $search_one('compte',
+            `
+            #id                   = $id_compte
+          & #hachage_mot_de_passe = $body.mot_de_passe
+            `,
+            { $id_compte: $context.compte.id }
+        )
+
+        if (compte)
+            return true
+
+        await $limit('echecs_mot_de_passe', '20/1h')
+        return false
+    }
+
+    // Corps : { clef, ids, profils_a_supprimer }. La clef, de type effacement, a été envoyée
+    // à la coordonnée principale par POST /clef, qui n en envoie qu après avoir vérifié le
+    // mot de passe : elle atteste à la fois du mot de passe et de l accès à l adresse
+    $demander_effacement = async ($body) =>
+    {
+        await $exiger_compte()
+
+        if (
+            !$body.clef
+         || !Array.isArray($body.ids)
+         || !$body.ids.length
+         || ($body.profils_a_supprimer !== undefined && !Array.isArray($body.profils_a_supprimer))
+        )
+            return $indicate(400, "Corps incomplet")
+
+        const id_compte = $context.compte.id
+
+        const principale = await $search_one('coordonnee',
+            `
+            #id_compte = $id_compte
+          & #est_principale
+            `,
+            { $id_compte: id_compte }
+        )
+
+        if (!principale)
+            return $indicate(403, "Accès refusé")
+
+        // $verifier_clef lit la coordonnée dans le corps : c est celle du compte qui compte
+        $body.coordonnee = principale.coordonnee
+
+        if (!await $verifier_clef('effacement'))
+            return $indicate(403, "Accès refusé")
+
+        await $delete_all('clefs',
+            `
+            #hachage_coordonnee = $body.coordonnee
+          & #type               = effacement
+            `
+        )
+
+        const a_supprimer = new Set(($body.profils_a_supprimer ?? []).map(String))
+
+        for (const profil of (await lire_profils_geres(id_compte)).filter(est_seul_gerant))
+            await $update_one('profil',
+                `#id = $id`,
+                { sort_a_l_effacement: a_supprimer.has(profil.id) ? 'suppression' : 'anonymisation' },
+                { $id: profil.id }
+            )
+
+        const demande = maintenant()
+        const date_effacement = ajouter_jours(demande, DELAI_EFFACEMENT)
+
+        await $update_one('compte',
+            `#id = $id`,
+            {
+                date_demande_effacement : demande,
+                nombre_avertissements   : 0
+            },
+            { $id: id_compte }
+        )
+
+        // Toutes les sessions sont fermées, celle de la demande comprise : un voleur perd son accès
+        await $update_all('sessions',
+            `
+            #id_compte       = $id
+          & #date_revocation = null
+            `,
+            { date_revocation: 'now' },
+            { $id: id_compte }
+        )
+
+        $set_cookie('jeton', '', { lifetime: 0 })
+        $add_to_respond('est_connecte', false)
+
+        const lien = await creer_lien(id_compte, 'effacement', DELAI_EFFACEMENT + 1, demande.getTime())
+
+        await ecrire(await lire_adresses(id_compte),
+            "Demande d'effacement de votre compte Anicroche",
+            `<p>L'effacement de votre compte Anicroche a été demandé le ${formater_date(demande)}. Il sera effacé définitivement le <strong>${formater_date(date_effacement)}</strong>.</p>`
+          + `<p>D'ici là, votre compte est suspendu et toutes ses sessions ont été fermées. Vous pouvez encore changer d'avis en vous connectant, ou avec ce lien :</p>`
+          + bouton(lien, "Restauration du compte")
+          + `<p>Si vous n'êtes pas à l'origine de cette demande, restaurez votre compte puis changez votre mot de passe.</p>`
+        )
+
+        return $indicate(200, "Effacement demandé", { date_effacement })
+    }
+
+    // Corps : { jeton }, lu dans le lien d un courriel, ou vide pour le compte connecté
+    $restaurer_compte = async ($body) =>
+    {
+        if ($body.jeton === undefined)
+        {
+            await $exiger_compte({ effacement_demande: true })
+
+            if (!$context.compte.date_demande_effacement)
+                return $indicate(409, "Aucun effacement en cours", { motif: 'effacement' })
+
+            await annuler($context.compte)
+
+            return $indicate(200, "Effacement annulé", { motif: 'effacement' })
+        }
+
+        const payload = typeof $body.jeton === 'string' ? await $verify_token($body.jeton) : null
+
+        if (payload?.type !== 'restauration' || !payload.id_compte)
+            return $indicate(403, "Lien invalide ou expiré")
+
+        const compte = await $search_one('compte', `#id = $id`, { $id: payload.id_compte })
+
+        if (!compte)
+            return $indicate(404, "Compte introuvable")
+
+        if (payload.motif === 'effacement')
+        {
+            // Un lien ne vaut que pour la demande qui l a créé
+            const demande = compte.date_demande_effacement ? new Date(compte.date_demande_effacement).getTime() : null
+            if (demande === null || demande !== payload.demande)
+                return $indicate(409, "Aucun effacement en cours", { motif: 'effacement' })
+
+            await annuler(compte)
+
+            return $indicate(200, "Effacement annulé", { motif: 'effacement' })
+        }
+
+        await $update_one('compte',
+            `#id = $id`,
+            {
+                date_derniere_activite     : 'now',
+                nombre_avertissements      : 0,
+                date_premier_avertissement : null
+            },
+            { $id: compte.id }
+        )
+
+        return $indicate(200, "Compte restauré", { motif: 'inactivite' })
+    }
+
+    // ─── Tâche quotidienne ───────────────────────────────────────────────────
+
+    const traiter_effacements = async () =>
+    {
+        const demandes = await $search_all('comptes',
+            `#date_demande_effacement < now-${DELAI_EFFACEMENT - Math.max(...RAPPELS_EFFACEMENT) - 1}d`
+        )
+
+        for (const compte of demandes)
+        {
+            try
+            {
+                const date_effacement = $date_effacement(compte)
+
+                if (date_effacement <= new Date())
+                {
+                    await effacer_compte(compte, 'demande')
+                    continue
+                }
+
+                // Un jour de traitement manqué regroupe les rappels en retard en un seul
+                const jours = (date_effacement - new Date()) / JOUR
+                const etape = RAPPELS_EFFACEMENT.filter(seuil => jours <= seuil).length
+                if (etape <= compte.nombre_avertissements)
+                    continue
+
+                const lien  = await creer_lien(compte.id, 'effacement', jours + 1, new Date(compte.date_demande_effacement).getTime())
+
+                await ecrire(await lire_adresses(compte.id),
+                    `Votre compte Anicroche sera effacé le ${formater_date(date_effacement)}`,
+                    `<p>Comme demandé le ${formater_date(compte.date_demande_effacement)}, votre compte Anicroche sera effacé définitivement le <strong>${formater_date(date_effacement)}</strong>.</p>`
+                  + `<p>Si vous avez changé d'avis, ou si vous n'êtes pas à l'origine de cette demande :</p>`
+                  + bouton(lien, "Restauration du compte")
+                )
+
+                await $update_one('compte', `#id = $id`, { nombre_avertissements: etape }, { $id: compte.id })
+            }
+            catch (erreur)
+            {
+                console.log(`/!\\ effacement d'un compte : ${erreur.message}`)
+            }
+        }
+    }
+
+    const lire_comptes_proteges = async () =>
+    {
+        const profils = await $search_all('profils',
+            `#role -{ $roles`,
+            { $roles: ROLES_PROTEGES },
+            { select: 'id ; gerants.id' }
+        )
+        return new Set(profils.flatMap(profil => profil.gerants.map(gerant => gerant.id)))
+    }
+
+    const traiter_inactifs = async () =>
+    {
+        const proteges = await lire_comptes_proteges()
+
+        // Un an avant l échéance, une année bissextile comprise
+        const candidats = await $search_all('comptes',
+            `
+            #date_derniere_activite  < now-${(DUREE_INACTIVITE - 1) * 365 - 1}d
+          & #date_demande_effacement = null
+            `
+        )
+
+        for (const compte of candidats)
+        {
+            try
+            {
+                const conserve = compte.date_conservation && new Date(compte.date_conservation) > new Date()
+
+                if (proteges.has(compte.id) || conserve)
+                {
+                    if (compte.nombre_avertissements > 0)
+                        await $update_one('compte',
+                            `#id = $id`,
+                            { nombre_avertissements: 0, date_premier_avertissement: null },
+                            { $id: compte.id }
+                        )
+                    continue
+                }
+
+                const echeance = echeance_inactivite(compte)
+                const jours    = (echeance - new Date()) / JOUR
+
+                if (compte.date_premier_avertissement && jours <= 0)
+                {
+                    await effacer_compte(compte, 'inactivite')
+                    continue
+                }
+
+                const etape = AVERTISSEMENTS.filter(seuil => jours <= seuil).length
+                if (etape <= compte.nombre_avertissements)
+                    continue
+
+                const lien = await creer_lien(compte.id, 'inactivite', jours + PREAVIS_MINIMUM)
+
+                await ecrire(await lire_adresses(compte.id),
+                    `Votre compte Anicroche sera supprimé le ${formater_date(echeance)}`,
+                    `<p>Vous n'avez pas utilisé votre compte Anicroche depuis le ${formater_date(compte.date_derniere_activite)}. Sans activité de votre part, il sera supprimé le <strong>${formater_date(echeance)}</strong>.</p>`
+                  + `<p>Vos données personnelles seront alors effacées, et les profils que vous gérez seul anonymisés : ce qu'ils ont publié restera visible, sans leur nom.</p>`
+                  + `<p>Pour restaurer votre compte, il suffit de vous connecter, ou d'utiliser ce lien :</p>`
+                  + bouton(lien, "Restauration du compte")
+                )
+
+                await $update_one('compte',
+                    `#id = $id`,
+                    {
+                        nombre_avertissements      : etape,
+                        date_premier_avertissement : compte.date_premier_avertissement ?? maintenant()
+                    },
+                    { $id: compte.id }
+                )
+            }
+            catch (erreur)
+            {
+                console.log(`/!\\ suppression d'un compte inactif : ${erreur.message}`)
+            }
+        }
+    }
+
+    $traiter_fins_de_comptes = async () =>
+    {
+        console.log('====================\nFINS DE COMPTES\n====================')
+        await traiter_effacements()
+        await traiter_inactifs()
+    }
+]

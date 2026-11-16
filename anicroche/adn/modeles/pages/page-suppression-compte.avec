@@ -1,0 +1,36 @@
+@script [
+    $profils_suppression      = null
+    $profils_a_supprimer      = []
+    $ids_suppression          = []
+    $mot_de_passe_suppression = null
+    $date_suppression         = ''
+
+    $erreur_mot_de_passe_suppression = false
+    $erreur_clef_suppression         = false
+    $succes_clef_suppression         = false
+]
+
+page [:(, $authentification : requise_sans_profil]
+    navigation
+        <div .gauche>
+            fleche-retour [/profil]
+
+        <div .centre>
+            <span>
+                "Suppression du compte"
+
+        <div .droite>
+            icone-horloge
+
+    onglet
+        section-suppression-compte [profils]
+
+    onglet
+        section-suppression-compte [mot_de_passe]
+
+    onglet
+        section-suppression-compte [clef]
+
+    # Atteint seulement après la demande : le compte, déconnecté, ne peut plus revenir sur la page
+    onglet
+        section-suppression-compte [resultat]
