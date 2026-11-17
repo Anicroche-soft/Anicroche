@@ -126,13 +126,20 @@
 
     $focus_champ_clef = () =>
     {
-        const noeud    = $node
-        const elements = elements_champ_clef(noeud)
+        const noeud     = $node
+        const evenement = $event
+        const elements  = elements_champ_clef(noeud)
         if (!est_modifiable(elements))
             return
 
         if (noeud === elements.cache)
             return atteindre_case(elements, case_a_atteindre(elements))
+
+        // En entrant dans le champ, par un clic sur n importe quelle case, on reprend après le
+        // dernier chiffre saisi ; les flèches et les clics d une case à l autre restent libres
+        const cible = case_a_atteindre(elements)
+        if (!elements.chiffres.includes(evenement?.relatedTarget) && elements.chiffres.indexOf(noeud) !== cible)
+            return atteindre_case(elements, cible)
 
         const vide = premiere_case_vide(elements)
         if (vide >= 0 && elements.chiffres.indexOf(noeud) !== vide)
