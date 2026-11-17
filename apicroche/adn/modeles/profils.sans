@@ -58,7 +58,7 @@
 
     # Choix fait à la demande d effacement du compte de son seul gérant (anonymisation par défaut)
     {
-        name  : sort_a_l_effacement
+        name  : sort
         type  : anonymisation/suppression
         count : 0-1
     }
@@ -129,7 +129,9 @@
 
         const racine = lire_racine(identifiant)
 
-        // Les dérivés d un profil anonymisé ou supprimé gardent leur base : elle reste réservée
+        // Une base portée par des profils dérivés reste réservée, même sans profil racine :
+        // ils en sont détachés quand leur racine disparaît (voir effacement.sans), mais un nom
+        // libéré par erreur permettrait de prendre la main sur leurs futurs dérivés
         if (!racine && profil_actuel?.identifiant !== identifiant && (await chercher_derives(identifiant)).length)
             return $indicate(409, "Identifiant déjà utilisé")
 

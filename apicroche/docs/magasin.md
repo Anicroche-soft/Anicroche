@@ -36,6 +36,8 @@ Les fonctions `_one` attendent de préférence le **nom d'entrée** (`'profil'`)
 
 Les entrées renvoyées contiennent les valeurs déchiffrées des champs `crypt`. Les champs `hash` contiennent la valeur hachée.
 
+Les dates sont toutes en **UTC** : les champs `datetime` sont lus et écrits en UTC (objets `Date` de JavaScript), et `now` désigne l'heure UTC, dans les conditions, les mises à jour et les valeurs par défaut. Les fuseaux du serveur MySQL et de la machine n'ont donc aucun effet. Pour afficher une date en heure française, la formater avec `timeZone: 'Europe/Paris'`. MySQL ne garde pas les millisecondes : une date écrite puis relue est arrondie à la seconde.
+
 Dans une route, le contexte de chaque condition contient automatiquement `$body` et `$params` en plus des variables passées en paramètre.
 
 ### Création

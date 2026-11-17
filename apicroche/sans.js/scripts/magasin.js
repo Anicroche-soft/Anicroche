@@ -25,7 +25,10 @@ const pool = () =>
     if (!name || !user)
         throw new Error("Variables d'environnement manquantes : database_name, database_user")
 
-    _pool = mysql.createPool({ host, port, user, password: pass, database: name })
+    // Tout en UTC, quels que soient les fuseaux du serveur MySQL et de la machine : la
+    // session pour NOW() et les valeurs par défaut, le pilote pour lire et écrire les dates
+    _pool = mysql.createPool({ host, port, user, password: pass, database: name, timezone: 'Z' })
+    _pool.on('connection', (connexion) => connexion.query(`SET time_zone = '+00:00'`))
     return _pool
 }
 

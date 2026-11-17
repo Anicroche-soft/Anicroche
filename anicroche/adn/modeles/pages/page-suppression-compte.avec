@@ -1,9 +1,10 @@
 @script [
-    $profils_suppression      = null
-    $profils_a_supprimer      = []
-    $ids_suppression          = []
-    $mot_de_passe_suppression = null
-    $date_suppression         = ''
+    $profils_suppression       = null
+    $choix_profils_suppression = []
+    $profils_a_supprimer       = []
+    $ids_suppression           = []
+    $mot_de_passe_suppression  = null
+    $date_suppression          = ''
 
     $erreur_mot_de_passe_suppression = false
     $erreur_clef_suppression         = false

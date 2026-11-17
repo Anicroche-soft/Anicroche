@@ -97,8 +97,10 @@
     }
 ]
 
+# $valeur distingue les cases d'un même nom (voir choix-multiple)
 @args [
     $etiquette : :(, $nom
+    $valeur : oui
     $requis : :(
     $coche : :(
     $action : :(
@@ -107,13 +109,13 @@
 <label
     .champ
     .case-a-cocher
-    for="champ-$nom"
+    for="champ-$nom-$valeur"
 >
     <input
-        #champ-$nom
+        #champ-$nom-$valeur
         name="$nom"
         type="checkbox"
-        value="oui"
+        value="$valeur"
         [$requis] ? required
         [$coche] ? checked
         [$action] ? @change="$action()"

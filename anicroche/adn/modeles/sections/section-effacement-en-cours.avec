@@ -38,7 +38,7 @@ section [effacement-en-cours, centree]
             erreur-formulaire
                 "$erreur_annulation_effacement"
         <p>
-            "L'effacement de votre compte a été demandé. Il sera effacé définitivement le $date_effacement_en_cours, et il est suspendu d'ici là."
+            "La suppression de votre compte a été demandé. Il sera supprimé définitivement le $date_effacement_en_cours, et il est suspendu d'ici là."
         <p>
             "Si vous avez changé d'avis, ou si vous n'êtes pas à l'origine de cette demande, vous pouvez encore restaurer votre compte. Pensez alors à changer votre mot de passe."
         ligne

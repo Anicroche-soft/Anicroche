@@ -45,12 +45,12 @@ section [restauration-compte, centree]
 
     @else-if [$etat_restauration = effacement_annule]
         titre [centre]
-            "Effacement annulé"
+            "Désinscription annulée"
         carte
             succes-formulaire
                 "Votre compte est restauré : il est de nouveau actif."
             <p>
-                "Si vous n'êtes pas à l'origine de la demande d'effacement, changez votre mot de passe."
+                "Si vous n'êtes pas à l'origine de la demande de suppression, changez votre mot de passe."
             ligne
                 bouton-ancre [/connexion]
                     "Connexion"

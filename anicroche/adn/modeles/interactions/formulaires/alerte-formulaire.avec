@@ -1,3 +1,10 @@
-ligne [centree]
+@style [
+    /* Écart fixe entre l'icône et le texte, dans un formulaire ou non */
+    .ligne:has(> .icone-alerte) {
+        gap: 0.5rem;
+    }
+]
+
+ligne [centree, $retour : :(]
     icone-alerte
     @stud

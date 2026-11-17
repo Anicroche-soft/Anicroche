@@ -179,7 +179,7 @@
     .champ-date
     @mount="$monter_champ_date()"
 >
-    <legend>
+    <legend .etiquette>
         "$etiquette"
     <div .parties>
         <label .partie .jour>

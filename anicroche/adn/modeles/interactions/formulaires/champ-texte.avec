@@ -112,7 +112,8 @@
     for="champ-$nom"
     [! $modifiable] ? @click="$bloquer_focus_lecture_seule()"
 >
-    "$etiquette"
+    <span .etiquette>
+        "$etiquette"
     <div
         [$prefixe] ? data-prefixe="$prefixe"
     >

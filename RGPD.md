@@ -158,7 +158,7 @@ Avant d'ajouter un nouveau prestataire qui reçoit des données personnelles : v
 
 Un profil anonymisé n'est plus une donnée personnelle **à condition que ses publications ne permettent pas d'identifier leur auteur** : une personne qui le demande peut toujours obtenir le retrait d'une publication qui l'identifie (art. 17). Garder des publications après le départ de leur auteur suppose aussi une licence dans les conditions d'utilisation (non exclusive, gratuite, maintenue après la suppression du compte, publication sans nom), avec les règles ci-dessus annoncées clairement.
 
-L'identifiant d'un profil racine anonymisé ou supprimé reste réservé tant que des profils dérivés le portent.
+Les profils dérivés d'un profil racine anonymisé ou supprimé, gérés par d'autres comptes, en sont détachés : ils deviennent des profils racines sous un nom proche et libre (`base.x` devient `base-x`, ou `base-x-1`, `base-x-2`…), et leurs gérants en sont prévenus par courriel. Le nom du partant ne reste donc pas attaché à leurs profils.
 
 **Confirmation** : un dernier courriel confirme l'effacement. Le journal n'enregistre que le motif (`COMPTE effacé (demande)` ou `(inactivité)`), sans identifiant.
 

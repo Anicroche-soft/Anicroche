@@ -106,6 +106,11 @@
         cursor: pointer;
     }
 
+    /* Étiquette d'un champ de formulaire */
+    .etiquette {
+        --e-fonte: var(--e-etiquette);
+    }
+
     path {
         stroke: var(--c-flux);
         stroke-width: 0.125rem;
@@ -137,11 +142,12 @@
         --h-navigation: 3.5rem;
         --h-avatar: 2rem;
 
-        --e-fonte:  var(--e-texte);
-        --e-titre:  450;
-        --e-texte:  400;
-        --e-gras:   600;
-        --e-bouton: 600;
+        --e-fonte:     var(--e-texte);
+        --e-titre:     450;
+        --e-texte:     400;
+        --e-gras:      600;
+        --e-bouton:    600;
+        --e-etiquette: var(--e-gras);
 
         --d-animation:      500ms;
         --d-animation-page: calc(var(--d-animation) / 2);

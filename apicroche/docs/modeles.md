@@ -121,7 +121,7 @@ Déclare la liste des champs de la table. Chaque champ est un dictionnaire `{ }`
 | `int` | Nombre entier | `INT` |
 | `tinyint` | Petit nombre entier (-128 à 127) | `TINYINT` |
 | `date` | Date seule | `DATE` |
-| `datetime` | Date et heure | `DATETIME` |
+| `datetime` | Date et heure, en UTC (voir [Valeurs lues](magasin.md#valeurs-lues)) | `DATETIME` |
 | `boolean` | Valeur vraie ou fausse | `TINYINT(1)` |
 | `hash` | Valeur hachée (non réversible) | voir ci-dessous |
 | `crypt` | Valeur chiffrée en AES-256-GCM (réversible) | `BINARY(n)` si la taille est fixe, sinon `VARBINARY(max)` (`VARBINARY(255)` sans `size`) |

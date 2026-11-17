@@ -37,7 +37,8 @@
     .champ-texte-long
     for="champ-$nom"
 >
-    "$etiquette"
+    <span .etiquette>
+        "$etiquette"
     <textarea
         #champ-$nom
         name="$nom"

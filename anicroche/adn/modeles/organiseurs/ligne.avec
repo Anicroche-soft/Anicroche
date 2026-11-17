@@ -9,15 +9,25 @@
         align-items: center;
     }
 
+    /* Sans retour à la ligne, une icône garde sa taille et le texte se replie à côté */
+    .ligne.sans-retour {
+        flex-wrap: nowrap;
+    }
+
+    .ligne.sans-retour > .icone {
+        flex-shrink: 0;
+    }
+
     .ligne:has(> .bouton) {
         --l-ecart: 0.5rem;
     }
 ]
 
-@args [$type : classique]
+@args [$type : classique, $retour : :)]
 
 <div
     .ligne
     [$type = centree] ? .centree
+    [! $retour] ? .sans-retour
 >
     @stud

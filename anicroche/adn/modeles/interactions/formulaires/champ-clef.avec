@@ -360,7 +360,8 @@
     .champ-clef
     for="champ-$nom"
 >
-    "$etiquette"
+    <span .etiquette>
+        "$etiquette"
     <div @mount="$monter_champ_clef()" @click="$clic_champ_clef()">
         <input
             #champ-$nom

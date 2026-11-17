@@ -8,7 +8,11 @@
             return
 
         const reponse = await $search('desinscription')
-        $profils_suppression = reponse.error ? [] : reponse.data.profils
+        $profils_suppression       = reponse.error ? [] : reponse.data.profils
+        $choix_profils_suppression = $profils_suppression.map(profil => ({
+            nom       : profil.id,
+            etiquette : `@${profil.identifiant}`
+        }))
     }
 
     // La clef n'est envoyée qu'avec le bon mot de passe
@@ -38,10 +42,7 @@
 
     $envoyer_formulaire_profils_suppression = () =>
     {
-        const data = new FormData($node)
-        $profils_a_supprimer = ($profils_suppression ?? [])
-            .filter(profil => data.get(profil.id) === 'oui')
-            .map(profil => profil.id)
+        $profils_a_supprimer = new FormData($node).getAll('profils_a_supprimer')
 
         $basculer_vers_onglet_suivant()
     }
@@ -115,16 +116,14 @@
             "Supprimer votre compte"
         carte
             formulaire [$envoyer_formulaire_profils_suppression]
-                <p>
-                    "Votre compte sera suspendu dès votre demande, puis effacé définitivement au bout de 30 jours avec vos données personnelles. D'ici là, vous pourrez changer d'avis en vous connectant, ou avec le lien envoyé par courriel."
-                @if [_ $profils_suppression > 0]
-                    <p>
-                        "Vous êtes le seul gérant de ces profils. Par défaut, ils sont anonymisés : leur nom disparaît, mais ce qu'ils ont publié reste visible. Cochez ceux que vous voulez supprimer avec leurs publications."
-                    @for-each [$p] of [$profils_suppression]
-                        case-a-cocher [$nom : $p.id]
-                            "Supprimer @$p.identifiant ($p.pseudonyme)"
                 information-formulaire
-                    "Les profils que vous gérez avec d'autres comptes leur restent."
+                    "Votre compte sera suspendu dès votre demande, puis effacé définitivement trente jours plus tard. D'ici là, vous aurez encore la possibilité de restaurer votre compte."
+                @if [_ $choix_profils_suppression > 0]
+                    choix-multiple [
+                        "Profils", profils_a_supprimer
+                        $choix : $choix_profils_suppression
+                        $description : "Tous vos profils vont être anonymisés, cochez uniquement ceux que vous voulez supprimer."
+                    ]
                 bouton-soumission
                     <span>
                         "Continuer"
@@ -133,7 +132,7 @@
 @else-if [$etape = mot_de_passe]
     section [suppression-compte, centree]
         titre [centre]
-            "Votre mot de passe"
+            "Saisissez votre mot de passe"
         carte
             formulaire [$envoyer_formulaire_mot_de_passe_suppression]
                 @if [$erreur_mot_de_passe_suppression]
@@ -177,7 +176,7 @@
                         alt
                             "Retour"
                     bouton-soumission
-                        "Suppression"
+                        "Désinscription"
 
 @else-if [$etape = resultat]
     section [suppression-compte, centree]

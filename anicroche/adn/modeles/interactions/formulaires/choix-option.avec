@@ -77,7 +77,8 @@
     for="choix-$nom"
     [$desactive] ? data-disabled
 >
-    "$etiquette"
+    <span .etiquette>
+        "$etiquette"
     <div
         [$prefixe] ? data-prefixe="$prefixe"
     >

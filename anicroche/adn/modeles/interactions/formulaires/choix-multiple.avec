@@ -1,0 +1,29 @@
+@style [
+    .choix-multiple {
+        flex: 1024;
+
+        --l-ecart: 0.5rem;
+    }
+
+    .choix-multiple > legend {
+        display: contents;
+        cursor: default;
+    }
+]
+
+# Cases à cocher d'un même nom : les valeurs cochées se lisent avec FormData.getAll($nom).
+# Chaque choix : { nom, etiquette }
+@args [$etiquette, $nom, $choix, $description : :(]
+
+<fieldset
+    .champ
+    .choix-multiple
+>
+    <legend .etiquette>
+        "$etiquette"
+    @for-each [$ch] of [$choix]
+        case-a-cocher [$nom : $nom, $valeur : $ch.nom]
+            "$ch.etiquette"
+    @if [$description]
+        indication
+            "$description"

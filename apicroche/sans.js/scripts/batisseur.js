@@ -100,7 +100,9 @@ const creer_connexion = async () =>
 
     try
     {
-        const connexion = await mysql.createConnection({ host, port, user, password: pass, database: name })
+        // En UTC, comme les connexions du magasin
+        const connexion = await mysql.createConnection({ host, port, user, password: pass, database: name, timezone: 'Z' })
+        await connexion.query(`SET time_zone = '+00:00'`)
         return connexion
     }
     catch (err)

@@ -135,7 +135,7 @@
         $search_all('profils',
             `#gerants.id = $id_compte`,
             { $id_compte: id_compte },
-            { select: 'id ; identifiant ; pseudonyme ; sort_a_l_effacement ; gerants.id' }
+            { select: 'id ; identifiant ; pseudonyme ; sort ; gerants.id' }
         )
 
     const est_seul_gerant = (profil) => profil.gerants.length === 1
@@ -160,9 +160,9 @@
         await $update_one('profil',
             `#id = $id`,
             {
-                identifiant         : null,
-                pseudonyme          : null,
-                sort_a_l_effacement : null
+                identifiant : null,
+                pseudonyme  : null,
+                sort        : null
             },
             { $id: id_profil }
         )
@@ -183,18 +183,84 @@
         await $delete_one('profil', `#id = $id`, { $id: id_profil })
     }
 
+    // ─── Profils dérivés ─────────────────────────────────────────────────────
+
+    const lire_derives = (racine) =>
+        $search_all('profils',
+            `#identifiant ~= $motif`,
+            { $motif: new RegExp(`^${racine}\\.`) },
+            { select: 'id ; identifiant ; gerants.id' }
+        )
+
+    // Identifiant racine libre et proche de celui d un profil dérivé qui perd sa racine :
+    // le point devient un tiret (base.x → base-x), puis base-x-1, base-x-2… Un candidat trop
+    // long perd ses premiers caractères, puis son tiret initial
+    const LONGUEUR_RACINE = 32
+    const MOTIF_RACINE    = /^(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+    const ajuster_identifiant = (identifiant) =>
+        identifiant.slice(Math.max(0, identifiant.length - LONGUEUR_RACINE)).replace(/^-/, '')
+
+    const est_identifiant_libre = async (identifiant) =>
+        !await $search_one('profil', `#identifiant = $identifiant`, { $identifiant: identifiant })
+     && !(await lire_derives(identifiant)).length
+
+    const trouver_identifiant_libre = async (identifiant) =>
+    {
+        const base = identifiant.replace('.', '-')
+
+        for (let x = 0; x <= 1000; x++)
+        {
+            const candidat = ajuster_identifiant(x ? `${base}-${x}` : base)
+
+            // Une coupe peut retirer toutes les lettres : le candidat est alors passé
+            if (MOTIF_RACINE.test(candidat) && await est_identifiant_libre(candidat))
+                return candidat
+        }
+
+        for (;;)
+        {
+            const candidat = `profil-${Math.random().toString(36).slice(2, 10)}`
+            if (await est_identifiant_libre(candidat))
+                return candidat
+        }
+    }
+
+    // Les profils dérivés d une racine qui disparaît en sont détachés : ils deviennent des
+    // profils racines sous un nom proche et libre (base.x → base-x), et leurs gérants sont
+    // prévenus. Ils peuvent dépasser la limite de profils racines de leur compte
+    const detacher_derives = async (racine) =>
+    {
+        for (const derive of await lire_derives(racine))
+        {
+            const nouveau = await trouver_identifiant_libre(derive.identifiant)
+            await $update_one('profil', `#id = $id`, { identifiant: nouveau }, { $id: derive.id })
+
+            for (const gerant of derive.gerants)
+                await ecrire(await lire_adresses(gerant.id),
+                    `Votre profil @${derive.identifiant} s'appelle désormais @${nouveau}`,
+                    `<p>Le profil @${racine}, dont dérivait votre profil @${derive.identifiant}, n'existe plus. Votre profil devient donc un profil racine, sous le nom <strong>@${nouveau}</strong>.</p>`
+                  + `<p>Vous pouvez changer ce nom depuis votre profil.</p>`
+                )
+        }
+    }
+
     // ─── Effacement ──────────────────────────────────────────────────────────
 
     const effacer_compte = async (compte, motif) =>
     {
         const adresses = await lire_adresses(compte.id)
+        const racines  = []
 
         for (const profil of await lire_profils_geres(compte.id))
         {
             if (!est_seul_gerant(profil))
                 continue
 
-            if (motif === 'demande' && profil.sort_a_l_effacement === 'suppression')
+            if (profil.identifiant && !profil.identifiant.includes('.'))
+                racines.push(profil.identifiant)
+
+            if (motif === 'demande' && profil.sort === 'suppression')
                 await supprimer_profil(profil.id)
             else
                 await anonymiser_profil(profil.id)
@@ -206,6 +272,10 @@
             await $delete_all('clefs', `#hachage_coordonnee -{ $adresses`, { $adresses: adresses })
         await $delete_all('coordonnees', `#id_compte = $id`, { $id: compte.id })
         await $delete_one('compte', `#id = $id`, { $id: compte.id })
+
+        // Après le compte : ses profils dérivés partagés ne sont plus gérés que par les autres
+        for (const racine of racines)
+            await detacher_derives(racine)
 
         console.log(`  COMPTE effacé (${motif === 'demande' ? 'demande' : 'inactivité'})`)
 
@@ -222,8 +292,8 @@
     const annuler = async (compte) =>
     {
         for (const profil of await lire_profils_geres(compte.id))
-            if (profil.sort_a_l_effacement)
-                await $update_one('profil', `#id = $id`, { sort_a_l_effacement: null }, { $id: profil.id })
+            if (profil.sort)
+                await $update_one('profil', `#id = $id`, { sort: null }, { $id: profil.id })
 
         await $update_one('compte',
             `#id = $id`,
@@ -237,9 +307,9 @@
         )
 
         await ecrire(await lire_adresses(compte.id),
-            "L'effacement de votre compte est annulé",
-            `<p>L'effacement de votre compte Anicroche a été annulé : votre compte et vos profils sont de nouveau actifs.</p>`
-          + `<p>Si vous n'êtes pas à l'origine de la demande d'effacement, changez votre mot de passe.</p>`
+            "La suppression de votre compte est annulée",
+            `<p>La suppression de votre compte Anicroche a été annulée : votre compte et vos profils sont de nouveau actifs.</p>`
+          + `<p>Si vous n'êtes pas à l'origine de la demande de suppression, changez votre mot de passe.</p>`
         )
     }
 
@@ -253,10 +323,10 @@
         const profils = (await lire_profils_geres($context.compte.id))
             .filter(est_seul_gerant)
             .map(profil => ({
-                id                  : profil.id,
-                identifiant         : profil.identifiant,
-                pseudonyme          : profil.pseudonyme,
-                sort_a_l_effacement : profil.sort_a_l_effacement ?? 'anonymisation'
+                id          : profil.id,
+                identifiant : profil.identifiant,
+                pseudonyme  : profil.pseudonyme,
+                sort        : profil.sort ?? 'anonymisation'
             }))
 
         return $indicate(200, "Effacement consulté", {
@@ -333,7 +403,7 @@
         for (const profil of (await lire_profils_geres(id_compte)).filter(est_seul_gerant))
             await $update_one('profil',
                 `#id = $id`,
-                { sort_a_l_effacement: a_supprimer.has(profil.id) ? 'suppression' : 'anonymisation' },
+                { sort: a_supprimer.has(profil.id) ? 'suppression' : 'anonymisation' },
                 { $id: profil.id }
             )
 
@@ -365,8 +435,8 @@
         const lien = await creer_lien(id_compte, 'effacement', DELAI_EFFACEMENT + 1, demande.getTime())
 
         await ecrire(await lire_adresses(id_compte),
-            "Demande d'effacement de votre compte Anicroche",
-            `<p>L'effacement de votre compte Anicroche a été demandé le ${formater_date(demande)}. Il sera effacé définitivement le <strong>${formater_date(date_effacement)}</strong>.</p>`
+            "Demande de suppression de votre compte Anicroche",
+            `<p>La suppression de votre compte Anicroche a été demandée le ${formater_date(demande)}. Il sera effacé définitivement le <strong>${formater_date(date_effacement)}</strong>.</p>`
           + `<p>D'ici là, votre compte est suspendu et toutes ses sessions ont été fermées. Vous pouvez encore changer d'avis en vous connectant, ou avec ce lien :</p>`
           + bouton(lien, "Restauration du compte")
           + `<p>Si vous n'êtes pas à l'origine de cette demande, restaurez votre compte puis changez votre mot de passe.</p>`

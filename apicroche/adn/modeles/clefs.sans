@@ -23,13 +23,14 @@
         type : hash
 
         # Une clef d effacement n est envoyée qu à la coordonnée principale du compte connecté,
-        # avec son mot de passe (mot_de_passe dans le corps)
+        # avec son mot de passe (mot_de_passe dans le corps) : $preparer_clef le vérifie, car
+        # un objet comme $context.compte ne peut pas être combiné par & dans une expression
         can_create  : "
             (
                 $type = authentification
               & $hachage_coordonnee ~= /^[^@\s]+@[^@\s]+\.[^@\s]+$/
             )
-          | ($type = effacement & $context.compte)
+          | $type = effacement
         "
         prior_create : $preparer_clef($values)
     }
@@ -39,10 +40,7 @@
         type : authentification/effacement
         size : 1-32
 
-        can_create : "
-            $type = authentification
-          | ($type = effacement & $context.compte)
-        "
+        can_create : "$type -{ [authentification, effacement]"
     }
 
     {
@@ -147,9 +145,9 @@
         {
             await $send_email({
                 to      : $values.hachage_coordonnee,
-                subject : "Votre code de confirmation d'effacement",
-                content : `<p>Votre code de confirmation : <strong>${clef_affichee}</strong></p>`
-                        + `<p>Il permet de demander l'effacement de votre compte Anicroche. Si vous n'êtes pas à l'origine de cette demande, ne le communiquez à personne et changez votre mot de passe.</p>`
+                subject : "Votre code de désinscription",
+                content : `<p>Votre code : <strong>${clef_affichee}</strong></p>`
+                        + `<p>Il permet de demander la suppression de votre compte Anicroche. Si vous n'êtes pas à l'origine de cette demande, ne le communiquez à personne et changez votre mot de passe.</p>`
             })
             return
         }

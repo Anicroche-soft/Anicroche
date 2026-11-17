@@ -179,7 +179,7 @@
     @mount="$monter_choix_unique()"
     @unmount="$demonter_choix_unique()"
 >
-    <legend>
+    <legend .etiquette>
         "$etiquette"
     <div>
         @for-each [$i, $ch] of [$choix]
