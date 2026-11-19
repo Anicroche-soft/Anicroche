@@ -59,3 +59,29 @@
         count : 0-1
     }
 ]
+
+# DELETE /session/<id> révoque une session du compte connecté (la ligne est supprimée, comme
+# le ferait $nettoyer_sessions) ; révoquer la session en cours revient à se déconnecter
+@rules [
+    can_delete      : "$context.compte"
+    restrict_delete : "#id_compte = $context.compte.id"
+    prior_delete    : $preparer_revocation()
+    post_delete     : $terminer_revocation($values)
+]
+
+@script [
+    $preparer_revocation = async () =>
+    {
+        await $exiger_compte()
+    }
+
+    $terminer_revocation = ($values) =>
+    {
+        if ($values.id !== $context.session?.id)
+            return
+
+        // $detecter_connexion (index.sans) répond alors est_connecte : false
+        $context.compte = null
+        $set_cookie('jeton', '', { lifetime: 0 })
+    }
+]

@@ -1,12 +1,35 @@
+# Adresses du compte. Routes automatiques, pour le compte connecté :
+# - POST /coordonnee { type : courriel, coordonnee, clef, ids } ajoute une adresse secondaire,
+#   avec une clef ajout-courriel envoyée à cette adresse ;
+# - PATCH /coordonnee/<id> { est_principale : true, clef, ids } en fait l adresse principale,
+#   avec une clef modification-courriel-principal envoyée à l adresse principale actuelle ;
+# - DELETE /coordonnee/<id> { clef, ids } retire une adresse secondaire, avec une clef
+#   suppression-courriel envoyée à l adresse principale.
+# Toutes les adresses du compte sont prévenues de chaque changement.
+
 @name [ coordonnees, coordonnee ]
 
-@primary [ hachage_coordonnee ]
+@primary [ id ]
+
+@unique [
+    [ hachage_coordonnee ]
+]
 
 @fields [
+    {
+        name    : id
+        type    : char
+        size    : 15
+        chars   : [A-Z0-9]
+        default : auto
+    }
+
     {
         name : type
         type : courriel/telephone
         size : 1-16
+
+        can_create : "$type = courriel"
     }
 
     {
@@ -14,6 +37,8 @@
         type : crypt
         size : 1-512
         rule : "($type = courriel & $coordonnee ~= /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/) | ($type = telephone & $coordonnee ~= /^\+?[\d\s\-(). ]{7,20}$/)"
+
+        can_create : ':)'
     }
 
     {
@@ -26,5 +51,155 @@
     {
         name : est_principale
         type : boolean
+
+        can_update   : "$context.compte"
+        prior_update : "$preparer_changement_principal($values, $request)"
+        post_update  : $notifier_changement_principal($values)
+    }
+
+    {
+        name    : date_ajout
+        type    : datetime
+        default : now
+    }
+]
+
+@rules [
+    prior_create    : $preparer_ajout($values)
+    post_create     : $notifier_ajout($values)
+
+    restrict_update : "#id_compte = $context.compte.id"
+
+    can_delete      : "$context.compte"
+    restrict_delete : "#id_compte = $context.compte.id"
+    prior_delete    : $preparer_suppression($values)
+    post_delete     : $notifier_suppression($values)
+]
+
+@script [
+    // Adresses au plus par compte
+    const LIMITE_COURRIELS = 5
+
+    const formater_date = (date) => new Date(date).toLocaleDateString('fr-FR', {
+        day      : 'numeric',
+        month    : 'long',
+        year     : 'numeric',
+        timeZone : 'Europe/Paris'
+    })
+
+    const avertissement = `<p>Si vous n'êtes pas à l'origine de ce changement, changez votre mot de passe et vérifiez les adresses de votre compte.</p>`
+
+    // ─── Ajout ───────────────────────────────────────────────────────────────
+
+    $preparer_ajout = async ($values) =>
+    {
+        await $exiger_compte()
+
+        if (
+            !$body.clef
+         || !Array.isArray($body.ids)
+         || !$body.ids.length
+        )
+            return $indicate(400, "Corps incomplet")
+
+        if (!await $verifier_clef('ajout-courriel'))
+            return $indicate(403, "Accès refusé")
+
+        if (await $search_one('coordonnee', `#hachage_coordonnee = $values.coordonnee`, { $values }))
+            return $indicate(409, "Adresse déjà utilisée")
+
+        const adresses = await $lire_courriels($context.compte.id)
+
+        if (adresses.length >= LIMITE_COURRIELS)
+            return $indicate(403, "Limite d'adresses atteinte")
+
+        $values.id_compte      = $context.compte.id
+        $values.est_principale = false
+
+        // Après l insertion, $values contient l adresse chiffrée
+        $context.adresses_compte  = adresses
+        $context.nouvelle_adresse = $values.coordonnee
+    }
+
+    $notifier_ajout = async ($values) =>
+    {
+        const adresse = $context.nouvelle_adresse
+
+        await $consommer_clefs(adresse, 'ajout-courriel')
+
+        $add_to_data('id', $values.id)
+
+        await $ecrire_courriels([ ...$context.adresses_compte, adresse ],
+            "Une adresse a été ajoutée à votre compte Anicroche",
+            `<p>L'adresse <strong>${adresse}</strong> a été ajoutée à votre compte Anicroche le ${formater_date(new Date())}. Elle permet désormais de vous y connecter.</p>`
+          + `<p>Si vous n'êtes pas à l'origine de cet ajout, retirez cette adresse depuis votre compte et changez votre mot de passe.</p>`
+        )
+    }
+
+    // ─── Adresse principale ──────────────────────────────────────────────────
+
+    $preparer_changement_principal = async ($values, $request) =>
+    {
+        await $exiger_compte()
+
+        // Une adresse ne cesse d être principale qu en en désignant une autre
+        if ($values.est_principale !== true)
+            return $indicate(422, "Une adresse ne peut que devenir principale")
+
+        const cible = await $search_one('coordonnee', `#id = $id`, { $id: $request.params.id })
+
+        if (cible.est_principale)
+            return $indicate(409, "Adresse déjà principale")
+
+        $context.ancienne_principale = await $verifier_clef_principale('modification-courriel-principal')
+        $context.nouvelle_principale = cible
+    }
+
+    $notifier_changement_principal = async ($values) =>
+    {
+        const ancienne = $context.ancienne_principale
+        const nouvelle = $context.nouvelle_principale
+
+        await $update_one('coordonnee', `#id = $id`, { est_principale: false }, { $id: ancienne.id })
+        await $consommer_clefs(ancienne.coordonnee, 'modification-courriel-principal')
+
+        await $update_one('compte',
+            `#id = $id`,
+            { date_changement_courriel_principal: 'now' },
+            { $id: $context.compte.id }
+        )
+
+        await $ecrire_courriels(await $lire_courriels($context.compte.id),
+            "L'adresse principale de votre compte Anicroche a changé",
+            `<p>L'adresse principale de votre compte Anicroche est désormais <strong>${nouvelle.coordonnee}</strong>, à la place de ${ancienne.coordonnee}.</p>`
+          + `<p>Par sécurité, votre compte ne pourra pas être supprimé pendant 7 jours.</p>`
+          + avertissement
+        )
+    }
+
+    // ─── Retrait ─────────────────────────────────────────────────────────────
+
+    $preparer_suppression = async ($values) =>
+    {
+        await $exiger_compte()
+
+        if ($values.est_principale)
+            return $indicate(409, "L'adresse principale ne peut pas être retirée")
+
+        $context.principale      = await $verifier_clef_principale('suppression-courriel')
+        $context.adresses_compte = await $lire_courriels($context.compte.id)
+    }
+
+    // L adresse retirée est prévenue elle aussi
+    $notifier_suppression = async ($values) =>
+    {
+        await $consommer_clefs($context.principale.coordonnee, 'suppression-courriel')
+        await $delete_all('clefs', `#hachage_coordonnee = $coordonnee`, { $coordonnee: $values.coordonnee })
+
+        await $ecrire_courriels($context.adresses_compte,
+            "Une adresse a été retirée de votre compte Anicroche",
+            `<p>L'adresse <strong>${$values.coordonnee}</strong> a été retirée de votre compte Anicroche le ${formater_date(new Date())}. Elle ne permet plus de vous y connecter.</p>`
+          + avertissement
+        )
     }
 ]

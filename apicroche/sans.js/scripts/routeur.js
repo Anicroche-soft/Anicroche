@@ -1103,8 +1103,15 @@ export const construire_routes = (schemas, index = null, options = {}) =>
                     return
                 }
 
-                const hooks_prior = table.fields.filter(f => f.prior_create).map(f => ({ action_brut: f.prior_create, etiquette: `prior_create ${f.name}` }))
-                const hooks_post  = table.fields.filter(f => f.post_create).map(f => ({ action_brut: f.post_create, etiquette: `post_create ${f.name}` }))
+                // Tous les champs ont une valeur à la création : leurs hooks sont tous concernés
+                const hooks_prior = [
+                    ...(table.rules?.prior_create ? [{ action_brut: table.rules.prior_create, etiquette: 'prior_create modèle' }] : []),
+                    ...table.fields.filter(f => f.prior_create).map(f => ({ action_brut: f.prior_create, etiquette: `prior_create ${f.name}` }))
+                ]
+                const hooks_post = [
+                    ...table.fields.filter(f => f.post_create).map(f => ({ action_brut: f.post_create, etiquette: `post_create ${f.name}` })),
+                    ...(table.rules?.post_create ? [{ action_brut: table.rules.post_create, etiquette: 'post_create modèle' }] : [])
+                ]
                 const fonctions   = compiler_script_modele(table, contexte_script, hooks_prior.length || hooks_post.length)
                 const parametres  = { fonctions, rep, $indicate, valeurs: { $body, $request, $context, $values } }
 
@@ -1276,8 +1283,16 @@ export const construire_routes = (schemas, index = null, options = {}) =>
                     return
                 }
 
-                const hooks_prior = table.fields.filter(f => f.prior_update).map(f => ({ action_brut: f.prior_update, etiquette: `prior_update ${f.name}` }))
-                const hooks_post  = table.fields.filter(f => f.post_update).map(f => ({ action_brut: f.post_update, etiquette: `post_update ${f.name}` }))
+                // Seuls les hooks des champs modifiés sont exécutés ; ceux du modèle le sont toujours
+                const champs_modifies = table.fields.filter(f => $values[f.name] !== undefined)
+                const hooks_prior = [
+                    ...(table.rules?.prior_update ? [{ action_brut: table.rules.prior_update, etiquette: 'prior_update modèle' }] : []),
+                    ...champs_modifies.filter(f => f.prior_update).map(f => ({ action_brut: f.prior_update, etiquette: `prior_update ${f.name}` }))
+                ]
+                const hooks_post = [
+                    ...champs_modifies.filter(f => f.post_update).map(f => ({ action_brut: f.post_update, etiquette: `post_update ${f.name}` })),
+                    ...(table.rules?.post_update ? [{ action_brut: table.rules.post_update, etiquette: 'post_update modèle' }] : [])
+                ]
                 const fonctions   = compiler_script_modele(table, contexte_script, hooks_prior.length || hooks_post.length)
                 const parametres  = { fonctions, rep, $indicate, valeurs: { $body, $request, $context, $values } }
 

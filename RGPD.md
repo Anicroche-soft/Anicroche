@@ -4,7 +4,7 @@ Ce document rassemble ce que le RGPD demande en dehors du code : le registre des
 
 Il doit être tenu à jour à chaque évolution des modèles `.sans` ou de l'hébergement. Les éléments marqués **À compléter** restent à définir.
 
-Dernière mise à jour : 13 novembre 2026.
+Dernière mise à jour : 19 novembre 2026.
 
 ---
 
@@ -30,7 +30,7 @@ En tant qu'éditeur non professionnel, la loi pour la confiance dans l'économie
 | Finalité | Créer un compte, se connecter (mot de passe ou code envoyé par courriel), maintenir la session |
 | Base légale | Exécution du contrat (CGU) — art. 6.1.b |
 | Personnes concernées | Utilisateurs inscrits, et personnes qui demandent un code sans terminer l'inscription |
-| Données | Adresse électronique (chiffrée AES-256-GCM + empreinte HMAC) ; mot de passe (haché Argon2id) ; date d'inscription ; date d'acceptation des conditions d'utilisation (preuve de l'acceptation, voir § 11) ; date de dernière activité, avertissements d'inactivité envoyés, date de demande d'effacement (voir § 4) ; code de connexion ou de confirmation d'effacement (haché, valable 15 min) |
+| Données | Adresses électroniques, cinq au plus, dont une principale (chiffrées AES-256-GCM + empreinte HMAC, avec leur date d'ajout) ; mot de passe (haché Argon2id) ; date d'inscription ; date d'acceptation des conditions d'utilisation (preuve de l'acceptation, voir § 11) ; date de dernière activité, avertissements d'inactivité envoyés, date de demande d'effacement (voir § 4) ; date du dernier changement d'adresse principale (voir § 4.1) ; codes de connexion et de confirmation (hachés, valables 15 min, voir § 9) |
 | Destinataires | L'éditeur ; l'hébergeur ; le prestataire d'envoi de courriels (adresse et code) |
 | Durée de conservation | Compte : jusqu'à son effacement (30 jours après la demande), ou 3 ans après la dernière activité (voir § 4). Codes : 15 min de validité, supprimés au plus tard le lendemain (`$nettoyer_clefs`) |
 
@@ -38,7 +38,7 @@ En tant qu'éditeur non professionnel, la loi pour la confiance dans l'économie
 
 | | |
 |---|---|
-| Finalité | Sécuriser les sessions, permettre à l'utilisateur de voir ses appareils connectés, limiter les abus (limitation des requêtes) |
+| Finalité | Sécuriser les sessions, permettre à l'utilisateur de voir ses sessions ouvertes (`GET /moi`) et d'en fermer (`DELETE /session/<id>`, effet immédiat), limiter les abus (limitation des requêtes) |
 | Base légale | Intérêt légitime (sécurité du service) — art. 6.1.f |
 | Données | Adresse IP ; agent utilisateur (navigateur) ; nom de l'appareil ; dates d'émission, de validité et de révocation de la session ; jeton de session (haché) |
 | Durée de conservation | Session : 30 jours au plus ; supprimée le lendemain de son expiration ou de sa révocation (`$nettoyer_sessions`). Compteurs de limitation : en mémoire uniquement, quelques minutes |
@@ -142,7 +142,8 @@ Avant d'ajouter un nouveau prestataire qui reçoit des données personnelles : v
 - la demande exige à la fois le mot de passe et un code de type `effacement`, envoyé à l'adresse principale seulement après vérification du mot de passe : une session volée ou un mot de passe volé ne suffit pas ;
 - dès la demande, toutes les sessions sont fermées et le compte est gelé (l'API ne lui ouvre plus que la consultation, la déconnexion et l'annulation) ; toutes les adresses du compte reçoivent un courriel avec un lien « Restauration du compte » ;
 - pendant 30 jours, l'utilisateur peut annuler en se connectant ou avec ce lien, sans se connecter (`POST /restauration`, page `/compte/restauration#…`) ; des rappels sont envoyés 14, 7, 3 et 1 jours avant l'échéance ;
-- ce délai reste dans le mois de l'art. 12.3. Il doit être annoncé dans la politique de confidentialité.
+- ce délai reste dans le mois de l'art. 12.3. Il doit être annoncé dans la politique de confidentialité ;
+- pendant les 7 jours qui suivent un changement d'adresse principale, la demande est refusée : quelqu'un qui aurait pris le mot de passe et l'accès à l'adresse principale ne peut pas faire effacer le compte aussitôt, et toutes les adresses du compte ont été prévenues du changement.
 
 **Compte inactif** : avertissements par courriel (§ 4), chacun avec le lien « Restauration du compte », qui remet la date d'activité à zéro sans connexion. Le premier avertissement précède toujours la suppression d'au moins 30 jours. Ne sont jamais supprimés pour inactivité :
 
@@ -171,7 +172,8 @@ Ce qui est en place dans le code :
 - mots de passe hachés en Argon2id (12 à 128 caractères), nombre de calculs simultanés plafonné ;
 - adresses électroniques et date de naissance chiffrées en AES-256-GCM ; recherche par empreinte HMAC-SHA256 ;
 - codes de connexion hachés, valables 15 min, 6 essais au plus, un nouveau code toutes les 30 s au plus ;
-- jetons de session hachés en base, renouvelés à mi-vie ; cookie `HttpOnly`, `Secure`, `SameSite=None` en production ; jeton d'accès JWT de 15 min ;
+- jetons de session hachés en base, renouvelés à mi-vie ; cookie `HttpOnly`, `Secure`, `SameSite=None` en production ; jeton d'accès JWT de 15 min, lié à sa session : une session fermée ne permet plus aucune requête, même avec un jeton d'accès encore valable ;
+- changements sensibles (adresses, mot de passe, effacement) confirmés par un code envoyé à l'adresse principale, et annoncés à toutes les adresses du compte ; un changement de mot de passe ferme les autres sessions ;
 - protection CSRF, CORS limité aux origines configurées ;
 - limitation des requêtes par IP (`@limits`), adresse réelle lue uniquement depuis le mandataire local ;
 - taille maximale du corps des requêtes ;
@@ -240,10 +242,22 @@ Les demandes arrivent à l'adresse de contact RGPD (§ 1). **Délai de réponse 
    | Droit | Traitement |
    |---|---|
    | Accès / portabilité (art. 15 et 20) | Export des données du compte (route à développer) ; en attendant, extraction manuelle en JSON : compte (dont date de naissance et date d'acceptation des conditions d'utilisation), coordonnées, sessions, profils gérés |
-   | Rectification (art. 16) | Fonctions à développer ; en attendant, modification manuelle en base par l'API (les champs `crypt` et `hash` doivent passer par sans.js, pas par du SQL direct) |
+   | Rectification (art. 16) | L'utilisateur corrige lui-même ses données depuis son compte (API prête, pages du site à faire), voir le tableau ci-dessous. Profils : identifiant et pseudonyme. Une demande reçue par courriel : l'inviter à le faire en ligne ; si ce n'est pas possible, modification manuelle par l'API (les champs `crypt` et `hash` doivent passer par sans.js, pas par du SQL direct) |
    | Effacement (art. 17) | L'utilisateur le demande lui-même depuis son compte (§ 4.1). Une demande reçue par courriel depuis l'adresse du compte : l'inviter à le faire en ligne, ou, si ce n'est pas possible, renseigner `date_demande_effacement` du compte (effacement au bout du délai). Retrait d'une publication anonymisée qui identifie son auteur : vider ses textes |
    | Opposition (art. 21) et retrait du consentement | Arrêter le traitement concerné (ex. décocher les fonctionnalités liées à l'âge) |
    | Limitation (art. 18) | Marquer le compte et suspendre le traitement contesté le temps de la vérification |
+
+   Rectification du compte par l'utilisateur (routes automatiques ; chaque code est envoyé par `POST /clef` et ne sert qu'à l'usage de son type) :
+
+   | Donnée | Route | Preuve demandée | Règles |
+   |---|---|---|---|
+   | Date de naissance | `PATCH /compte/<id>` | session | Un majeur reste majeur ; un mineur ne peut que rajeunir sa date, sans passer sous 15 ans |
+   | Ajout d'une adresse | `POST /coordonnee` | session, mot de passe, code `ajout-courriel` envoyé à la nouvelle adresse | Cinq adresses au plus ; l'adresse ajoutée est secondaire |
+   | Retrait d'une adresse | `DELETE /coordonnee/<id>` | session, mot de passe, code `suppression-courriel` envoyé à l'adresse principale | L'adresse principale ne peut pas être retirée |
+   | Adresse principale | `PATCH /coordonnee/<id>` | session, mot de passe, code `modification-courriel-principal` envoyé à l'adresse principale actuelle | Effacement du compte refusé pendant 7 jours (§ 4.1) |
+   | Mot de passe | `PATCH /compte/<id>` | session, code `modification-mot-de-passe` envoyé à l'adresse principale (sans l'ancien mot de passe, pour couvrir l'oubli) | Les autres sessions sont fermées |
+
+   Chaque changement d'adresse ou de mot de passe est annoncé par courriel à toutes les adresses du compte, y compris celle qui vient d'être retirée. Une personne qui a perdu l'accès à son adresse principale ne peut pas encore la remplacer seule.
 
 3. **Répondre** à la personne, en indiquant ce qui a été fait, ou pourquoi la demande est refusée et qu'elle peut saisir la CNIL.
 4. **Consigner** la demande ci-dessous (sans y recopier de données personnelles au-delà du nécessaire).

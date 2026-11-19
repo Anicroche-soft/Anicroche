@@ -158,6 +158,35 @@
         )
     }
 
+    // Session valide et son compte (le jeton de la session, haché, ne peut être vérifié qu à sa lecture)
+    const lire_session = async (condition, valeurs) =>
+    {
+        const session = await $search_one('session',
+            `
+            ${condition}
+          & #date_validite   > now
+          & #date_revocation = null
+            `,
+            valeurs,
+            { select: 'id ; date_emission ; date_validite ; nom_appareil ; is_session_of_compte' }
+        )
+
+        const compte = session?.is_session_of_compte
+        if (!compte)
+            return null
+
+        delete session.is_session_of_compte
+        return { session, compte }
+    }
+
+    const authentifier = async ({ session, compte }) =>
+    {
+        $context.compte  = compte
+        $context.session = session
+        await $noter_activite()
+        await $resoudre_profil()
+    }
+
     $rafraichir_jeton = async () =>
     {
         const en_tete = $request.headers?.authorization ?? null
@@ -169,21 +198,22 @@
         {
             const payload = await $verify_token(jeton_acces)
 
-            // Les liens des courriels sont aussi des jetons signés : seul un jeton d accès authentifie
-            if (payload?.type === 'acces' && payload.id_compte)
+            // Les liens des courriels sont aussi des jetons signés : seul un jeton d accès authentifie,
+            // et seulement tant que sa session n est ni expirée ni révoquée
+            if (payload?.type === 'acces' && payload.id_session)
             {
+                // Une seule requête : le compte, joint à sa session
                 const compte = await $search_one('compte',
-                    `#id = $payload.id_compte`,
-                    { $payload: payload }
+                    `
+                    #sessions.id              = $id_session
+                  & #sessions.date_validite   > now
+                  & #sessions.date_revocation = null
+                    `,
+                    { $id_session: payload.id_session }
                 )
 
                 if (compte)
-                {
-                    $context.compte = compte
-                    await $noter_activite()
-                    await $resoudre_profil()
-                    return
-                }
+                    return await authentifier({ session: { id: payload.id_session }, compte })
             }
         }
 
@@ -196,30 +226,24 @@
         if (separateur <= 0 || separateur >= cookie_session.length - 1)
             return
 
-        const id_session = cookie_session.slice(0, separateur)
-        const jeton_session = cookie_session.slice(separateur + 1)
-
-        const session = await $search_one('session',
+        const lecture = await lire_session(
             `
-            #id              = $id_session
-          & #hachage_jeton   = $jeton_session
-          & #date_validite   > now
-          & #date_revocation = null
+            #id            = $id_session
+          & #hachage_jeton = $jeton_session
             `,
             {
-                $id_session: id_session,
-                $jeton_session: jeton_session
+                $id_session    : cookie_session.slice(0, separateur),
+                $jeton_session : cookie_session.slice(separateur + 1)
             }
         )
 
-        if (!session)
+        if (!lecture)
             return
 
-        const maintenant = new Date()
-        const emission = new Date(session.date_emission)
-        const validite = new Date(session.date_validite)
-        const duree_totale = validite - emission
-        const duree_restante = validite - maintenant
+        const session        = lecture.session
+        const maintenant     = new Date()
+        const duree_totale   = new Date(session.date_validite) - new Date(session.date_emission)
+        const duree_restante = new Date(session.date_validite) - maintenant
 
         if (duree_restante < duree_totale / 2)
         {
@@ -230,29 +254,27 @@
             )
 
             const nouvelle_session = await $create_one('session', {
-                id_compte         : session.id_compte,
+                id_compte         : lecture.compte.id,
                 adresse_ip        : $request.ip,
-                agent_utilisateur : $request.user_agent
+                agent_utilisateur : $request.user_agent,
+                nom_appareil      : session.nom_appareil
             })
 
             const cookie_rotation = `${nouvelle_session.id}.${nouvelle_session.jeton}`
             $set_cookie('jeton', cookie_rotation, { lifetime: '30d' })
 
-            const nouveau_jeton_acces = await $sign_token({ type: 'acces', id_compte: session.id_compte })
+            const nouveau_jeton_acces = await $sign_token({ type: 'acces', id_compte: lecture.compte.id, id_session: nouvelle_session.id })
             $add_to_data('jeton_acces', nouveau_jeton_acces)
+
+            lecture.session = {
+                id            : nouvelle_session.id,
+                date_emission : nouvelle_session.date_emission,
+                date_validite : nouvelle_session.date_validite,
+                nom_appareil  : session.nom_appareil
+            }
         }
 
-        const compte = await $search_one('compte',
-            `#id = $session.id_compte`,
-            { $session: session }
-        )
-
-        if (!compte)
-            return
-
-        $context.compte = compte
-        await $noter_activite()
-        await $resoudre_profil()
+        await authentifier(lecture)
     }
 
     // Date de dernière activité, pour la suppression des comptes inactifs (voir effacement.sans) :
@@ -322,10 +344,81 @@
             return $indicate(403, 'Accès refusé')
     }
 
+    // ─── Courriels du compte ────────────────────────────────────────────────
+
+    $lire_courriels = async (id_compte) =>
+        (await $search_all('coordonnees',
+            `
+            #id_compte = $id_compte
+          & #type      = courriel
+            `,
+            { $id_compte: id_compte }
+        )).map(coordonnee => coordonnee.coordonnee)
+
+    // Toutes les adresses du compte sont prévenues : un voleur qui aurait changé l adresse
+    // principale n empêche pas l ancienne d être avertie
+    $ecrire_courriels = async (adresses, sujet, contenu) =>
+    {
+        for (const adresse of adresses)
+        {
+            try
+            {
+                await $send_email({ to: adresse, subject: sujet, content: contenu })
+            }
+            catch (erreur)
+            {
+                console.log(`/!\\ courriel au compte non envoyé : ${erreur.message}`)
+            }
+        }
+    }
+
+    // Vérifie une clef du type donné, envoyée à l adresse principale du compte connecté (corps :
+    // { clef, ids }), et renvoie cette adresse. $verifier_clef lit l adresse dans le corps : c est
+    // celle du compte qui compte
+    $verifier_clef_principale = async (type) =>
+    {
+        if (
+            !$body.clef
+         || !Array.isArray($body.ids)
+         || !$body.ids.length
+        )
+            return $indicate(400, "Corps incomplet")
+
+        const principale = await $search_one('coordonnee',
+            `
+            #id_compte = $id_compte
+          & #est_principale
+            `,
+            { $id_compte: $context.compte.id }
+        )
+
+        if (!principale)
+            return $indicate(403, "Accès refusé")
+
+        $body.coordonnee = principale.coordonnee
+
+        if (!await $verifier_clef(type))
+            return $indicate(403, "Accès refusé")
+
+        return principale
+    }
+
+    // Supprime les clefs d un type pour une adresse, une fois l une d elles utilisée
+    $consommer_clefs = (coordonnee, type) =>
+        $delete_all('clefs',
+            `
+            #hachage_coordonnee = $coordonnee
+          & #type               = $type
+            `,
+            { $coordonnee: coordonnee, $type: type }
+        )
+
     // ─── Âge ─────────────────────────────────────────────────────────────────
 
     // Âge minimum pour s'inscrire seul (RGPD art. 8, loi Informatique et Libertés art. 45)
     $age_minimum = () => 15
+
+    $age_majorite = () => 18
 
     // Âge en années révolues d'une date de naissance AAAA-MM-JJ, ou null si la date est
     // invalide, antérieure à 1900 ou future

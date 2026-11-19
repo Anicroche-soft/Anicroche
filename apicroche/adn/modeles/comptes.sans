@@ -11,19 +11,30 @@
         default : auto
     }
 
+    # PATCH /compte/<id> { mot_de_passe, clef, ids }, avec une clef modification-mot-de-passe
+    # envoyée à l adresse principale
     {
+        alt   : mot_de_passe
         name  : hachage_mot_de_passe
         type  : hash
         size  : 1-256
         count : 0-1
         rule  : "$hachage_mot_de_passe ~= /^.{12,128}$/"
+
+        can_update   : "$context.compte"
+        prior_update : $preparer_modification_mot_de_passe()
+        post_update  : $notifier_modification_mot_de_passe()
     }
 
+    # PATCH /compte/<id> { date_naissance }
     {
         name : date_naissance
         type : crypt
         size : 1-64
         rule : "$date_naissance ~= /^\d{4}-\d{2}-\d{2}$/"
+
+        can_update   : "$context.compte"
+        prior_update : $verifier_date_naissance($values)
     }
 
     {
@@ -63,6 +74,14 @@
         count : 0-1
     }
 
+    # L effacement est refusé quelques jours après un changement d adresse principale
+    # (voir coordonnees.sans et effacement.sans)
+    {
+        name  : date_changement_courriel_principal
+        type  : datetime
+        count : 0-1
+    }
+
     # Suspend la suppression pour inactivité (litige, réquisition, somme due…) : renseignée
     # à la main, jamais par une route
     {
@@ -80,6 +99,11 @@
         name  : sessions
         count : 0-N
     }
+]
+
+@rules [
+    restrict_update : "#id = $context.compte.id"
+    prior_update    : $preparer_modification_compte()
 ]
 
 @routes [
@@ -115,12 +139,73 @@
             #id = $id_compte
             `,
             { $id_compte: $context.compte.id },
-            { select: 'id ; date_inscription ; date_demande_effacement ; coordonnees.type,coordonnee,est_principale ; is_gerant_of_profils.id,identifiant,pseudonyme,role,date_creation' }
+            { select: 'id ; date_inscription ; date_naissance ; date_demande_effacement ; date_changement_courriel_principal ; coordonnees.id,type,coordonnee,est_principale,date_ajout ; sessions.id,date_emission,date_validite,date_revocation,adresse_ip,agent_utilisateur,nom_appareil ; is_gerant_of_profils.id,identifiant,pseudonyme,role,date_creation' }
         )
 
-        compte.date_effacement = $date_effacement(compte)
+        const maintenant = new Date()
+
+        compte.date_effacement          = $date_effacement(compte)
+        compte.date_effacement_possible = $date_effacement_possible(compte)
+        compte.sessions                 = (compte.sessions ?? [])
+            .filter(session => !session.date_revocation && new Date(session.date_validite) > maintenant)
+            .map(({ date_revocation, ...session }) => ({ ...session, est_actuelle: session.id === $context.session?.id }))
+            .sort((a, b) => new Date(b.date_emission) - new Date(a.date_emission))
+
+        delete compte.date_changement_courriel_principal
 
         return $indicate(200, "Compte récupéré", compte)
+    }
+
+    // ─── Modification (PATCH /compte/<id>) ───────────────────────────────────
+
+    $preparer_modification_compte = async () =>
+    {
+        await $exiger_compte()
+    }
+
+    // Un majeur ne peut pas devenir mineur, et un mineur ne peut que rajeunir, sans passer sous
+    // l âge minimum (sauf, plus tard, pour un compte sous contrôle parental)
+    $verifier_date_naissance = ($values) =>
+    {
+        const actuelle = $context.compte.date_naissance
+        const age      = $calculer_age($values.date_naissance)
+
+        if (age === null)
+            return $indicate(422, "Date de naissance invalide")
+
+        if (age < $age_minimum())
+            return $indicate(403, "Âge minimum non atteint")
+
+        const age_actuel = $calculer_age(actuelle)
+        const vieillit   = $values.date_naissance < actuelle
+
+        if (age_actuel >= $age_majorite() ? age < $age_majorite() : vieillit)
+            return $indicate(403, "Modification de la date de naissance refusée")
+    }
+
+    $preparer_modification_mot_de_passe = async () =>
+    {
+        $context.principale = await $verifier_clef_principale('modification-mot-de-passe')
+    }
+
+    // Les autres sessions sont fermées : un voleur qui en aurait une perd son accès
+    $notifier_modification_mot_de_passe = async () =>
+    {
+        await $consommer_clefs($context.principale.coordonnee, 'modification-mot-de-passe')
+
+        await $delete_all('sessions',
+            `
+            #id_compte = $id_compte
+          & #id       != $id_session
+            `,
+            { $id_compte: $context.compte.id, $id_session: $context.session.id }
+        )
+
+        await $ecrire_courriels(await $lire_courriels($context.compte.id),
+            "Le mot de passe de votre compte Anicroche a changé",
+            `<p>Le mot de passe de votre compte Anicroche a été changé, et vos autres sessions ont été fermées.</p>`
+          + `<p>Si vous n'êtes pas à l'origine de ce changement, changez-le de nouveau sans attendre, à l'aide d'un code envoyé à votre adresse principale.</p>`
+        )
     }
 
     $inscrire_compte = async ($body) =>
@@ -265,7 +350,7 @@
         $set_cookie('jeton', cookie_session, { lifetime: '30d' })
 
 
-        const jeton_acces = await $sign_token({ type: 'acces', id_compte: coordonnee.id_compte })
+        const jeton_acces = await $sign_token({ type: 'acces', id_compte: coordonnee.id_compte, id_session: session.id })
 
         $add_to_respond('est_connecte', true)
 

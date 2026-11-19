@@ -442,7 +442,11 @@ const transformer_modele = (annotations) =>
             restrict_search : lire_chaine_optionnelle(rules_brutes, 'restrict_search'),
             prior_search    : lire_chaine_optionnelle(rules_brutes, 'prior_search'),
             post_search     : lire_chaine_optionnelle(rules_brutes, 'post_search'),
+            prior_create    : lire_chaine_optionnelle(rules_brutes, 'prior_create'),
+            post_create     : lire_chaine_optionnelle(rules_brutes, 'post_create'),
             restrict_update : lire_chaine_optionnelle(rules_brutes, 'restrict_update'),
+            prior_update    : lire_chaine_optionnelle(rules_brutes, 'prior_update'),
+            post_update     : lire_chaine_optionnelle(rules_brutes, 'post_update'),
             can_delete      : lire_chaine_optionnelle(rules_brutes, 'can_delete'),
             restrict_delete : lire_chaine_optionnelle(rules_brutes, 'restrict_delete'),
             prior_delete    : lire_chaine_optionnelle(rules_brutes, 'prior_delete'),
@@ -808,7 +812,7 @@ const lister_hooks_modele = (table) =>
         for (const clef of ['prior_create', 'post_create', 'prior_update', 'post_update', 'prior_search', 'post_search'])
             if (champ[clef])
                 hooks.push({ action: champ[clef], etiquette: `${clef} du champ \`${champ.name}\`` })
-    for (const clef of ['prior_search', 'post_search', 'prior_delete', 'post_delete'])
+    for (const clef of ['prior_search', 'post_search', 'prior_create', 'post_create', 'prior_update', 'post_update', 'prior_delete', 'post_delete'])
         if (table.rules?.[clef])
             hooks.push({ action: table.rules[clef], etiquette: `${clef} de @rules` })
     for (const route of table.routes)

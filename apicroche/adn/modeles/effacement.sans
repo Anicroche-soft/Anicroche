@@ -41,6 +41,10 @@
     // Rappels de l effacement, en jours avant l échéance, après le courriel de la demande
     const RAPPELS_EFFACEMENT = [ 14, 7, 3, 1 ]
 
+    // Après un changement d adresse principale, l effacement est refusé pendant ce nombre de jours :
+    // un voleur qui aurait pris l adresse ne peut pas faire effacer le compte aussitôt
+    const DELAI_APRES_CHANGEMENT_PRINCIPAL = 7
+
     // Durée d inactivité avant la suppression, en années. Le premier avertissement précède
     // toujours la suppression d au moins PREAVIS_MINIMUM jours, même pour un compte qui
     // n a pas pu être averti à temps (compte protégé qui ne l est plus, tâche interrompue…)
@@ -72,32 +76,6 @@
 
     // ─── Courriels ───────────────────────────────────────────────────────────
 
-    const lire_adresses = async (id_compte) =>
-        (await $search_all('coordonnees',
-            `
-            #id_compte = $id_compte
-          & #type      = courriel
-            `,
-            { $id_compte: id_compte }
-        )).map(coordonnee => coordonnee.coordonnee)
-
-    // Toutes les adresses du compte sont prévenues : un voleur qui aurait changé l adresse
-    // principale n empêche pas l ancienne d être avertie
-    const ecrire = async (adresses, sujet, contenu) =>
-    {
-        for (const adresse of adresses)
-        {
-            try
-            {
-                await $send_email({ to: adresse, subject: sujet, content: contenu })
-            }
-            catch (erreur)
-            {
-                console.log(`/!\\ courriel de fin de compte non envoyé : ${erreur.message}`)
-            }
-        }
-    }
-
     // Le jeton ne fait que restaurer le compte : il ne permet pas de s y connecter. Il est placé
     // dans le fragment de l adresse, que le navigateur n envoie jamais au serveur
     const creer_lien = async (id_compte, motif, jours, demande = null) =>
@@ -127,6 +105,24 @@
 
         const preavis = ajouter_jours(compte.date_premier_avertissement ?? maintenant(), PREAVIS_MINIMUM)
         return echeance > preavis ? echeance : preavis
+    }
+
+    // Date à partir de laquelle l effacement peut être demandé, ou null s il peut l être
+    $date_effacement_possible = (compte) =>
+    {
+        if (!compte.date_changement_courriel_principal)
+            return null
+
+        const date = ajouter_jours(compte.date_changement_courriel_principal, DELAI_APRES_CHANGEMENT_PRINCIPAL)
+        return date > new Date() ? date : null
+    }
+
+    $exiger_effacement_possible = () =>
+    {
+        const date = $date_effacement_possible($context.compte)
+
+        if (date)
+            return $indicate(403, `Suppression du compte impossible avant le ${formater_date(date)}`, { date_effacement_possible: date })
     }
 
     // ─── Profils et anicroches ───────────────────────────────────────────────
@@ -237,7 +233,7 @@
             await $update_one('profil', `#id = $id`, { identifiant: nouveau }, { $id: derive.id })
 
             for (const gerant of derive.gerants)
-                await ecrire(await lire_adresses(gerant.id),
+                await $ecrire_courriels(await $lire_courriels(gerant.id),
                     `Votre profil @${derive.identifiant} s'appelle désormais @${nouveau}`,
                     `<p>Le profil @${racine}, dont dérivait votre profil @${derive.identifiant}, n'existe plus. Votre profil devient donc un profil racine, sous le nom <strong>@${nouveau}</strong>.</p>`
                   + `<p>Vous pouvez changer ce nom depuis votre profil.</p>`
@@ -249,7 +245,7 @@
 
     const effacer_compte = async (compte, motif) =>
     {
-        const adresses = await lire_adresses(compte.id)
+        const adresses = await $lire_courriels(compte.id)
         const racines  = []
 
         for (const profil of await lire_profils_geres(compte.id))
@@ -279,7 +275,7 @@
 
         console.log(`  COMPTE effacé (${motif === 'demande' ? 'demande' : 'inactivité'})`)
 
-        await ecrire(adresses,
+        await $ecrire_courriels(adresses,
             "Votre compte Anicroche a été effacé",
             motif === 'demande'
                 ? `<p>Comme vous l'avez demandé, votre compte Anicroche et vos données personnelles ont été effacés.</p>`
@@ -306,7 +302,7 @@
             { $id: compte.id }
         )
 
-        await ecrire(await lire_adresses(compte.id),
+        await $ecrire_courriels(await $lire_courriels(compte.id),
             "La suppression de votre compte est annulée",
             `<p>La suppression de votre compte Anicroche a été annulée : votre compte et vos profils sont de nouveau actifs.</p>`
           + `<p>Si vous n'êtes pas à l'origine de la demande de suppression, changez votre mot de passe.</p>`
@@ -330,7 +326,8 @@
             }))
 
         return $indicate(200, "Effacement consulté", {
-            date_demande_effacement : $context.compte.date_demande_effacement ?? null,
+            date_demande_effacement  : $context.compte.date_demande_effacement ?? null,
+            date_effacement_possible : $date_effacement_possible($context.compte),
             date_effacement         : $date_effacement($context.compte),
             delai_effacement        : DELAI_EFFACEMENT,
             profils
@@ -372,31 +369,12 @@
         )
             return $indicate(400, "Corps incomplet")
 
-        const id_compte = $context.compte.id
+        await $exiger_effacement_possible()
 
-        const principale = await $search_one('coordonnee',
-            `
-            #id_compte = $id_compte
-          & #est_principale
-            `,
-            { $id_compte: id_compte }
-        )
+        const id_compte  = $context.compte.id
+        const principale = await $verifier_clef_principale('effacement')
 
-        if (!principale)
-            return $indicate(403, "Accès refusé")
-
-        // $verifier_clef lit la coordonnée dans le corps : c est celle du compte qui compte
-        $body.coordonnee = principale.coordonnee
-
-        if (!await $verifier_clef('effacement'))
-            return $indicate(403, "Accès refusé")
-
-        await $delete_all('clefs',
-            `
-            #hachage_coordonnee = $body.coordonnee
-          & #type               = effacement
-            `
-        )
+        await $consommer_clefs(principale.coordonnee, 'effacement')
 
         const a_supprimer = new Set(($body.profils_a_supprimer ?? []).map(String))
 
@@ -434,7 +412,7 @@
 
         const lien = await creer_lien(id_compte, 'effacement', DELAI_EFFACEMENT + 1, demande.getTime())
 
-        await ecrire(await lire_adresses(id_compte),
+        await $ecrire_courriels(await $lire_courriels(id_compte),
             "Demande de suppression de votre compte Anicroche",
             `<p>La suppression de votre compte Anicroche a été demandée le ${formater_date(demande)}. Il sera effacé définitivement le <strong>${formater_date(date_effacement)}</strong>.</p>`
           + `<p>D'ici là, votre compte est suspendu et toutes ses sessions ont été fermées. Vous pouvez encore changer d'avis en vous connectant, ou avec ce lien :</p>`
@@ -523,7 +501,7 @@
 
                 const lien  = await creer_lien(compte.id, 'effacement', jours + 1, new Date(compte.date_demande_effacement).getTime())
 
-                await ecrire(await lire_adresses(compte.id),
+                await $ecrire_courriels(await $lire_courriels(compte.id),
                     `Votre compte Anicroche sera effacé le ${formater_date(date_effacement)}`,
                     `<p>Comme demandé le ${formater_date(compte.date_demande_effacement)}, votre compte Anicroche sera effacé définitivement le <strong>${formater_date(date_effacement)}</strong>.</p>`
                   + `<p>Si vous avez changé d'avis, ou si vous n'êtes pas à l'origine de cette demande :</p>`
@@ -593,7 +571,7 @@
 
                 const lien = await creer_lien(compte.id, 'inactivite', jours + PREAVIS_MINIMUM)
 
-                await ecrire(await lire_adresses(compte.id),
+                await $ecrire_courriels(await $lire_courriels(compte.id),
                     `Votre compte Anicroche sera supprimé le ${formater_date(echeance)}`,
                     `<p>Vous n'avez pas utilisé votre compte Anicroche depuis le ${formater_date(compte.date_derniere_activite)}. Sans activité de votre part, il sera supprimé le <strong>${formater_date(echeance)}</strong>.</p>`
                   + `<p>Vos données personnelles seront alors effacées, et les profils que vous gérez seul anonymisés : ce qu'ils ont publié restera visible, sans leur nom.</p>`

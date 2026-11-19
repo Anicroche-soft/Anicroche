@@ -66,11 +66,11 @@ Un hook peut interrompre la route en appelant `$indicate(…)` : la réponse est
 
 Route générée dès qu'au moins un champ déclare `can_create`.
 
-| Propriété (champ) | Description |
-|---|---|
-| `can_create` | Le champ peut être fourni dans le corps. Toutes les expressions `can_create` doivent être vraies |
-| `prior_create` | Hook appelé juste avant l'insertion |
-| `post_create` | Hook appelé juste après l'insertion |
+| Propriété | Où | Description |
+|---|---|---|
+| `can_create` | champ | Le champ peut être fourni dans le corps. Toutes les expressions `can_create` doivent être vraies |
+| `prior_create` | champ ou `@rules` | Hook appelé juste avant l'insertion |
+| `post_create` | champ ou `@rules` | Hook appelé juste après l'insertion |
 
 Déroulement :
 
@@ -78,12 +78,12 @@ Déroulement :
 2. lecture des champs `can_create` dans le corps (sous leur nom [`alt`](modeles.md#alt) s'il existe) ; les autres champs du corps sont ignorés ;
 3. génération des valeurs `default : auto` hors contraintes et des valeurs `default : $autre_champ` ;
 4. vérification des règles (`422` sinon) ;
-5. hooks `prior_create` de tous les champs, dans l'ordre de déclaration ;
+5. hook `prior_create` du modèle, puis ceux de tous les champs, dans l'ordre de déclaration (à la création, chaque champ a une valeur, fournie ou par défaut) ;
 6. insertion (les valeurs `auto` uniques sont générées à ce moment) ;
-7. hooks `post_create`, dont `$values` contient alors aussi les valeurs générées (identifiant…) ;
+7. hooks `post_create` des champs, puis celui du modèle. `$values` contient alors aussi les valeurs générées (identifiant…), et les champs `crypt` y sont chiffrés : une valeur en clair utile après l'insertion se garde dans `$context` par un `prior_create` ;
 8. réponse `201 Créé`.
 
-Arguments des hooks : `$body`, `$request`, `$context`, `$values` (valeurs à insérer).
+Arguments des hooks : `$body`, `$request`, `$context`, `$values` (valeurs à insérer). Un `prior_create` peut compléter `$values` (ex. une clef étrangère tirée de `$context`) : c'est cet objet qui est inséré.
 
 ```
 {
@@ -151,8 +151,9 @@ Route générée dès qu'au moins un champ déclare `can_update`.
 | Propriété | Où | Description |
 |---|---|---|
 | `can_update` | champ | Le champ peut être modifié. L'expression de chaque champ fourni doit être vraie |
-| `prior_update` | champ | Hook appelé juste avant la mise à jour |
-| `post_update` | champ | Hook appelé juste après la mise à jour |
+| `prior_update` | champ | Hook appelé juste avant la mise à jour, **seulement si le champ est modifié** |
+| `post_update` | champ | Hook appelé juste après la mise à jour, seulement si le champ est modifié |
+| `prior_update`, `post_update` | `@rules` | Hooks du modèle, appelés à chaque modification |
 | `restrict_update` | `@rules` | Condition que l'entrée doit respecter pour être modifiée |
 
 Déroulement :
@@ -160,7 +161,7 @@ Déroulement :
 1. lecture des champs `can_update` présents dans le corps (sous leur nom `alt` s'il existe) ; s'il n'y en a aucun : `400` ;
 2. vérification de l'expression `can_update` de chaque champ fourni (`403` sinon) ;
 3. recherche de l'entrée par sa clef et `restrict_update` (`404` sinon) ;
-4. hooks `prior_update`, mise à jour (avec vérification de l'énumération, de la taille et des règles : `422` sinon), hooks `post_update` ;
+4. hook `prior_update` du modèle, puis ceux des champs modifiés ; mise à jour (avec vérification de l'énumération, de la taille et des règles : `422` sinon) ; hooks `post_update` des champs modifiés, puis celui du modèle ;
 5. réponse `200 Modifié`.
 
 Arguments des hooks : `$body`, `$request`, `$context`, `$values` (valeurs modifiées).
@@ -190,7 +191,9 @@ Récapitulatif des propriétés de `@rules` :
 | `can_search` | `GET` | Expression d'autorisation |
 | `restrict_search` | `GET` | Condition sur les lignes renvoyées |
 | `prior_search`, `post_search` | `GET` | Hooks |
+| `prior_create`, `post_create` | `POST` | Hooks du modèle, appelés avant ceux des champs (`prior`) ou après (`post`) |
 | `restrict_update` | `PATCH` | Condition sur l'entrée modifiable |
+| `prior_update`, `post_update` | `PATCH` | Hooks du modèle, appelés à chaque modification, avant ceux des champs modifiés (`prior`) ou après (`post`) |
 | `can_delete` | `DELETE` | Expression d'autorisation (génère la route) |
 | `restrict_delete` | `DELETE` | Condition sur l'entrée supprimable |
 | `prior_delete`, `post_delete` | `DELETE` | Hooks |

@@ -22,25 +22,27 @@
         name : hachage_coordonnee
         type : hash
 
-        # Une clef d effacement n est envoyée qu à la coordonnée principale du compte connecté,
-        # avec son mot de passe (mot_de_passe dans le corps) : $preparer_clef le vérifie, car
-        # un objet comme $context.compte ne peut pas être combiné par & dans une expression
+        # Une clef d authentification ou d ajout d adresse est envoyée à l adresse fournie ; les
+        # autres ne le sont qu à l adresse principale du compte connecté. $preparer_clef vérifie
+        # les prérequis de chaque type (voir TYPES_PRINCIPALE), car un objet comme $context.compte
+        # ne peut pas être combiné par & dans une expression
         can_create  : "
             (
-                $type = authentification
+                $type -{ [authentification, ajout-courriel]
               & $hachage_coordonnee ~= /^[^@\s]+@[^@\s]+\.[^@\s]+$/
             )
-          | $type = effacement
+          | $type -{ [effacement, suppression-courriel, modification-courriel-principal, modification-mot-de-passe]
         "
         prior_create : $preparer_clef($values)
     }
 
+    # Une clef ne sert qu à l usage de son type
     {
         name : type
-        type : authentification/effacement
-        size : 1-32
+        type : authentification/effacement/ajout-courriel/suppression-courriel/modification-courriel-principal/modification-mot-de-passe
+        size : 1-48
 
-        can_create : "$type -{ [authentification, effacement]"
+        can_create : "$type -{ [authentification, effacement, ajout-courriel, suppression-courriel, modification-courriel-principal, modification-mot-de-passe]"
     }
 
     {
@@ -81,11 +83,44 @@
 ]
 
 @script [
+    // Types de clef envoyés à l adresse principale du compte connecté, et s ils exigent aussi son
+    // mot de passe. Le changement de mot de passe ne l exige pas : il sert aussi en cas d oubli,
+    // et une clef reçue sur une adresse du compte permet déjà de s y connecter
+    const TYPES_PRINCIPALE = {
+        'effacement'                      : true,
+        'suppression-courriel'            : true,
+        'modification-courriel-principal' : true,
+        'modification-mot-de-passe'       : false
+    }
+
+    // Sujet et usage annoncés dans le courriel de chaque type
+    const COURRIELS = {
+        'effacement'                      : [ "Votre code de désinscription", "Il permet de demander la suppression de votre compte Anicroche." ],
+        'ajout-courriel'                  : [ "Votre code d'ajout d'adresse", "Il permet d'ajouter cette adresse à votre compte Anicroche." ],
+        'suppression-courriel'            : [ "Votre code de retrait d'adresse", "Il permet de retirer une adresse de votre compte Anicroche." ],
+        'modification-courriel-principal' : [ "Votre code de changement d'adresse principale", "Il permet de changer l'adresse principale de votre compte Anicroche." ],
+        'modification-mot-de-passe'       : [ "Votre code de changement de mot de passe", "Il permet de changer le mot de passe de votre compte Anicroche." ]
+    }
+
     $preparer_clef = async ($values) =>
     {
-        if ($values.type === 'effacement')
+        if ($values.type === 'ajout-courriel')
         {
             await $exiger_compte()
+
+            // Le mot de passe d abord : une session seule ne permet pas de savoir si une adresse est inscrite
+            if (!await $verifier_mot_de_passe())
+                return $indicate(403, "Mot de passe invalide")
+
+            if (await $search_one('coordonnee', `#hachage_coordonnee = $values.hachage_coordonnee`, { $values }))
+                return $indicate(409, "Adresse déjà utilisée")
+        }
+        else if ($values.type in TYPES_PRINCIPALE)
+        {
+            await $exiger_compte()
+
+            if ($values.type === 'effacement')
+                await $exiger_effacement_possible()
 
             const principale = await $search_one('coordonnee',
                 `
@@ -99,7 +134,7 @@
             if (!principale)
                 return $indicate(403, "Accès refusé")
 
-            if (!await $verifier_mot_de_passe())
+            if (TYPES_PRINCIPALE[$values.type] && !await $verifier_mot_de_passe())
                 return $indicate(403, "Mot de passe invalide")
         }
 
@@ -141,13 +176,16 @@
             { $values }
         )
 
-        if ($values.type === 'effacement')
+        if ($values.type in COURRIELS)
         {
+            const [ sujet, usage ] = COURRIELS[$values.type]
+
             await $send_email({
                 to      : $values.hachage_coordonnee,
-                subject : "Votre code de désinscription",
+                subject : sujet,
                 content : `<p>Votre code : <strong>${clef_affichee}</strong></p>`
-                        + `<p>Il permet de demander la suppression de votre compte Anicroche. Si vous n'êtes pas à l'origine de cette demande, ne le communiquez à personne et changez votre mot de passe.</p>`
+                        + `<p>${usage} Si vous n'êtes pas à l'origine de cette demande, ne le communiquez à personne`
+                        + ($values.type === 'ajout-courriel' ? `.</p>` : ` et changez votre mot de passe.</p>`)
             })
             return
         }
