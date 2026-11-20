@@ -11,6 +11,7 @@ import {construire_routes, appliquer_cors} from "./scripts/routeur.js"
 import { demarrer_taches_periodiques, executer_actions_prior_run } from "./scripts/planificateur.js"
 import { construire_limites } from "./scripts/limiteur.js"
 import { correspondre_chemin } from "./scripts/chemins.js"
+import { definir_app } from "./scripts/app.js"
 
 console.log(`\
 ╔══════╗
@@ -18,6 +19,7 @@ console.log(`\
 ╚══════╝`)
 
 const adn     = generer_adn()
+definir_app(adn)
 const schemas = charger_modeles("adn/modeles")
 
 const afficher_schemas = ({ tables, relations }) =>

@@ -41,18 +41,7 @@
 @script [
     $preparer_brouillon = async ($values) =>
     {
-        await $exiger_maitre()
-
-        const anicroche = await $search_one('anicroche',
-            `
-            #id   = $id
-          & #type = page
-            `,
-            { $id: $values.id_anicroche }
-        )
-
-        if (!anicroche)
-            return $indicate(404, "Page introuvable")
+        await $exiger_administration_anicroche($values.id_anicroche)
 
         const derniere = await $search_one('version',
             `#id_anicroche = $id`,
@@ -68,7 +57,7 @@
 
     $supprimer_textes_brouillon = async ($values) =>
     {
-        await $exiger_maitre()
+        await $exiger_administration_anicroche($values.id_anicroche)
 
         await $delete_all('textes',
             `
@@ -86,7 +75,7 @@
 
     $verifier_publication = async ($values, $request) =>
     {
-        await $exiger_maitre()
+        const anicroche = await $exiger_administration_anicroche($request.params.id_anicroche)
 
         if (!('date_publication' in $values))
             return
@@ -107,19 +96,6 @@
             $values.date_publication = date
         }
 
-        const { id_anicroche, numero } = $request.params
-
-        const contenu = await $search_one('texte',
-            `
-            #id_anicroche = $id_anicroche
-          & #role         = contenu
-          & #version      = $numero
-          & #contenu     != ''
-            `,
-            { $id_anicroche: id_anicroche, $numero: Number(numero) }
-        )
-
-        if (!contenu)
-            return $indicate(422, "Le brouillon ne contient pas de contenu")
+        await $verifier_sources_publiables(anicroche, Number($request.params.numero))
     }
 ]

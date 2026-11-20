@@ -5,7 +5,7 @@
     "type": "module",
     "scripts": {
         "start": "node sans.js/sans.js",
-        "dev": "nodemon --watch adn --watch sans.js --ext js,sans sans.js/sans.js"
+        "dev": "nodemon --watch adn --watch sans.js --ext js,sans,adn sans.js/sans.js"
     },
     "dependencies": {
         "jose": "^6.0.11",

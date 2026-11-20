@@ -33,6 +33,7 @@ Le bloc `@script` d'un modèle contient du JavaScript. Les fonctions déclarées
 | `$request` | La requête (voir ci-dessous) |
 | `$context` | Objet partagé pendant toute la requête, initialement vide ; typiquement rempli par une action `prior_respond` (ex. `$context.compte`) |
 | `$mode` | Mode d'exécution : `dev` ou `prod` (variable d'environnement `mode`) |
+| `$app` | Configuration lue dans `app.adn` (voir [Démarrage](demarrage.md#le-fichier-appadn)) |
 
 ### `$request`
 

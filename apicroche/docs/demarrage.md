@@ -27,7 +27,7 @@ Les fichiers `.sans` peuvent être rangés dans des sous-dossiers, à n'importe 
 
 ## Le fichier `app.adn`
 
-`app.adn` contient la configuration de l'application au format ADN (paires `clef : valeur`) :
+`app.adn` contient la configuration de l'application au format ADN : paires `clef : valeur`, dictionnaires entre `{ }`, listes entre `[ ]`, nombres, et booléens `:)` (vrai) et `:(` (faux). Une valeur entre guillemets reste un texte (`":)"`).
 
 ```
 nom    : MonAPI
@@ -40,6 +40,22 @@ port   : 5030
 | `port` | nombre | `PORT` ou `5030` | Port d'écoute du serveur. S'il est absent, la variable d'environnement `PORT` est utilisée, puis `5030` |
 | `body_limit` | taille | `1mb` | Taille maximale du corps des requêtes, en octets ou avec l'unité `b`, `kb` ou `mb` (`512kb`). Au-delà : `413` |
 | `cors_headers` | liste | — | En-têtes de requête autorisés pour CORS en plus de `Content-Type` et `Authorization` (`[ X-Profil ]`). Une requête du navigateur portant un autre en-tête est bloquée |
+
+L'application peut y ajouter ses propres clefs. Tout `app.adn` est disponible sous le nom `$app` dans les [scripts](scripts.md#variables-disponibles) et les [expressions augure](magasin.md#expressions-augure) (`rule`, `can_*`, `when`) :
+
+```
+types : {
+    article : {
+        auteurs : :)
+    }
+}
+```
+
+```javascript
+$a_des_auteurs = (type) => $app.types?.[type]?.auteurs === true
+```
+
+`app.adn` est lu au démarrage : une modification demande de relancer le serveur (en mode dev, nodemon le fait dès que le fichier change). Contrairement à celui d'avec.js, il n'est jamais envoyé au navigateur.
 
 ## Variables d'environnement
 

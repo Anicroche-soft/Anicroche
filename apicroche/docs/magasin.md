@@ -206,7 +206,7 @@ Les propriétés `rule`, `can_*` et `when` sont des expressions augure, évalué
 
 | Élément | Syntaxe |
 |---|---|
-| Variables | `$nom`, `$objet.attribut`, `$liste[0]` |
+| Variables | `$nom`, `$objet.attribut`, `$liste[0]` ; `$app` donne la configuration d'`app.adn` |
 | Littéraux | `"texte"`, `'texte'`, mot sans guillemets, `42`, `:)` (vrai), `:(` (faux), `:o` (nul), `:x` (erreur, valeur des champs absents) |
 | Comparaisons | `=`, `!=`, `<`, `>`, `<=`, `>=` (`now` et `now+30d` sont des dates) |
 | Logique | `&`, `\|`, `!`, `( … )` |

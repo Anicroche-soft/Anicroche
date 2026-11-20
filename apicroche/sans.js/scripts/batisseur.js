@@ -286,6 +286,10 @@ const mettre_a_jour_table = async (connexion, table, mode_dev, suppression_schem
                     `ALTER TABLE \`${table.name}\` ADD COLUMN \`${champ.name}\` ${type_cible} ${nullable_sql} ${default_sql(champ)}`.trimEnd()
                 )
                 console.log(`  ALTER TABLE \`${table.name}\` ADD COLUMN \`${champ.name}\``)
+
+                // Les entrées existantes deviennent les variantes de la première position de leur groupe
+                if (champ.order)
+                    await connexion.query(`UPDATE \`${table.name}\` SET \`${champ.name}\` = 1`)
             }
             catch (err)
             {

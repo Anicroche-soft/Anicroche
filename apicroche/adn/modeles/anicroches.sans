@@ -3,20 +3,22 @@
 @primary [ id ]
 
 @fields [
+    # Libre ou attribué automatiquement, selon le type (voir types.sans)
     {
         name         : id
         type         : char
         size         : 1-48
-        rule         : "$type != page | $id ~= /^(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/"
         can_create   : ':)'
         can_search   : ':)'
         prior_create : $verifier_creation_anicroche($values)
         post_create  : $ouvrir_premier_brouillon($values)
     }
 
+    # Une clef de types_anicroches (app.adn)
     {
         name       : type
-        type       : page/
+        type       : char
+        size       : 1-32
         can_create : ':)'
         can_search : ':)'
     }
@@ -31,8 +33,8 @@
         count : 0-N
     }
 
-    # Les pages n ont pas d auteur. Pour les autres types, une anicroche sans auteurs est
-    # supprimée : ses textes ont été vidés (voir effacement.sans)
+    # Pour un type avec auteurs, une anicroche sans auteurs est supprimée : ses textes ont été
+    # vidés (voir effacement.sans)
     {
         name  : auteurs
         entry : auteur
@@ -42,33 +44,35 @@
 ]
 
 # Chaque anicroche trouvée est complétée par sa version en vigueur et ses sources. Seules
-# celles qui ont une version publiée sont visibles, sauf pour les profils maîtres,
-# qui voient aussi le brouillon en cours. Une anicroche supprimée n est jamais visible
+# celles qui ont une version publiée sont visibles, sauf pour les profils qui administrent
+# leur type, qui voient aussi le brouillon en cours. Une anicroche supprimée n est jamais visible
 @rules [
     post_search : $completer_anicroches($results)
 ]
 
 @script [
-    // Seules les pages existent pour l instant : elles sont réservées aux profils maîtres
     $verifier_creation_anicroche = async ($values) =>
     {
-        await $exiger_maitre()
+        if (!$type_anicroche($values.type))
+            return $indicate(422, "Type d'anicroche inconnu")
 
-        const existante = await $search_one('anicroche', `#id = $id`, { $id: $values.id })
-        if (existante)
-            return $indicate(409, "Identifiant déjà utilisé")
+        await $exiger_administration($values.type)
+        await $preparer_identifiant($values)
     }
 
     $ouvrir_premier_brouillon = async ($values) =>
     {
-        await $creer_premier_brouillon($values.id)
+        await $initialiser_anicroche({ id: $values.id, type: $values.type })
+        $add_to_data('id', $values.id)
         $add_to_data('brouillon', 1)
     }
 
-    // Une source par rôle pour une version donnée :
+    // Une source par rôle et par position pour une version donnée :
     // - une source non remplacée par une version plus récente reste valable
     // - préférence de langue : langue et région préférées, puis langue seule, puis sans langue
-    const resoudre_sources = (textes, numero) =>
+    // Un rôle à plusieurs sources (nombre maximum au-dessus de 1) donne une liste rangée par
+    // position, les autres une source seule
+    const resoudre_sources = (type, textes, numero) =>
     {
         const { langue, region } = $langue_preferee()
         const preferences = [ [ langue, region ], [ langue, '' ], [ '', '' ] ]
@@ -78,39 +82,53 @@
             return index < 0 ? preferences.length : index
         }
 
-        const sources = {}
+        const retenues = new Map()
         for (const texte of textes)
         {
             if (texte.version > numero)
                 continue
 
-            const actuelle = sources[texte.role]
+            const clef      = `${texte.role}|${texte.position}`
+            const actuelle  = retenues.get(clef)
             const meilleure = !actuelle
                 || rang(texte) < rang(actuelle)
                 || (rang(texte) === rang(actuelle) && texte.version > actuelle.version)
 
             if (meilleure)
-                sources[texte.role] = texte
+                retenues.set(clef, texte)
         }
 
-        return Object.fromEntries(Object.entries(sources).map(([role, texte]) => [role, {
-            langue  : texte.langue,
-            region  : texte.region,
-            version : texte.version,
-            contenu : texte.contenu
-        }]))
+        const multiples = new Set($sources_type(type).filter(source => source.max > 1).map(source => source.role))
+        const sources   = {}
+
+        for (const texte of [ ...retenues.values() ].sort((a, b) => a.position - b.position))
+        {
+            const source = {
+                position : texte.position,
+                langue   : texte.langue,
+                region   : texte.region,
+                version  : texte.version,
+                contenu  : texte.contenu
+            }
+
+            if (multiples.has(texte.role))
+                (sources[texte.role] ??= []).push(source)
+            else
+                sources[texte.role] ??= source
+        }
+
+        return sources
     }
 
     $completer_anicroches = async ($results) =>
     {
-        const maitre = await $est_maitre()
-
         for (let i = $results.length - 1; i >= 0; i--)
         {
-            const anicroche = $results[i]
-            const version   = await $version_en_vigueur(anicroche.id)
+            const anicroche  = $results[i]
+            const version    = await $version_en_vigueur(anicroche.id)
+            const administre = $administre_type(anicroche.type)
 
-            if ((!version && !maitre) || await $est_anicroche_supprimee(anicroche))
+            if ((!version && !administre) || await $est_anicroche_supprimee(anicroche))
             {
                 $results.splice(i, 1)
                 continue
@@ -120,9 +138,9 @@
 
             anicroche.version          = version?.numero ?? null
             anicroche.date_publication = version?.date_publication ?? null
-            anicroche.sources          = version ? resoudre_sources(textes, version.numero) : {}
+            anicroche.sources          = version ? resoudre_sources(anicroche.type, textes, version.numero) : {}
 
-            if (!maitre)
+            if (!administre)
                 continue
 
             const derniere = await $search_one('version',
@@ -133,7 +151,7 @@
 
             // Le brouillon montre les sources telles qu elles seront une fois publiées
             anicroche.brouillon = derniere && !derniere.date_publication
-                ? { numero: derniere.numero, sources: resoudre_sources(textes, derniere.numero) }
+                ? { numero: derniere.numero, sources: resoudre_sources(anicroche.type, textes, derniere.numero) }
                 : null
         }
     }

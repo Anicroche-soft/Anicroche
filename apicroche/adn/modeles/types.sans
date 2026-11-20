@@ -1,0 +1,233 @@
+# Types d anicroches, décrits dans la clef types_anicroches d app.adn. Chaque propriété d un
+# type déclenche une possibilité du script général des anicroches :
+# - identifiant    : libre (choisi à la création, en minuscules) ou un nombre (clef
+#                    automatique de ce nombre de caractères A-Z0-9) ;
+# - auteurs        : :) si les anicroches du type ont des profils auteurs ;
+# - administration : rôles de profil qui ont tous les droits sur les anicroches du type ;
+# - sources        : rôles des textes, chacun avec son nombre de sources (0-1, 1-1, 1-N…),
+#                    rangées par position ; les sources obligatoires sont créées vides avec
+#                    l anicroche.
+
+@actions [
+    {
+        prior_run : $verifier_types_anicroches()
+    }
+]
+
+@script [
+    const MOTIF_NOMBRE      = /^(\d+)-(\d+|N)$/
+    const MOTIF_LISIBLE     = /^(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/
+    const CARACTERES_CLEF   = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    const LONGUEUR_MAXIMALE = 48
+
+    $type_anicroche = (type) =>
+        Object.prototype.hasOwnProperty.call($app.types_anicroches ?? {}, type)
+            ? $app.types_anicroches[type]
+            : null
+
+    // « 1-N » donne { min: 1, max: Infinity }, et null pour une valeur invalide
+    $lire_nombre = (texte) =>
+    {
+        const morceaux = MOTIF_NOMBRE.exec(String(texte ?? '0-1'))
+        if (!morceaux)
+            return null
+
+        const min = Number(morceaux[1])
+        const max = morceaux[2] === 'N' ? Infinity : Number(morceaux[2])
+        return min <= max ? { min, max } : null
+    }
+
+    $sources_type = (type) =>
+        Object.entries($type_anicroche(type)?.sources ?? {})
+            .map(([role, config]) => ({ role, ...$lire_nombre(config?.nombre) }))
+
+    $a_des_auteurs = (type) => $type_anicroche(type)?.auteurs === true
+
+    // ─── Droits ──────────────────────────────────────────────────────────────
+
+    // Le rôle est celui du profil sélectionné
+    $administre_type = (type) =>
+        !!$context.profil && ($type_anicroche(type)?.administration ?? []).includes($context.profil.role)
+
+    $exiger_administration = async (type) =>
+    {
+        await $exiger_compte()
+
+        if (!$administre_type(type))
+            return $indicate(403, 'Accès refusé')
+    }
+
+    // Renvoie l anicroche, après avoir vérifié que le profil administre son type
+    $exiger_administration_anicroche = async (id_anicroche) =>
+    {
+        await $exiger_compte()
+
+        const anicroche = await $search_one('anicroche', `#id = $id`, { $id: id_anicroche })
+        if (!anicroche)
+            return $indicate(404, "Anicroche introuvable")
+
+        await $exiger_administration(anicroche.type)
+        return anicroche
+    }
+
+    // ─── Identifiants ────────────────────────────────────────────────────────
+
+    const generer_clef = (longueur) =>
+        Array.from(crypto.getRandomValues(new Uint32Array(longueur)), n => CARACTERES_CLEF[n % CARACTERES_CLEF.length]).join('')
+
+    // Complète ou vérifie $values.id selon le type
+    $preparer_identifiant = async ($values) =>
+    {
+        const identifiant = $type_anicroche($values.type).identifiant
+
+        if (identifiant === 'libre')
+        {
+            if (typeof $values.id !== 'string' || !MOTIF_LISIBLE.test($values.id) || $values.id.length > LONGUEUR_MAXIMALE)
+                return $indicate(422, "Identifiant invalide")
+
+            if (await $search_one('anicroche', `#id = $id`, { $id: $values.id }))
+                return $indicate(409, "Identifiant déjà utilisé")
+            return
+        }
+
+        if ($values.id !== undefined && $values.id !== null && $values.id !== '')
+            return $indicate(422, "L'identifiant de ce type est attribué automatiquement")
+
+        for (;;)
+        {
+            const clef = generer_clef(identifiant)
+            if (!await $search_one('anicroche', `#id = $id`, { $id: clef }))
+            {
+                $values.id = clef
+                return
+            }
+        }
+    }
+
+    // ─── Sources ─────────────────────────────────────────────────────────────
+
+    // Pour chaque position et chaque langue, la source la plus récente jusqu à la version donnée
+    const sources_en_place = (textes, role, numero) =>
+    {
+        const par_variante = new Map()
+        for (const texte of textes)
+        {
+            if (texte.role !== role || texte.version > numero)
+                continue
+
+            const clef   = `${texte.position}|${texte.langue}|${texte.region}`
+            const actuel = par_variante.get(clef)
+            if (!actuel || texte.version > actuel.version)
+                par_variante.set(clef, texte)
+        }
+        return [ ...par_variante.values() ]
+    }
+
+    const compter_positions = async (id_anicroche, role) =>
+    {
+        const derniere = await $search_one('texte',
+            `
+            #id_anicroche = $id
+          & #role         = $role
+            `,
+            { $id: id_anicroche, $role: role },
+            { order: 'position', dir: 'desc' }
+        )
+        return derniere?.position ?? 0
+    }
+
+    // Sources obligatoires créées vides dans le dernier brouillon, jusqu au nombre minimum
+    $creer_sources_obligatoires = async (anicroche) =>
+    {
+        const brouillon = await $search_one('version',
+            `
+            #id_anicroche     = $id
+          & #date_publication = null
+            `,
+            { $id: anicroche.id },
+            { order: 'numero', dir: 'desc' }
+        )
+        if (!brouillon)
+            return
+
+        const { langue, region } = $langue_preferee()
+
+        for (const source of $sources_type(anicroche.type))
+        {
+            for (let position = await compter_positions(anicroche.id, source.role) + 1; position <= source.min; position++)
+                await $create_one('texte', {
+                    id_anicroche : anicroche.id,
+                    role         : source.role,
+                    position,
+                    version      : brouillon.numero,
+                    langue,
+                    region,
+                    contenu      : ''
+                })
+        }
+    }
+
+    // Sans position, la source s ajoute à la suite : le nombre maximum de son rôle s applique
+    $verifier_role_source = async (anicroche, role, position) =>
+    {
+        const source = $sources_type(anicroche.type).find(source => source.role === role && source.max > 0)
+        if (!source)
+            return $indicate(422, `Rôle invalide pour une anicroche de type ${anicroche.type}`)
+
+        if ((position === undefined || position === null) && await compter_positions(anicroche.id, role) >= source.max)
+            return $indicate(422, `Nombre maximum de sources ${role} atteint (${source.max})`)
+    }
+
+    // Une version ne se publie qu avec le nombre minimum de sources non vides de chaque rôle,
+    // une source comptant dès qu elle est remplie dans une langue
+    $verifier_sources_publiables = async (anicroche, numero) =>
+    {
+        const textes = await $search_all('textes', `#id_anicroche = $id`, { $id: anicroche.id })
+
+        for (const source of $sources_type(anicroche.type))
+        {
+            const positions = new Set(sources_en_place(textes, source.role, numero)
+                .filter(texte => String(texte.contenu ?? '').trim() !== '')
+                .map(texte => texte.position))
+
+            if (positions.size < source.min)
+                return $indicate(422, source.min > 1
+                    ? `Il faut au moins ${source.min} sources ${source.role} remplies`
+                    : `La source ${source.role} est vide`)
+        }
+    }
+
+    // ─── Vérification au démarrage ───────────────────────────────────────────
+
+    $verifier_types_anicroches = () =>
+    {
+        const types = $app.types_anicroches
+
+        if (!types || typeof types !== 'object' || !Object.keys(types).length)
+        {
+            console.log("/!\\ app.adn : aucun type d'anicroche (types_anicroches)")
+            return
+        }
+
+        for (const [type, config] of Object.entries(types))
+        {
+            const avertir = (message) => console.log(`/!\\ app.adn : type ${type} : ${message}`)
+            const identifiant = config?.identifiant
+
+            if (identifiant !== 'libre' && !(Number.isInteger(identifiant) && identifiant > 0 && identifiant <= LONGUEUR_MAXIMALE))
+                avertir(`identifiant invalide (${identifiant}) : libre ou un nombre de 1 à ${LONGUEUR_MAXIMALE}`)
+
+            if (config?.auteurs !== undefined && typeof config.auteurs !== 'boolean')
+                avertir(`auteurs doit valoir :) ou :(`)
+
+            if (!Array.isArray(config?.administration))
+                avertir(`administration doit être une liste de rôles`)
+
+            for (const [role, source] of Object.entries(config?.sources ?? {}))
+            {
+                if (!$lire_nombre(source?.nombre))
+                    avertir(`source ${role} : nombre invalide (${source?.nombre})`)
+            }
+        }
+    }
+]

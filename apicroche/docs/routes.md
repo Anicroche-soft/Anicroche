@@ -13,10 +13,11 @@ Toutes les routes répondent au [format JSON commun](demarrage.md#format-des-ré
 | `POST /<entrée>` | au moins un champ a `can_create` | Créer une entrée |
 | `GET /<table>` | toujours | Rechercher des entrées |
 | `GET /<entrée>/<$clef>` | le modèle a une clef primaire | Lire une entrée |
+| `GET /<table>/<$clef sans order>` | la clef primaire contient un champ [`order`](modeles.md#champs-order) | Lire toutes les positions d'un groupe, dans l'ordre |
 | `PATCH /<entrée>/<$clef>` | au moins un champ a `can_update` | Modifier une entrée |
 | `DELETE /<entrée>/<$clef>` | `@rules` contient `can_delete` | Supprimer une entrée |
 
-`<$clef>` reprend les champs de la clef primaire, un segment par champ (`/coordonnee/<$hachage_coordonnee>`, ou `/texte/<$id_anicroche>/<$role>/<$version>/<$langue>/<$region>` pour une clef composée). Pour un champ haché, l'URL contient la valeur en clair.
+`<$clef>` reprend les champs de la clef primaire, un segment par champ (`/coordonnee/<$hachage_coordonnee>`, ou `/texte/<$id_anicroche>/<$role>/<$position>/<$version>/<$langue>/<$region>` pour une clef composée). Pour un champ haché, l'URL contient la valeur en clair.
 
 Une valeur vide (`''`) s'écrit `-` dans l'adresse : `PATCH /texte/accueil/contenu/1/fr/-` désigne la région `''`. Cette règle vaut pour toutes les captures `<$nom>`, y compris celles des [routes déclarées](#routes-déclarées--routes) ; une valeur réellement égale à `-` ne peut donc pas être désignée dans une adresse.
 
@@ -56,7 +57,7 @@ Un hook peut interrompre la route en appelant `$indicate(…)` : la réponse est
 | `403` | Expression `can_*` fausse, ou aucun champ consultable |
 | `404` | Entrée introuvable (ou exclue par une restriction) |
 | `409` | Suppression d'une entrée encore référencée par une clef étrangère |
-| `422` | Valeur invalide : énumération, taille, `rule`, ou référence vers une entrée inexistante |
+| `422` | Valeur invalide : énumération, taille, `rule`, position d'un champ [`order`](modeles.md#champs-order), ou référence vers une entrée inexistante |
 | `429` | Limite de requêtes dépassée (voir [`@limits`](#limites-par-ip--limits)) |
 | `500` | Erreur imprévue (le détail est affiché dans les journaux) |
 
@@ -95,7 +96,7 @@ Arguments des hooks : `$body`, `$request`, `$context`, `$values` (valeurs à ins
 }
 ```
 
-## `GET /<table>` et `GET /<entrée>/<$clef>` — Recherche
+## `GET /<table>`, `GET /<entrée>/<$clef>` et `GET /<table>/<$clef sans order>` — Recherche
 
 | Propriété | Où | Description |
 |---|---|---|
@@ -119,6 +120,8 @@ Ordre d'exécution : `prior_search` du modèle, `prior_search` des champs, reche
 Arguments des hooks : `$body`, `$request`, `$context`, et `$results` (résultats filtrés) pour `post_search`.
 
 Réponse : `200 OK` avec la liste des entrées (`GET /<table>`) ou l'entrée (`GET /<entrée>/<$clef>`), `404` si l'entrée est introuvable.
+
+Pour un modèle dont la clef primaire contient un champ `order`, `GET /<table>/<$clef sans order>` reprend la clef primaire sans ce champ et renvoie la liste des entrées correspondantes, rangées par position (une liste vide si aucune ne correspond). Les variantes faisant partie de la clef, la liste ne contient que celles qui sont demandées : `GET /textes/accueil/image/2/fr/FR` donne les images de la version 2 en `fr-FR`, quelle que soit leur position. Les propriétés (`can_search`, `restrict_search`, hooks…) sont les mêmes que pour `GET /<table>`.
 
 ### Accès aux relations
 

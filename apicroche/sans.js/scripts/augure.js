@@ -2,6 +2,8 @@
 // Port du moteur front-end avec.js/scripts/augure.js, adapté pour Node.js.
 // Utilisé pour évaluer les `rule` des champs lors des insertions.
 
+import { lire_app } from './app.js'
+
 // ============================================================
 // Types de résultat
 // ============================================================
@@ -761,7 +763,9 @@ const evaluer_noeud = (noeud, donnees) =>
     case 'variable':
     {
         const nom = noeud.valeur
-        return Object.prototype.hasOwnProperty.call(donnees, nom) ? donnees[nom] : ERREUR
+        if (Object.prototype.hasOwnProperty.call(donnees, nom))
+            return donnees[nom]
+        return nom === '$app' ? lire_app() : ERREUR
     }
 
     case 'acces':

@@ -123,6 +123,7 @@ Déclare la liste des champs de la table. Chaque champ est un dictionnaire `{ }`
 | `date` | Date seule | `DATE` |
 | `datetime` | Date et heure, en UTC (voir [Valeurs lues](magasin.md#valeurs-lues)) | `DATETIME` |
 | `boolean` | Valeur vraie ou fausse | `TINYINT(1)` |
+| `order` | Position d'une entrée dans son groupe, de 1 au nombre d'entrées, sans trou (voir ci-dessous) | `INT` |
 | `hash` | Valeur hachée (non réversible) | voir ci-dessous |
 | `crypt` | Valeur chiffrée en AES-256-GCM (réversible) | `BINARY(n)` si la taille est fixe, sinon `VARBINARY(max)` (`VARBINARY(255)` sans `size`) |
 | `a/b/c` | Type énuméré : la valeur doit être l'une des valeurs listées. Une barre oblique finale déclare un énuméré à une seule valeur (`page/`) | `VARCHAR` (longueur de la plus longue valeur par défaut) |
@@ -147,6 +148,34 @@ Chaque calcul argon2 occupe 64 Mio de mémoire : sans.js n'en effectue que 4 à 
 #### Champs `crypt`
 
 La valeur est chiffrée avant l'écriture et déchiffrée automatiquement à la lecture. Toutes les comparaisons sont possibles dans une condition, mais elles sont vérifiées ligne par ligne après lecture (elles ne peuvent pas être traduites en SQL).
+
+#### Champs `order`
+
+Un champ `order` range les entrées d'un même **groupe** : les entrées qui partagent le reste de la clef primaire. Il doit faire partie de `@primary`, et un modèle n'en a qu'un. La propriété `variants` liste les champs de la clef primaire qui ne comptent pas dans le groupe : les entrées qui ne diffèrent que par ces champs sont des variantes d'une même entrée (versions, traductions…) et partagent sa position.
+
+```
+@primary [ id_anicroche, role, position, version, langue, region ]
+
+@fields [
+    {
+        name       : position
+        type       : order
+        variants   : [ version, langue, region ]
+        can_create : ':)'
+        can_update : ':)'
+    }
+]
+```
+
+Ici, les positions sont comptées pour chaque anicroche et chaque rôle, quelles que soient la version et la langue. Le magasin (et donc les routes automatiques) garantit que les positions d'un groupe vont toujours de 1 au nombre d'entrées, sans trou :
+
+- **création** : sans position, l'entrée prend la position qui suit la plus haute de son groupe (1 pour la première). Avec la position d'une entrée existante, elle en devient une variante. Une position au-delà de la suivante est refusée ;
+- **modification** : changer la position déplace l'entrée et toutes ses variantes, et décale celles qui se trouvent entre les deux positions. Sur cinq entrées, passer la première en position 3 fait passer la deuxième en 1 et la troisième en 2. Une position plus grande que le nombre d'entrées du groupe est refusée, comme une expression (`position + 1`), un changement simultané d'un champ du groupe, ou un changement de position portant sur plusieurs entrées à la fois ;
+- **suppression** : quand la dernière variante d'une position disparaît, les positions suivantes du groupe sont décalées pour refermer le trou.
+
+Une position refusée donne le code `ORDER_VIOLATION` (réponse `422`). Une colonne `order` ajoutée à une table existante place toutes ses entrées en position 1.
+
+La route automatique [`GET /<table>/<$clef sans order>`](routes.md#get-table-get-entréeclef-et-get-tableclef-sans-order--recherche) renvoie toutes les positions d'un groupe dans l'ordre (`GET /textes/<$id_anicroche>/<$role>/<$version>/<$langue>/<$region>`).
 
 ### `size`
 

@@ -7,6 +7,7 @@ import { verifier_argon2 } from './crypto.js'
 import { lire_ip, regrouper_ip, analyser_quota, consommer } from './limiteur.js'
 import { lister_fonctions_script } from '../analyseur_sans.js'
 import { compiler_chemin } from './chemins.js'
+import { lire_app } from './app.js'
 
 if (!globalThis.crypto)
     globalThis.crypto = webcrypto
@@ -553,6 +554,11 @@ const normaliser_projection_recherche = (table, projection) =>
 const construire_condition_pk = (table) =>
     table.primary.map(clef => `#${clef} = $params.${clef}`).join(' & ')
 
+// Clef primaire sans ses champs order : elle désigne toutes les positions d'un même groupe
+// et de mêmes variantes
+const clef_sans_ordre = (table) =>
+    table.primary.filter(clef => !table.fields.find(champ => champ.name === clef)?.order)
+
 // Ajouter une restriction déclarée dans @rules à une condition
 const restreindre = (condition, restriction) =>
     restriction ? `(${condition}) & (${restriction})` : condition
@@ -793,7 +799,7 @@ const executer_post_respond = async (index, contexte, rep, $body, $request, $con
 
 // ─── Construction des routes ──────────────────────────────────────────────────
 
-const CODES_VALIDATION = new Set(['RULE_VIOLATION', 'ENUM_VIOLATION', 'SIZE_VIOLATION'])
+const CODES_VALIDATION = new Set(['RULE_VIOLATION', 'ENUM_VIOLATION', 'SIZE_VIOLATION', 'ORDER_VIOLATION'])
 
 export const construire_routes = (schemas, index = null, options = {}) =>
 {
@@ -903,6 +909,7 @@ export const construire_routes = (schemas, index = null, options = {}) =>
             $request,
             $context,
             $mode          : mode,
+            $app           : lire_app(),
             $sign_token    : creer_sign_token(),
             $verify_token  : creer_verify_token(),
             $set_cookie    : creer_set_cookie(rep),
@@ -1135,6 +1142,18 @@ export const construire_routes = (schemas, index = null, options = {}) =>
         if (a_une_pk)
             routes_recherche.push({ is_one: true, chemin: chemin_pk, action: 'search_one' })
 
+        // GET /<table>/<$pk sans order> : toutes les positions, rangées dans l'ordre
+        const champ_ordre = table.fields.find(champ => champ.order && table.primary.includes(champ.name))
+        const clef_groupe = clef_sans_ordre(table)
+        if (champ_ordre && clef_groupe.length)
+            routes_recherche.push({
+                is_one   : false,
+                chemin   : `/${table.name}/${clef_groupe.map(clef => `<$${clef}>`).join('/')}`,
+                action   : `search_all par ${champ_ordre.name}`,
+                condition: clef_groupe.map(clef => `#${clef} = $params.${clef}`).join(' & '),
+                order    : champ_ordre.name
+            })
+
         for (const route_recherche of routes_recherche)
         {
             const handler = proteger(`GET ${route_recherche.chemin}`, async ({ $body, $request, $context, $params, $indicate, contexte_script, magasin }, req, rep) =>
@@ -1176,11 +1195,16 @@ export const construire_routes = (schemas, index = null, options = {}) =>
                 const options_recherche = {
                     select        : [champs_retenus.join(';'), ...reste_projection].filter(Boolean).join(';'),
                     aux_conditions,
-                    enforce_rules : true
+                    enforce_rules : true,
+                    ...(route_recherche.order ? { order: route_recherche.order } : {})
                 }
 
                 const condition_base = table.rules?.restrict_search ?? ':)'
-                const condition = route_recherche.is_one ? restreindre(condition_pk, table.rules?.restrict_search) : condition_base
+                const condition = route_recherche.is_one
+                    ? restreindre(condition_pk, table.rules?.restrict_search)
+                    : route_recherche.condition
+                        ? restreindre(route_recherche.condition, table.rules?.restrict_search)
+                        : condition_base
 
                 const champs_hooks = table.fields.filter(f => champs_retenus.includes(f.name))
                 const hooks_prior = [

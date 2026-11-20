@@ -1000,6 +1000,27 @@ const mettre_a_jour_lignes = async (modele, lignes, donnees) =>
     for (const ligne of lignes)
         valider_update(modele, ligne, donnees)
 
+    const champ = champ_ordre(modele)
+    if (champ && Object.prototype.hasOwnProperty.call(donnees, champ.name))
+    {
+        if (est_expression_update(modele, donnees[champ.name]))
+            throw erreur_ordre(champ, `Position invalide pour le champ "${champ.name}"`)
+        if (champ.group.some(nom => Object.prototype.hasOwnProperty.call(donnees, nom)))
+            throw erreur_ordre(champ, `Le groupe d'une entrée ordonnée ne peut pas changer en même temps que sa position`)
+        if (lignes.length > 1)
+            throw erreur_ordre(champ, `Une position ne se modifie que pour une entrée à la fois`)
+
+        const { [champ.name]: valeur, ...autres } = donnees
+        const cible = lire_position(champ, valeur)
+
+        await deplacer_position(modele, champ, lignes[0], cible)
+        lignes  = [{ ...lignes[0], [champ.name]: cible }]
+        donnees = autres
+
+        if (!Object.keys(donnees).length)
+            return 1
+    }
+
     const { clause: set_clause, valeurs: set_valeurs } = await construire_set_update(modele, donnees)
     const clause_pk = modele.primary.map(c => `\`${c}\` = ?`).join(' AND ')
     let mises_a_jour = 0
@@ -1022,6 +1043,156 @@ const supprimer_par_pk = async (modele, ligne) =>
     const clause  = modele.primary.map(c => `\`${c}\` = ?`).join(' AND ')
     const valeurs = modele.primary.map(c => ligne[c])
     await pool().query(`DELETE FROM \`${modele.name}\` WHERE ${clause}`, valeurs)
+}
+
+// ─── Champs de type order ────────────────────────────────────────────────────
+// Les positions d'un groupe (champ.group : le reste de la clef primaire, sans les variantes)
+// vont de 1 au nombre d'entrées, sans trou ; toutes les variantes d'une entrée partagent
+// sa position.
+
+const champ_ordre = (modele) => modele.fields.find(champ => champ.order) ?? null
+
+const erreur_ordre = (champ, message) => Object.assign(new Error(message), { code: 'ORDER_VIOLATION', champ: champ.name })
+
+const clef_groupe = (champ, ligne) => JSON.stringify(champ.group.map(nom => ligne[nom] ?? null))
+
+const condition_groupe = (champ, ligne) => ({
+    clause : champ.group.length ? champ.group.map(nom => `\`${nom}\` = ?`).join(' AND ') : '1 = 1',
+    valeurs: champ.group.map(nom => ligne[nom])
+})
+
+const compter_positions = async (executeur, modele, champ, ligne) =>
+{
+    const { clause, valeurs } = condition_groupe(champ, ligne)
+    const [rows] = await executeur.query(
+        `SELECT MAX(\`${champ.name}\`) AS nombre FROM \`${modele.name}\` WHERE ${clause}`,
+        valeurs
+    )
+    return Number(rows[0]?.nombre ?? 0)
+}
+
+const lire_position = (champ, valeur) =>
+{
+    const position = typeof valeur === 'string' && /^\d+$/.test(valeur) ? Number(valeur) : valeur
+    if (!Number.isInteger(position))
+        throw erreur_ordre(champ, `Position invalide pour le champ "${champ.name}"`)
+    return position
+}
+
+// Sans position, une nouvelle entrée prend la suivante ; une position existante ajoute une
+// variante de l'entrée qui l'occupe
+const attribuer_positions = async (modele, insertions) =>
+{
+    const champ = champ_ordre(modele)
+    if (!champ)
+        return
+
+    const suivantes = new Map()
+    for (const insertion of insertions)
+    {
+        const clef = clef_groupe(champ, insertion)
+        if (!suivantes.has(clef))
+            suivantes.set(clef, await compter_positions(pool(), modele, champ, insertion) + 1)
+        const suivante = suivantes.get(clef)
+
+        const valeur = insertion[champ.name]
+        if (valeur === undefined || valeur === null || valeur === '')
+        {
+            insertion[champ.name] = suivante
+            suivantes.set(clef, suivante + 1)
+            continue
+        }
+
+        const position = lire_position(champ, valeur)
+        if (position < 1 || position > suivante)
+            throw erreur_ordre(champ, `Position hors limites pour le champ "${champ.name}" (de 1 à ${suivante})`)
+
+        insertion[champ.name] = position
+        if (position === suivante)
+            suivantes.set(clef, suivante + 1)
+    }
+}
+
+// Déplace une entrée et toutes ses variantes ; les entrées entre les deux positions se décalent.
+// La position 0, jamais attribuée, sert de place temporaire pour ne pas heurter la clef primaire
+const deplacer_position = async (modele, champ, ligne, cible) =>
+{
+    const connexion = await pool().getConnection()
+    try
+    {
+        await connexion.beginTransaction()
+
+        const nombre = await compter_positions(connexion, modele, champ, ligne)
+        if (cible < 1 || cible > nombre)
+        {
+            await connexion.rollback()
+            throw erreur_ordre(champ, `Position hors limites pour le champ "${champ.name}" (de 1 à ${nombre})`)
+        }
+
+        const actuelle = Number(ligne[champ.name])
+        if (actuelle !== cible)
+        {
+            const { clause, valeurs } = condition_groupe(champ, ligne)
+            const table   = `\`${modele.name}\``
+            const colonne = `\`${champ.name}\``
+
+            await connexion.query(`UPDATE ${table} SET ${colonne} = 0 WHERE ${clause} AND ${colonne} = ?`, [...valeurs, actuelle])
+            if (actuelle < cible)
+                await connexion.query(
+                    `UPDATE ${table} SET ${colonne} = ${colonne} - 1 WHERE ${clause} AND ${colonne} > ? AND ${colonne} <= ? ORDER BY ${colonne} ASC`,
+                    [...valeurs, actuelle, cible]
+                )
+            else
+                await connexion.query(
+                    `UPDATE ${table} SET ${colonne} = ${colonne} + 1 WHERE ${clause} AND ${colonne} >= ? AND ${colonne} < ? ORDER BY ${colonne} DESC`,
+                    [...valeurs, cible, actuelle]
+                )
+            await connexion.query(`UPDATE ${table} SET ${colonne} = ? WHERE ${clause} AND ${colonne} = 0`, [cible, ...valeurs])
+        }
+
+        await connexion.commit()
+    }
+    catch (erreur)
+    {
+        await connexion.rollback().catch(() => {})
+        throw erreur
+    }
+    finally
+    {
+        connexion.release()
+    }
+}
+
+// Après une suppression, les positions restantes de chaque groupe touché sont renumérotées
+// dans l'ordre : une position libérée par sa dernière variante ne laisse pas de trou
+const compacter_positions = async (modele, lignes) =>
+{
+    const champ = champ_ordre(modele)
+    if (!champ)
+        return
+
+    const groupes = new Map(lignes.map(ligne => [clef_groupe(champ, ligne), ligne]))
+    const table   = `\`${modele.name}\``
+    const colonne = `\`${champ.name}\``
+
+    for (const ligne of groupes.values())
+    {
+        const { clause, valeurs } = condition_groupe(champ, ligne)
+        const [rows] = await pool().query(
+            `SELECT DISTINCT ${colonne} AS position FROM ${table} WHERE ${clause} ORDER BY position ASC`,
+            valeurs
+        )
+
+        for (let i = 0; i < rows.length; i++)
+        {
+            const ancienne = Number(rows[i].position)
+            if (ancienne !== i + 1)
+                await pool().query(
+                    `UPDATE ${table} SET ${colonne} = ? WHERE ${clause} AND ${colonne} = ?`,
+                    [i + 1, ...valeurs, ancienne]
+                )
+        }
+    }
 }
 
 // ─── Intégrité des relations vers un groupe de lignes (key) ──────────────────
@@ -1143,6 +1314,7 @@ const creer_delete_one = (schemas) => async (nom_modele, condition, contexte_con
 
     await verifier_groupes_restants(schemas, modele, [lignes[0]])
     await supprimer_par_pk(modele, lignes[0])
+    await compacter_positions(modele, [lignes[0]])
     return 1
 }
 
@@ -1161,6 +1333,7 @@ const creer_delete_all = (schemas) => async (nom_modele, condition, contexte_con
     await verifier_groupes_restants(schemas, modele, cibles.map(element => element.brute))
     for (const element of cibles)
         await supprimer_par_pk(modele, element.brute)
+    await compacter_positions(modele, cibles.map(element => element.brute))
 
     return cibles.length
 }
@@ -1305,6 +1478,9 @@ const inserer_batch = async (modele, tableau) =>
                 ins[champ.name] = ins[nom_source]
         }
     }
+
+    // 1c. Positions des champs order
+    await attribuer_positions(modele, insertions)
 
     // 2. Valider les règles
     for (let i = 0; i < insertions.length; i++)

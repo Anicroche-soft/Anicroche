@@ -1,3 +1,16 @@
 nom          : Apicroche
 langue       : fr
 cors_headers : [ X-Profil ]
+
+types_anicroches : {
+    page : {
+        identifiant    : libre
+        auteurs        : :(
+        administration : [ maitre ]
+        sources        : {
+            contenu : {
+                nombre : 1-1
+            }
+        }
+    }
+}

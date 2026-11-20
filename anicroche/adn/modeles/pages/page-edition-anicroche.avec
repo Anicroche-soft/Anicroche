@@ -78,18 +78,20 @@
     {
         const brouillon = $anicroche_edition.brouillon
         const source    = brouillon.sources?.contenu
+        const position  = source?.position ?? 1
         const langue    = source?.langue ?? 'fr'
         const region    = source?.region ?? 'FR'
 
         if (source?.version === brouillon.numero)
             return await $update(
-                `texte/${encodeURIComponent($anicroche_edition.id)}/contenu/${brouillon.numero}/${segment(langue)}/${segment(region)}`,
+                `texte/${encodeURIComponent($anicroche_edition.id)}/contenu/${position}/${brouillon.numero}/${segment(langue)}/${segment(region)}`,
                 { contenu }
             )
 
         return await $create('texte', {
             id_anicroche : $anicroche_edition.id,
             role         : 'contenu',
+            position,
             version      : brouillon.numero,
             langue,
             region,

@@ -57,9 +57,6 @@
     // Les comptes gérants d un profil de l un de ces rôles ne sont jamais supprimés pour inactivité
     const ROLES_PROTEGES = [ 'maitre' ]
 
-    // Types d anicroches qui n ont pas d auteur
-    const TYPES_SANS_AUTEURS = [ 'page' ]
-
     const JOUR = 24 * 60 * 60 * 1000
 
     // MySQL ne garde pas les millisecondes : une date écrite puis relue reste ainsi identique
@@ -138,7 +135,7 @@
 
     $est_anicroche_supprimee = async (anicroche) =>
     {
-        if (TYPES_SANS_AUTEURS.includes(anicroche.type))
+        if (!$a_des_auteurs(anicroche.type))
             return false
 
         return !await $search_one('auteur_anicroche', `#id_anicroche = $id`, { $id: anicroche.id })

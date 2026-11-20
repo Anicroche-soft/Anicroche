@@ -20,12 +20,20 @@ const analyser_clef_adn = (str) =>
     return (clef)
 }
 
+// Les booléens s'écrivent :) et :( : leur parenthèse n'ouvre ni ne ferme aucun bloc
+const est_booleen = (str, pos, dans_chaine) =>
+    !dans_chaine && str[pos] == ':' && (str[pos + 1] == ')' || str[pos + 1] == '(')
+
 const analyser_valeur_adn = (str) =>
 {
     if (str[0] == '{' && str.slice(-1) == '}')
         return (analyser_bloc_adn(str.slice(1, -1), "dict"))
     if (str[0] == '[' && str.slice(-1) == ']')
         return (analyser_bloc_adn(str.slice(1, -1), "list"))
+    if (str == ':)')
+        return (true)
+    if (str == ':(')
+        return (false)
 
     let valeur = ""
     let bloc = ''
@@ -68,9 +76,11 @@ const analyser_brin_adn = (str, adn) =>
     {
         let dans_chaine = false
         let fin = debut
-        while (str[fin] != ':' || blocs != '' || valeurs.length > 0)
+        while (str[fin] != ':' || est_booleen(str, fin, dans_chaine) || blocs != '' || valeurs.length > 0)
         {
-            if (str[fin] == blocs.slice(-1))
+            if (est_booleen(str, fin, dans_chaine))
+                fin++
+            else if (str[fin] == blocs.slice(-1))
             {
                 blocs = blocs.slice(0, -1)
                 dans_chaine = false
@@ -156,7 +166,9 @@ const analyser_bloc_adn = (str, type) =>
         let fin = debut
         while (str[fin] != '\n' || blocs != '')
         {
-            if (str[fin] == blocs.slice(-1))
+            if (est_booleen(str, fin, dans_chaine))
+                fin++
+            else if (str[fin] == blocs.slice(-1))
             {
                 blocs = blocs.slice(0, -1)
                 dans_chaine = false

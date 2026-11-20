@@ -313,6 +313,9 @@ const resoudre_type_sql = (type_sans, taille, est_deterministe) =>
         case 'tinyint':
             return { type: 'tinyint', min: null, max: null, treatment: null }
 
+        case 'order':
+            return { type: 'int', min: null, max: null, treatment: null, order: true }
+
         case 'date':
             return { type: 'date', min: null, max: null, treatment: null }
 
@@ -413,6 +416,13 @@ const transformer_champ = (champ_brut, champs_dans_unique) =>
     }
     if (type_res.values)
         champ.values = type_res.values
+    if (type_res.order)
+    {
+        champ.order    = true
+        champ.variants = Array.isArray(champ_brut.variants)
+            ? champ_brut.variants
+            : (typeof champ_brut.variants === 'string' ? [champ_brut.variants] : [])
+    }
     return champ
 }
 
@@ -489,6 +499,21 @@ const transformer_modele = (annotations) =>
         if (champ === "invalide")
             throw new Error(`@fields : type inconnu pour \`${champ_brut.name}\` : « ${champ_brut.type} »`)
         champs.push(champ)
+    }
+
+    // Les positions d'un champ order sont comptées par groupe : les entrées qui partagent le
+    // reste de la clef primaire, sans les champs de variante (version, langue…)
+    const champs_ordre = champs.filter(champ => champ.order)
+    if (champs_ordre.length > 1)
+        throw new Error(`@fields : un seul champ de type order par modèle (${champs_ordre.map(c => c.name).join(', ')})`)
+    for (const champ of champs_ordre)
+    {
+        if (!primary.includes(champ.name))
+            throw new Error(`@fields : le champ order \`${champ.name}\` doit faire partie de @primary`)
+        for (const variante of champ.variants)
+            if (variante === champ.name || !primary.includes(variante))
+                throw new Error(`@fields : variants de \`${champ.name}\` : \`${variante}\` doit être un autre champ de @primary`)
+        champ.group = primary.filter(nom => nom !== champ.name && !champ.variants.includes(nom))
     }
 
     const modele = {

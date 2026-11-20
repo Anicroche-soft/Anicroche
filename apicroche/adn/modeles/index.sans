@@ -338,17 +338,6 @@
             return $indicate(403, "Effacement du compte en cours")
     }
 
-    // Le rôle est celui du profil sélectionné
-    $est_maitre = () => $context.profil?.role === 'maitre'
-
-    $exiger_maitre = async () =>
-    {
-        await $exiger_compte()
-
-        if (!$est_maitre())
-            return $indicate(403, 'Accès refusé')
-    }
-
     // ─── Courriels du compte ────────────────────────────────────────────────
 
     $lire_courriels = async (id_compte) =>
@@ -490,12 +479,14 @@
 
     $langue_preferee = () => ({ langue: 'fr', region: 'FR' })
 
-    // Toute anicroche naît avec le brouillon de sa première version
-    $creer_premier_brouillon = async (id_anicroche) =>
+    // Toute anicroche naît avec le brouillon de sa première version et ses sources obligatoires
+    $initialiser_anicroche = async (anicroche) =>
     {
-        const version = await $search_one('version', `#id_anicroche = $id`, { $id: id_anicroche })
+        const version = await $search_one('version', `#id_anicroche = $id`, { $id: anicroche.id })
         if (!version)
-            await $create_one('version', { id_anicroche, numero: 1 })
+            await $create_one('version', { id_anicroche: anicroche.id, numero: 1 })
+
+        await $creer_sources_obligatoires(anicroche)
     }
 
     $creer_pages_obligatoires = async () =>
@@ -512,7 +503,7 @@
             }
 
             // Aussi pour une page créée avant cette règle
-            await $creer_premier_brouillon(id)
+            await $initialiser_anicroche({ id, type: 'page' })
         }
     }
 

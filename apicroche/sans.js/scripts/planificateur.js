@@ -4,6 +4,7 @@ import { creer_fonctions_magasin } from './magasin.js'
 import { creer_fonctions_mailer } from './mailer.js'
 import { evaluer } from './augure.js'
 import { lister_fonctions_script } from '../analyseur_sans.js'
+import { lire_app } from './app.js'
 
 const analyser_action = (action) =>
 {
@@ -101,6 +102,7 @@ const creer_contexte_base = (schemas) => ({
     },
     $context: {},
     $mode: process.env.mode || 'prod',
+    $app: lire_app(),
     $q: citer_condition
 })
 

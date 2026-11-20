@@ -79,11 +79,12 @@
                     date_publication : version.date_publication
                 })),
                 textes   : textes.map(texte => ({
-                    role    : texte.role,
-                    version : texte.version,
-                    langue  : texte.langue,
-                    region  : texte.region,
-                    contenu : texte.contenu
+                    role     : texte.role,
+                    position : texte.position,
+                    version  : texte.version,
+                    langue   : texte.langue,
+                    region   : texte.region,
+                    contenu  : texte.contenu
                 }))
             })
         }

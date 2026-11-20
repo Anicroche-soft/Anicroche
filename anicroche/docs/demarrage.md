@@ -22,7 +22,7 @@ Les modèles peuvent être rangés dans des sous-dossiers à la convenance de l'
 
 ## Le fichier `app.adn`
 
-`app.adn` contient la configuration de l'application au format ADN (paires `clef : valeur`, dictionnaires entre `{ }`, listes entre `[ ]`) :
+`app.adn` contient la configuration de l'application au format ADN : paires `clef : valeur`, dictionnaires entre `{ }`, listes entre `[ ]`, nombres, et booléens `:)` (vrai) et `:(` (faux). Une valeur entre guillemets reste un texte (`":)"`).
 
 ```
 port   : 4030
