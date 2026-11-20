@@ -1,11 +1,11 @@
-@name [ textes, texte ]
+@name [ sources, source ]
 
-# Adresse d un texte : /texte/<anicroche>/<role>/<position>/<version>/<langue>/<region>
+# Adresse d une source : /source/<anicroche>/<role>/<position>/<version>/<langue>/<region>
 # (une langue ou une région vide s écrit -)
 @primary [ id_anicroche, role, position, version, langue, region ]
 
 @fields [
-    # POST /texte ajoute une source au brouillon d une anicroche : aucun texte n existe
+    # POST /source ajoute une source au brouillon d une anicroche : aucune source n existe
     # sans son anicroche
     {
         name         : id_anicroche
@@ -23,7 +23,7 @@
     }
 
     # Rang de la source parmi celles de son rôle, commun à toutes ses versions et langues.
-    # Sans position, POST /texte ajoute une source à la suite ; avec la position d une source
+    # Sans position, POST /source ajoute une source à la suite ; avec la position d une source
     # existante, il en dépose une nouvelle version ou une traduction. PATCH la déplace, tant
     # qu aucune version n est publiée
     {
@@ -57,7 +57,7 @@
         can_create : ':)'
     }
 
-    # PATCH /texte/... { contenu } corrige une source, tant que sa version est un brouillon
+    # PATCH /source/... { contenu } corrige une source, tant que sa version est un brouillon
     {
         name         : contenu
         type         : text
@@ -96,7 +96,7 @@
         if ($values.position === undefined || $values.position === null)
             return
 
-        const existante = await $search_one('texte',
+        const existante = await $search_one('source',
             `
             #id_anicroche = $id_anicroche
           & #role         = $role

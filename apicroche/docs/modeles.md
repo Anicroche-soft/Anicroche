@@ -167,7 +167,7 @@ Un champ `order` range les entrées d'un même **groupe** : les entrées qui par
 ]
 ```
 
-Ici, les positions sont comptées pour chaque anicroche et chaque rôle, quelles que soient la version et la langue. Le magasin (et donc les routes automatiques) garantit que les positions d'un groupe vont toujours de 1 au nombre d'entrées, sans trou :
+Ici, les positions des sources sont comptées pour chaque anicroche et chaque rôle, quelles que soient la version et la langue. Le magasin (et donc les routes automatiques) garantit que les positions d'un groupe vont toujours de 1 au nombre d'entrées, sans trou :
 
 - **création** : sans position, l'entrée prend la position qui suit la plus haute de son groupe (1 pour la première). Avec la position d'une entrée existante, elle en devient une variante. Une position au-delà de la suivante est refusée ;
 - **modification** : changer la position déplace l'entrée et toutes ses variantes, et décale celles qui se trouvent entre les deux positions. Sur cinq entrées, passer la première en position 3 fait passer la deuxième en 1 et la troisième en 2. Une position plus grande que le nombre d'entrées du groupe est refusée, comme une expression (`position + 1`), un changement simultané d'un champ du groupe, ou un changement de position portant sur plusieurs entrées à la fois ;
@@ -175,7 +175,7 @@ Ici, les positions sont comptées pour chaque anicroche et chaque rôle, quelles
 
 Une position refusée donne le code `ORDER_VIOLATION` (réponse `422`). Une colonne `order` ajoutée à une table existante place toutes ses entrées en position 1.
 
-La route automatique [`GET /<table>/<$clef sans order>`](routes.md#get-table-get-entréeclef-et-get-tableclef-sans-order--recherche) renvoie toutes les positions d'un groupe dans l'ordre (`GET /textes/<$id_anicroche>/<$role>/<$version>/<$langue>/<$region>`).
+La route automatique [`GET /<table>/<$clef sans order>`](routes.md#get-table-get-entréeclef-et-get-tableclef-sans-order--recherche) renvoie toutes les positions d'un groupe dans l'ordre (`GET /sources/<$id_anicroche>/<$role>/<$version>/<$langue>/<$region>`).
 
 ### `size`
 

@@ -4,7 +4,7 @@
 #                    automatique de ce nombre de caractères A-Z0-9) ;
 # - auteurs        : :) si les anicroches du type ont des profils auteurs ;
 # - administration : rôles de profil qui ont tous les droits sur les anicroches du type ;
-# - sources        : rôles des textes, chacun avec son nombre de sources (0-1, 1-1, 1-N…),
+# - sources        : rôles des sources, chacun avec son nombre de sources (0-1, 1-1, 1-N…),
 #                    rangées par position ; les sources obligatoires sont créées vides avec
 #                    l anicroche.
 
@@ -107,25 +107,25 @@
     // ─── Sources ─────────────────────────────────────────────────────────────
 
     // Pour chaque position et chaque langue, la source la plus récente jusqu à la version donnée
-    const sources_en_place = (textes, role, numero) =>
+    const sources_en_place = (lignes, role, numero) =>
     {
         const par_variante = new Map()
-        for (const texte of textes)
+        for (const ligne of lignes)
         {
-            if (texte.role !== role || texte.version > numero)
+            if (ligne.role !== role || ligne.version > numero)
                 continue
 
-            const clef   = `${texte.position}|${texte.langue}|${texte.region}`
+            const clef   = `${ligne.position}|${ligne.langue}|${ligne.region}`
             const actuel = par_variante.get(clef)
-            if (!actuel || texte.version > actuel.version)
-                par_variante.set(clef, texte)
+            if (!actuel || ligne.version > actuel.version)
+                par_variante.set(clef, ligne)
         }
         return [ ...par_variante.values() ]
     }
 
     const compter_positions = async (id_anicroche, role) =>
     {
-        const derniere = await $search_one('texte',
+        const derniere = await $search_one('source',
             `
             #id_anicroche = $id
           & #role         = $role
@@ -155,7 +155,7 @@
         for (const source of $sources_type(anicroche.type))
         {
             for (let position = await compter_positions(anicroche.id, source.role) + 1; position <= source.min; position++)
-                await $create_one('texte', {
+                await $create_one('source', {
                     id_anicroche : anicroche.id,
                     role         : source.role,
                     position,
@@ -182,13 +182,13 @@
     // une source comptant dès qu elle est remplie dans une langue
     $verifier_sources_publiables = async (anicroche, numero) =>
     {
-        const textes = await $search_all('textes', `#id_anicroche = $id`, { $id: anicroche.id })
+        const lignes = await $search_all('sources', `#id_anicroche = $id`, { $id: anicroche.id })
 
         for (const source of $sources_type(anicroche.type))
         {
-            const positions = new Set(sources_en_place(textes, source.role, numero)
-                .filter(texte => String(texte.contenu ?? '').trim() !== '')
-                .map(texte => texte.position))
+            const positions = new Set(sources_en_place(lignes, source.role, numero)
+                .filter(ligne => String(ligne.contenu ?? '').trim() !== '')
+                .map(ligne => ligne.position))
 
             if (positions.size < source.min)
                 return $indicate(422, source.min > 1

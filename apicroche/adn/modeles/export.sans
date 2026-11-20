@@ -65,7 +65,7 @@
                 { $id: anicroche.id },
                 { order: 'numero' }
             )
-            const textes = await $search_all('textes',
+            const sources = await $search_all('sources',
                 `#id_anicroche = $id`,
                 { $id: anicroche.id },
                 { order: 'version' }
@@ -78,13 +78,13 @@
                     numero           : version.numero,
                     date_publication : version.date_publication
                 })),
-                textes   : textes.map(texte => ({
-                    role     : texte.role,
-                    position : texte.position,
-                    version  : texte.version,
-                    langue   : texte.langue,
-                    region   : texte.region,
-                    contenu  : texte.contenu
+                sources  : sources.map(source => ({
+                    role     : source.role,
+                    position : source.position,
+                    version  : source.version,
+                    langue   : source.langue,
+                    region   : source.region,
+                    contenu  : source.contenu
                 }))
             })
         }

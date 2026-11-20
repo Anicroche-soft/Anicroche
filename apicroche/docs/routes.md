@@ -17,9 +17,9 @@ Toutes les routes répondent au [format JSON commun](demarrage.md#format-des-ré
 | `PATCH /<entrée>/<$clef>` | au moins un champ a `can_update` | Modifier une entrée |
 | `DELETE /<entrée>/<$clef>` | `@rules` contient `can_delete` | Supprimer une entrée |
 
-`<$clef>` reprend les champs de la clef primaire, un segment par champ (`/coordonnee/<$hachage_coordonnee>`, ou `/texte/<$id_anicroche>/<$role>/<$position>/<$version>/<$langue>/<$region>` pour une clef composée). Pour un champ haché, l'URL contient la valeur en clair.
+`<$clef>` reprend les champs de la clef primaire, un segment par champ (`/coordonnee/<$hachage_coordonnee>`, ou `/source/<$id_anicroche>/<$role>/<$position>/<$version>/<$langue>/<$region>` pour une clef composée). Pour un champ haché, l'URL contient la valeur en clair.
 
-Une valeur vide (`''`) s'écrit `-` dans l'adresse : `PATCH /texte/accueil/contenu/1/fr/-` désigne la région `''`. Cette règle vaut pour toutes les captures `<$nom>`, y compris celles des [routes déclarées](#routes-déclarées--routes) ; une valeur réellement égale à `-` ne peut donc pas être désignée dans une adresse.
+Une valeur vide (`''`) s'écrit `-` dans l'adresse : `PATCH /source/accueil/contenu/1/1/fr/-` désigne la région `''`. Cette règle vaut pour toutes les captures `<$nom>`, y compris celles des [routes déclarées](#routes-déclarées--routes) ; une valeur réellement égale à `-` ne peut donc pas être désignée dans une adresse.
 
 ### Expressions d'autorisation
 
@@ -121,7 +121,7 @@ Arguments des hooks : `$body`, `$request`, `$context`, et `$results` (résultats
 
 Réponse : `200 OK` avec la liste des entrées (`GET /<table>`) ou l'entrée (`GET /<entrée>/<$clef>`), `404` si l'entrée est introuvable.
 
-Pour un modèle dont la clef primaire contient un champ `order`, `GET /<table>/<$clef sans order>` reprend la clef primaire sans ce champ et renvoie la liste des entrées correspondantes, rangées par position (une liste vide si aucune ne correspond). Les variantes faisant partie de la clef, la liste ne contient que celles qui sont demandées : `GET /textes/accueil/image/2/fr/FR` donne les images de la version 2 en `fr-FR`, quelle que soit leur position. Les propriétés (`can_search`, `restrict_search`, hooks…) sont les mêmes que pour `GET /<table>`.
+Pour un modèle dont la clef primaire contient un champ `order`, `GET /<table>/<$clef sans order>` reprend la clef primaire sans ce champ et renvoie la liste des entrées correspondantes, rangées par position (une liste vide si aucune ne correspond). Les variantes faisant partie de la clef, la liste ne contient que celles qui sont demandées : `GET /sources/accueil/image/2/fr/FR` donne les images de la version 2 en `fr-FR`, quelle que soit leur position. Les propriétés (`can_search`, `restrict_search`, hooks…) sont les mêmes que pour `GET /<table>`.
 
 ### Accès aux relations
 

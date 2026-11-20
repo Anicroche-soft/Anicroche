@@ -5,7 +5,7 @@
 # - après inactivité, il est toujours anonymisé.
 # Un profil anonymisé n a plus de gérant, d identifiant ni de pseudonyme, et reste l auteur
 # de ses anicroches. Un profil supprimé n en est plus l auteur : une anicroche qui n a plus
-# d auteur est vidée de ses textes, et considérée comme supprimée.
+# d auteur est vidée de ses sources, et considérée comme supprimée.
 
 @actions [
     {
@@ -144,7 +144,7 @@
     // Les versions restent : une conversation garde la place d un message supprimé
     const vider_anicroche = async (id_anicroche) =>
     {
-        await $delete_all('textes', `#id_anicroche = $id`, { $id: id_anicroche })
+        await $delete_all('sources', `#id_anicroche = $id`, { $id: id_anicroche })
     }
 
     const anonymiser_profil = async (id_profil) =>

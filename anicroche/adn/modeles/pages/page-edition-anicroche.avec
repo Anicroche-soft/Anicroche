@@ -84,11 +84,11 @@
 
         if (source?.version === brouillon.numero)
             return await $update(
-                `texte/${encodeURIComponent($anicroche_edition.id)}/contenu/${position}/${brouillon.numero}/${segment(langue)}/${segment(region)}`,
+                `source/${encodeURIComponent($anicroche_edition.id)}/contenu/${position}/${brouillon.numero}/${segment(langue)}/${segment(region)}`,
                 { contenu }
             )
 
-        return await $create('texte', {
+        return await $create('source', {
             id_anicroche : $anicroche_edition.id,
             role         : 'contenu',
             position,
