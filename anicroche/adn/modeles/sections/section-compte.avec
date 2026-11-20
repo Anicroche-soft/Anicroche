@@ -48,7 +48,5 @@ section [compte]
         ligne
             bouton-ancre [/compte/edition]
                 "Modifier le compte"
-            bouton-ancre [/compte/suppression]
-                "Supprimer le compte"
             bouton-action [$deconnecter_compte]
                 "Déconnexion"

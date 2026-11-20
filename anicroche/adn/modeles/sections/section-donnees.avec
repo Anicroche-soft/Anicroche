@@ -1,0 +1,9 @@
+section [donnees]
+    titre
+        "Vos données"
+    carte
+        ligne
+            bouton-ancre [/compte/export]
+                "Exporter les données"
+            bouton-ancre [/compte/suppression]
+                "Supprimer le compte"

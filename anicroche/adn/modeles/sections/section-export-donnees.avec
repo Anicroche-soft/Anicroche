@@ -1,0 +1,60 @@
+@script [
+    const telecharger = (donnees) =>
+    {
+        const date    = new Date()
+        const jour    = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+        const fichier = new Blob([ JSON.stringify(donnees, null, 4) ], { type: 'application/json' })
+        const adresse = URL.createObjectURL(fichier)
+        const lien    = document.createElement('a')
+
+        lien.href     = adresse
+        lien.download = `anicroche-donnees-${jour}.json`
+        document.body.append(lien)
+        lien.click()
+        lien.remove()
+
+        // Révoquée aussitôt, l adresse peut l être avant que le navigateur ait lu le fichier
+        setTimeout(() => URL.revokeObjectURL(adresse), 60 * 1000)
+    }
+
+    $envoyer_formulaire_export = async () =>
+    {
+        const reponse = await $create('export', {
+            mot_de_passe : new FormData($node).get('mot_de_passe')
+        })
+
+        if (reponse.error)
+        {
+            $erreur_export = reponse.code === 403
+                ? "Mot de passe invalide"
+                : reponse.code === 429
+                    ? "Trop de tentatives, veuillez réessayer plus tard"
+                    : reponse.error ?? "Erreur serveur"
+            return
+        }
+
+        telecharger(reponse.data.export)
+
+        $erreur_export = false
+        $navigate_to('/compte')
+    }
+]
+
+section [export-donnees, centree]
+    titre [centre]
+        "Exporter vos données"
+    carte
+        formulaire [$envoyer_formulaire_export]
+            @if [$erreur_export]
+                erreur-formulaire
+                    "$erreur_export"
+            information-formulaire
+                "Vous allez télécharger un fichier qui contient votre compte, vos coordonnées, vos sessions, ainsi que les profils que vous gérez et leurs publications. Il ne contient ni votre mot de passe, ni les autres gérants de vos profils partagés."
+            champ-mot-de-passe ["Mot de passe", mot_de_passe]
+            ligne
+                bouton-ancre [/compte]
+                    icone-fleche-gauche
+                    alt
+                        "Retour"
+                bouton-soumission
+                    "Télécharger"

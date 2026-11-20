@@ -44,6 +44,9 @@
 @else-if [$path ~= '/compte/suppression']
     -page-suppression-compte
 
+@else-if [$path ~= '/compte/export']
+    -page-export-donnees
+
 @else-if [$path ~= '/compte/restauration']
     -page-restauration-compte
 

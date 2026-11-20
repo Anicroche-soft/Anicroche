@@ -1,0 +1,19 @@
+@script [
+    $erreur_export = false
+]
+
+# Ouverte aussi à un compte dont l'effacement est demandé : c'est alors que l'export sert le plus
+page [:(, $authentification : requise_sans_profil, $compte_suspendu : :)]
+    navigation
+        <div .gauche>
+            fleche-retour [/compte]
+
+        <div .centre>
+            <span>
+                "Export des données"
+
+        <div .droite>
+            icone-horloge
+
+    onglet
+        section-export-donnees

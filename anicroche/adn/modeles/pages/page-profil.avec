@@ -20,3 +20,4 @@ page [$authentification : requise, $page_compte : :)]
         section-profils
         section-compte
         section-sessions
+        section-donnees

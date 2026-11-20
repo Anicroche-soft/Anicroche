@@ -42,6 +42,11 @@
     }
 
     {
+        path  : /export
+        limit : 5/10m
+    }
+
+    {
         path   : /clef
         method : post
         limit  : 3/10m

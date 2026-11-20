@@ -271,8 +271,9 @@
 # $authentification : libre, interdite (déconnecté seulement), requise, requise_sans_profil,
 # ou ouverte (aucune vérification : pages reçues par courriel). Un compte dont l'effacement
 # est demandé est traité comme déconnecté, sauf sur la page du compte ($page_compte), qui
-# affiche l'effacement en cours ; une page qui exige d'être connecté le renvoie vers elle
-@args [$defilable : :), $authentification : libre, $page_compte : :(]
+# affiche l'effacement en cours ; une page qui exige d'être connecté le renvoie vers elle,
+# sauf si elle lui reste ouverte ($compte_suspendu)
+@args [$defilable : :), $authentification : libre, $page_compte : :(, $compte_suspendu : :(]
 
 <div
     .page
@@ -311,7 +312,7 @@
             onglet
                 section-deja-connecte
 
-        @else-if [$authentification -{ [requise, requise_sans_profil] & $connecte & ! $compte_actif]
+        @else-if [$authentification -{ [requise, requise_sans_profil] & $connecte & ! $compte_actif & ! $compte_suspendu]
             navigation
                 <div .gauche>
                     fleche-retour
@@ -324,7 +325,7 @@
             onglet
                 section-compte-en-suppression
 
-        @else-if [$authentification -{ [requise, requise_sans_profil] & ! $compte_actif]
+        @else-if [$authentification -{ [requise, requise_sans_profil] & ! $connecte]
             navigation
                 <div .gauche>
                     fleche-retour

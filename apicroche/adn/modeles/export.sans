@@ -1,0 +1,153 @@
+# Export des données du compte connecté (RGPD art. 15 et 20), y compris pendant l effacement
+# demandé : le compte, ses adresses, ses sessions, les profils qu il gère et leurs anicroches.
+# Les empreintes, les clefs et les identifiants internes en sont exclus, comme les autres
+# gérants d un profil partagé (données d autres personnes).
+
+@routes [
+    # Corps : { mot_de_passe }. Une session seule ne suffit pas à tout récupérer
+    {
+        path   : /export
+        action : $exporter_donnees($body)
+    }
+]
+
+@script [
+    const formater_date = (date) => new Date(date).toLocaleDateString('fr-FR', {
+        day      : 'numeric',
+        month    : 'long',
+        year     : 'numeric',
+        timeZone : 'Europe/Paris'
+    })
+
+    const lire_compte = (id_compte) =>
+        $search_one('compte',
+            `#id = $id`,
+            { $id: id_compte },
+            { select: 'date_inscription ; date_naissance ; date_acceptation_conditions ; date_derniere_activite ; nombre_avertissements ; date_premier_avertissement ; date_demande_effacement ; date_changement_courriel_principal ; date_conservation' }
+        )
+
+    const lire_coordonnees = async (id_compte) =>
+        (await $search_all('coordonnees', `#id_compte = $id`, { $id: id_compte }))
+            .map(coordonnee => ({
+                type           : coordonnee.type,
+                coordonnee     : coordonnee.coordonnee,
+                est_principale : !!coordonnee.est_principale,
+                date_ajout     : coordonnee.date_ajout
+            }))
+            .sort((a, b) => Number(b.est_principale) - Number(a.est_principale))
+
+    const lire_sessions = async (id_compte) =>
+        (await $search_all('sessions',
+            `#id_compte = $id`,
+            { $id: id_compte },
+            { order: 'date_emission', dir: 'desc' }
+        )).map(session => ({
+            appareil          : session.nom_appareil,
+            agent_utilisateur : session.agent_utilisateur,
+            adresse_ip        : session.adresse_ip,
+            date_emission     : session.date_emission,
+            date_validite     : session.date_validite,
+            date_revocation   : session.date_revocation
+        }))
+
+    const lire_anicroches = async (id_profil) =>
+    {
+        const anicroches = []
+
+        for (const lien of await $search_all('auteurs_anicroches', `#id_profil = $id`, { $id: id_profil }))
+        {
+            const anicroche = await $search_one('anicroche', `#id = $id`, { $id: lien.id_anicroche })
+            if (!anicroche)
+                continue
+
+            const versions = await $search_all('versions',
+                `#id_anicroche = $id`,
+                { $id: anicroche.id },
+                { order: 'numero' }
+            )
+            const textes = await $search_all('textes',
+                `#id_anicroche = $id`,
+                { $id: anicroche.id },
+                { order: 'version' }
+            )
+
+            anicroches.push({
+                id       : anicroche.id,
+                type     : anicroche.type,
+                versions : versions.map(version => ({
+                    numero           : version.numero,
+                    date_publication : version.date_publication
+                })),
+                textes   : textes.map(texte => ({
+                    role    : texte.role,
+                    version : texte.version,
+                    langue  : texte.langue,
+                    region  : texte.region,
+                    contenu : texte.contenu
+                }))
+            })
+        }
+
+        return anicroches
+    }
+
+    const lire_profils = async (id_compte) =>
+    {
+        const profils = await $search_all('profils',
+            `#gerants.id = $id_compte`,
+            { $id_compte: id_compte },
+            { select: 'id ; identifiant ; pseudonyme ; role ; date_creation ; sort ; gerants.id', order: 'date_creation' }
+        )
+
+        const resultat = []
+
+        for (const profil of profils)
+            resultat.push({
+                identifiant         : profil.identifiant,
+                pseudonyme          : profil.pseudonyme,
+                role                : profil.role,
+                date_creation       : profil.date_creation,
+                est_partage         : profil.gerants.length > 1,
+                sort_a_l_effacement : profil.sort ?? null,
+                anicroches          : await lire_anicroches(profil.id)
+            })
+
+        return resultat
+    }
+
+    $exporter_donnees = async ($body) =>
+    {
+        await $exiger_compte({ effacement_demande: true })
+
+        if (!await $verifier_mot_de_passe())
+            return $indicate(403, "Mot de passe invalide")
+
+        const id_compte = $context.compte.id
+        const compte    = await lire_compte(id_compte)
+
+        const donnees = {
+            format      : 'anicroche-export',
+            date_export : new Date(),
+            compte      : {
+                ...compte,
+                date_effacement : $date_effacement(compte),
+                coordonnees     : await lire_coordonnees(id_compte)
+            },
+            sessions    : await lire_sessions(id_compte),
+            profils     : await lire_profils(id_compte)
+        }
+
+        const courriels = donnees.compte.coordonnees
+            .filter(coordonnee => coordonnee.type === 'courriel')
+            .map(coordonnee => coordonnee.coordonnee)
+
+        await $ecrire_courriels(courriels,
+            "Les données de votre compte Anicroche ont été exportées",
+            `<p>Une copie des données de votre compte Anicroche a été téléchargée le ${formater_date(donnees.date_export)}.</p>`
+          + `<p>Si vous n'êtes pas à l'origine de cet export, changez votre mot de passe et fermez les sessions que vous ne reconnaissez pas.</p>`
+        )
+
+        // Rangées à part : la réponse peut aussi porter un nouveau jeton d accès
+        return $indicate(200, "Données exportées", { export: donnees })
+    }
+]
