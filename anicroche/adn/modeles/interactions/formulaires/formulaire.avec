@@ -10,6 +10,10 @@
     .formulaire .ligne {
         gap: 0.5rem;
     }
+
+    .formulaire :is(.lien-ancre, .lien-action, .lien-soumission) {
+        --c-flux: var(--c-vif);
+    }
 ]
 
 @args [$fonction]
