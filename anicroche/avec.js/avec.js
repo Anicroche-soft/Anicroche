@@ -63,6 +63,39 @@ const echapper_attribut = (texte) => texte
     .replaceAll(`"`, `&quot;`)
     .replaceAll(`<`, `&lt;`)
 
+// Page de base, complétée par la clef `config` d'app.adn
+const lire_index = () =>
+{
+    const config = adn.config ?? {}
+    let html     = fs.readFileSync(`avec.js/index.html`, `utf-8`)
+
+    if (config.lang)
+        html = html.replace(/<html\b/, `<html lang="${echapper_attribut(config.lang)}"`)
+    if (config.name)
+        html = html.replace(/<title>[^<]*<\/title>/, `<title>${echapper_attribut(config.name)}</title>`)
+
+    const balises = []
+    if (config.description)
+        balises.push(`<meta name="description" content="${echapper_attribut(config.description)}">`)
+    if (config.name)
+        balises.push(`<meta name="apple-mobile-web-app-title" content="${echapper_attribut(config.name)}">`)
+
+    const couleurs = typeof config.theme_color === `object`
+        ? config.theme_color ?? {}
+        : {defaut: config.theme_color}
+    for (const [theme, couleur] of Object.entries(couleurs))
+    {
+        if (!couleur)
+            continue
+        const media = [`light`, `dark`].includes(theme) ? ` media="(prefers-color-scheme: ${theme})"` : ``
+        balises.push(`<meta name="theme-color" content="${echapper_attribut(couleur)}"${media}>`)
+    }
+
+    if (balises.length)
+        html = html.replace(/(<link rel="canonical"[^>]*>)/, `$1\n        ${balises.join(`\n        `)}`)
+    return html
+}
+
 // Adresse sans le paramètre `?sans-js`, chemin et paramètres compris
 const chemin_complet = (adresse) => adresse.pathname + adresse.search
 
@@ -95,7 +128,7 @@ const entetes_page = (entetes = {}) => ({
 // renvoie vers la même adresse avec `?sans-js`
 const envoyer_page_vide = (rep, adresse = null, entetes = {}) =>
 {
-    let html = fs.readFileSync("avec.js/index.html", "utf-8")
+    let html = lire_index()
     if (adresse)
     {
         html = fixer_adresse_canonique(html, adresse)
@@ -138,7 +171,7 @@ const servir_page = async (req, rep) =>
         return
     }
 
-    const html = fixer_adresse_canonique(assembler_page(rendu), adresse)
+    const html = fixer_adresse_canonique(assembler_page(rendu, lire_index()), adresse)
     rep.writeHead(200, entetes_page(entetes))
     rep.end(html)
 }

@@ -43,7 +43,7 @@ Si une variable n'existe dans aucun parent, l'affectation crée la variable dans
 | `$navigate_post` | fonction | Reproduit la flèche "suivant" du navigateur (`$navigate_post()`) |
 | `$history` | fonction | Retourne une entrée de l'historique interne (`$history()`, `$history(1)`, `$history(2)`) |
 | `$app` | dictionnaire | Configuration de `app.adn` (voir [Démarrage](demarrage.md#le-fichier-appadn)) |
-| `$<clef>` | selon la clef | Chaque clef de `app.adn` (ex. `$nom`), ainsi que `$api_url` |
+| `$<clef>` | selon la clef | Chaque clef de `app.adn` (ex. `$config`), ainsi que `$api_url` |
 | `$create`, `$search`, `$update`, `$delete` | fonctions | Requêtes vers l'API (voir [Requêtes vers l'API](api.md)) |
 | `$add_action` | fonction | Actions exécutées autour des requêtes vers l'API (voir [Requêtes vers l'API](api.md#actions-autour-des-requêtes--add_action)) |
 

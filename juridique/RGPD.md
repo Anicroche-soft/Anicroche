@@ -4,6 +4,8 @@ Ce document rassemble ce que le RGPD demande en dehors du code : le registre des
 
 Il doit être tenu à jour à chaque évolution des modèles `.sans` ou de l'hébergement. Les éléments marqués **À compléter** restent à définir.
 
+Les textes publiés sur le site ont leur brouillon dans le même dossier : [`conditions-generales-d-utilisation.md`](conditions-generales-d-utilisation.md), [`politique-de-confidentialite.md`](politique-de-confidentialite.md) et [`mentions-legales.md`](mentions-legales.md). Une modification de ce registre qui concerne les utilisateurs doit y être reportée, puis publiée (§ 11).
+
 Dernière mise à jour : 20 novembre 2026.
 
 ---
@@ -95,6 +97,7 @@ L'inscription est donc refusée en dessous de 15 ans, en attendant les comptes s
 | Élément | Contenu | Finalité | Consentement |
 |---|---|---|---|
 | Cookie `jeton` (HttpOnly, Secure) | Identifiant et jeton de session | Rester connecté | Non requis (strictement nécessaire) |
+| Cookie `avec-js` (1 an, `SameSite=Lax`) | La valeur `1`, sans donnée personnelle | Indiquer que JavaScript est actif : le serveur n'a alors pas à construire la page (rendu côté serveur réservé aux navigateurs sans JavaScript) | Non requis (strictement nécessaire) |
 | `localStorage` `id_profil` | Profil sélectionné | Mémoriser le profil actif | Non requis (strictement nécessaire) |
 | Cache du service worker | Fichiers du site uniquement (aucune réponse de l'API) | Chargement rapide, mode hors ligne | Non requis |
 
@@ -241,7 +244,7 @@ Les demandes arrivent à l'adresse de contact RGPD (§ 1). **Délai de réponse 
 
    | Droit | Traitement |
    |---|---|
-   | Accès / portabilité (art. 15 et 20) | L'utilisateur télécharge lui-même ses données en JSON depuis son compte (page « Exporter mes données », `/compte/export`, route `POST /export` d'`export.sans`), y compris pendant l'effacement demandé : compte (dates, dont naissance, inscription, acceptation des conditions, dernière activité, avertissements, demande d'effacement), adresses, sessions, profils gérés et leurs anicroches (versions et textes). Le mot de passe est demandé, chaque export est annoncé à toutes les adresses du compte, et la route est limitée à 5 requêtes par 10 min. Sont exclus les empreintes, les clefs, les identifiants internes et les autres gérants des profils partagés (seul le partage est indiqué). Une demande reçue par courriel : l'inviter à le faire en ligne ; si ce n'est pas possible, même extraction à la main |
+   | Accès / portabilité (art. 15 et 20) | L'utilisateur télécharge lui-même ses données en JSON depuis son compte (bouton « Exporter les données » de la page du compte, page `/compte/export`, route `POST /export` d'`export.sans`), y compris pendant l'effacement demandé : compte (dates, dont naissance, inscription, acceptation des conditions, dernière activité, avertissements, demande d'effacement, et coordonnées), sessions (révoquées comprises, tant qu'elles ne sont pas nettoyées), profils gérés et leurs anicroches (versions, brouillons et textes). Pour un profil partagé, l'export contient toutes ses anicroches, y compris celles qu'un autre gérant a rédigées : l'auteur est le profil, pas le compte. Le mot de passe est demandé, chaque export est annoncé à toutes les adresses du compte, et la route est limitée à 5 requêtes par 10 min. Sont exclus les empreintes, les clefs, les identifiants internes et les autres gérants des profils partagés (seul le partage est indiqué). Une demande reçue par courriel : l'inviter à le faire en ligne ; si ce n'est pas possible, même extraction à la main |
    | Rectification (art. 16) | L'utilisateur corrige lui-même ses données depuis son compte (page « Modifier le compte », `/compte/edition`, et sessions ouvertes sur `/profil`), voir le tableau ci-dessous. Profils : identifiant et pseudonyme. Une demande reçue par courriel : l'inviter à le faire en ligne ; si ce n'est pas possible, modification manuelle par l'API (les champs `crypt` et `hash` doivent passer par sans.js, pas par du SQL direct) |
    | Effacement (art. 17) | L'utilisateur le demande lui-même depuis son compte (§ 4.1). Une demande reçue par courriel depuis l'adresse du compte : l'inviter à le faire en ligne, ou, si ce n'est pas possible, renseigner `date_demande_effacement` du compte (effacement au bout du délai). Retrait d'une publication anonymisée qui identifie son auteur : vider ses textes |
    | Opposition (art. 21) et retrait du consentement | Arrêter le traitement concerné (ex. décocher les fonctionnalités liées à l'âge) |
@@ -287,7 +290,7 @@ Une analyse d'impact (AIPD) n'est pas nécessaire aujourd'hui. Elle le deviendra
 
 ## 11. Pages légales et preuve d'acceptation des conditions
 
-Les conditions d'utilisation, la politique de confidentialité et les mentions légales sont des anicroches de type `page` (`conditions-generales-d-utilisation`, `politique-de-confidentialite`, `mentions-legales`), créées automatiquement au démarrage de l'API. Leur texte est versionné : chaque publication crée une version datée, et le site affiche toujours la version en vigueur (la plus récente dont la date de publication est passée).
+Les conditions d'utilisation, la politique de confidentialité et les mentions légales (brouillons dans ce dossier) sont des anicroches de type `page` (`conditions-generales-d-utilisation`, `politique-de-confidentialite`, `mentions-legales`), créées automatiquement au démarrage de l'API. Leur texte est versionné : chaque publication crée une version datée, et le site affiche toujours la version en vigueur (la plus récente dont la date de publication est passée).
 
 **Preuve de l'acceptation.** À l'inscription, l'utilisateur coche la case des conditions d'utilisation ; l'API enregistre alors la date (`comptes.date_acceptation_conditions`). La version acceptée est celle qui était en vigueur à cette date. Pour que cette preuve tienne :
 
@@ -305,10 +308,16 @@ Le brouillon reste invisible jusqu'à sa publication. Dans une nouvelle version,
 
 **Avant le lancement.** En production, l'inscription est refusée (`503`) tant qu'aucune version des conditions d'utilisation n'est publiée : publier les trois pages avant d'ouvrir le service.
 
-**Quand les conditions d'utilisation changent :**
+**Quand les conditions d'utilisation changent**, aucune nouvelle acceptation n'est demandée : une modification de fond est acceptée tacitement, après un préavis pendant lequel l'utilisateur peut supprimer son compte s'il la refuse.
 
-1. publier la nouvelle version à une date future, pour laisser aux utilisateurs le temps d'en prendre connaissance (un mois est un délai courant) ;
-2. les prévenir avant cette date, par exemple par courriel ;
-3. pour un changement important, leur demander d'accepter à nouveau à leur prochaine connexion : un compte dont `date_acceptation_conditions` est antérieure à la publication en vigueur n'a pas accepté la nouvelle version. **À développer.**
+- **Correction mineure** (faute, reformulation sans effet sur les droits et obligations) : nouvelle version publiée sans annonce.
+- **Modification de fond** :
+  1. publier la nouvelle version à une date future, au moins 30 jours plus tard ;
+  2. pendant ce préavis, l'annoncer par courriel à tous les comptes et par une notification dans le site, avec la date d'entrée en vigueur, un lien vers la nouvelle version et le rappel que le compte peut être supprimé ;
+  3. à cette date, la nouvelle version s'applique à tous les comptes qui continuent d'utiliser le service.
+
+La preuve de l'acceptation d'une version postérieure à l'inscription tient alors à l'annonce : il faut pouvoir montrer qu'elle a été faite, à quelle date et à qui (courriels envoyés). **À développer** : marquage des versions à annoncer, envoi des courriels par lots et notification.
+
+Une modification de la politique de confidentialité qui change l'usage des données s'annonce de la même façon. Un nouvel usage fondé sur le consentement demande un consentement distinct, jamais déduit de l'usage du service.
 
 La politique de confidentialité n'a pas à être « acceptée » : elle informe. L'étape d'inscription y renvoie par un lien, ce qui répond à l'obligation d'information au moment de la collecte (art. 13).

@@ -1,24 +1,20 @@
 Tâches :
-- rédiger et publier les textes des pages légales (conditions d'utilisation, politique de confidentialité, mentions légales) avant le lancement, et ajouter des liens vers ces pages dans le site
-- prévoir dans les conditions d'utilisation et la politique de confidentialité la fin des comptes (RGPD.md § 4.1) : délai de 30 jours avant l'effacement, suppression après 3 ans d'inactivité, anonymisation des profils, licence sur les publications maintenue après la suppression du compte (non exclusive, gratuite, publication sans nom)
-- mentionner le cookie technique `avec-js` (rendu côté serveur, sans donnée personnelle) dans RGPD.md et dans la politique de confidentialité
-- demander une nouvelle acceptation des conditions d'utilisation à la connexion quand une version importante est publiée (date_acceptation_conditions antérieure à la version en vigueur), voir RGPD.md § 11
-- compléter RGPD.md :
+- relire et compléter les premières versions des pages légales (juridique/conditions-generales-d-utilisation.md, juridique/politique-de-confidentialite.md, juridique/mentions-legales.md : passages « À compléter », adresse d'Infomaniak à vérifier), les publier avant le lancement, et ajouter des liens vers ces pages dans le site
+- annoncer les modifications de fond des pages légales pendant leur préavis de 30 jours (acceptation tacite, sans nouvelle validation) : marquage des versions à annoncer, courriel à tous les comptes envoyé par lots, notification dans le site, trace des envois comme preuve, voir juridique/RGPD.md § 11
+- compléter juridique/RGPD.md :
     - adresse de contact RGPD (§ 1)
     - référence et date du contrat de sous-traitance (DPA) d'Infomaniak, couvrant serveur, base et courriels (§ 3)
     - fréquence et durée de conservation des sauvegardes Infomaniak, relevées dans le Manager (§ 4 et § 7)
     - durée de conservation des journaux PM2, avec pm2-logrotate (§ 2.6 et § 4)
     - vérifier où en est la loi du 7 juillet 2023 sur la majorité numérique avant le lancement (§ 2.4)
-    - préciser que l'export contient toutes les publications des profils gérés, y compris celles d'un profil partagé rédigées par un autre gérant (§ 9)
-- sauvegarder secret_aes et secret_hmac hors du serveur (gestionnaire de mots de passe) : sans secret_aes, les adresses chiffrées sont perdues ; noter l'endroit dans RGPD.md § 6
+- sauvegarder secret_aes et secret_hmac hors du serveur (gestionnaire de mots de passe) : sans secret_aes, les adresses chiffrées sont perdues ; noter l'endroit dans juridique/RGPD.md § 6
 - ajouter `internal_api_url=http://localhost:4005` au .env du serveur de production
 - permettre de remplacer une adresse principale perdue (changement différé, avec opposition possible depuis l'adresse actuelle)
-- mettre en place la configuration de compte et de profils (dont la case à cocher des fonctionnalités liées à l'âge, voir RGPD.md § 2.4, la teinte, le fuseau horaire, les langues)
+- mettre en place la configuration de compte et de profils (dont la case à cocher des fonctionnalités liées à l'âge, voir juridique/RGPD.md § 2.4, la teinte, le fuseau horaire, les langues)
 - ajout des comptes sous contrôle parental
 - remplacer la ligne d'indication au début de l'édition de page par une boîte de notifications généralisée à toute l'application
 - référencement des pages construites par le serveur : titre et description propres à chaque page (instruction ou variable d'avec.js, à documenter), vrai code 404 quand le routeur affiche page-404, sitemap.xml des anicroches publiées
 - sans JavaScript, les pages construites par le serveur sont toujours au format `grand` et au thème clair : prévoir des règles CSS @media quand les classes posées par index.avec sont absentes
-- déplacer dans app.adn les éléments propres à Anicroche présents dans avec.js/index.html (titre, lang, canonical, description, couleurs de thème, nom pour Apple) ; la clef `langue` de app.adn n'est pas utilisée
 - permettre la définition de l'ordre de récupération dans les modèles .sans du cadriciel d'API
 
 Tâches dépendantes :
@@ -28,4 +24,4 @@ Tâches dépendantes :
     - prévenir avant la cession que les publications du profil quitteront l'export des données, et proposer l'export à ce moment-là
     - ne pas garder de trace des anciens gérants
     - annoncer que les brouillons et anciennes versions passent au nouveau gérant avec le profil
-    - prévoir dans RGPD.md § 9 qu'une demande d'effacement d'un ancien gérant sur une publication qui l'identifie se traite en vidant les textes concernés
+    - prévoir dans juridique/RGPD.md § 9 qu'une demande d'effacement d'un ancien gérant sur une publication qui l'identifie se traite en vidant les textes concernés

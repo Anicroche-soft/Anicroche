@@ -1,2 +1,9 @@
-nom     : Anicroche
-langue  : fr
+config : {
+    name        : Anicroche
+    lang        : fr
+    description : "Application de création et de divertissement"
+    theme_color : {
+        light : "#FFFFFF"
+        dark  : "#000000"
+    }
+}

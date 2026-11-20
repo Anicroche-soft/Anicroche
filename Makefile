@@ -3,7 +3,7 @@ SERVICE ?= anicroche
 -include .env
 
 ifeq ($(mode),dev)
-	COMPOSE = docker compose -f docker-compose.yml -f docker-compose.dev.yml
+	COMPOSE = docker compose -f compose.yaml -f compose.dev.yaml
 else
 	COMPOSE = docker compose
 endif

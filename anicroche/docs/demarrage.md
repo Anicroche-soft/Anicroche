@@ -22,25 +22,45 @@ Les modèles peuvent être rangés dans des sous-dossiers à la convenance de l'
 
 ## Le fichier `app.adn`
 
-`app.adn` contient la configuration de l'application au format ADN (paires `clef : valeur`) :
+`app.adn` contient la configuration de l'application au format ADN (paires `clef : valeur`, dictionnaires entre `{ }`, listes entre `[ ]`) :
 
 ```
-nom    : MonApplication
 port   : 4030
+config : {
+    name        : MonApplication
+    lang        : fr
+    description : "Application de démonstration"
+    theme_color : {
+        light : "#FFFFFF"
+        dark  : "#000000"
+    }
+}
 ```
 
 | Clef | Type | Défaut | Description |
 |---|---|---|---|
 | `port` | nombre | `PORT` ou `4030` | Port d'écoute du serveur. S'il est absent, la variable d'environnement `PORT` est utilisée, puis `4030` |
+| `config` | dictionnaire | — | Éléments de l'en-tête de chaque page servie (voir ci-dessous) |
 
-Toutes les clefs de `app.adn` sont envoyées au navigateur et deviennent des [variables de scope racine](expressions.md#variables-de-scope) :
+Clefs de `config`, toutes facultatives : une clef absente ne produit aucune balise.
+
+| Clef | Type | Effet dans la page |
+|---|---|---|
+| `name` | texte | `<title>` et `<meta name="apple-mobile-web-app-title">` |
+| `lang` | texte | Attribut `lang` de `<html>` |
+| `description` | texte | `<meta name="description">` |
+| `theme_color` | texte ou dictionnaire | `<meta name="theme-color">` : une couleur pour tous les thèmes, ou une par thème (`light`, `dark`), avec la requête média `prefers-color-scheme` correspondante |
+
+L'adresse canonique (`<link rel="canonical">`) n'est pas configurée : elle est calculée pour chaque page, sur le domaine `app_url`. Le serveur lit `app.adn` au démarrage : une modification de `port` ou de `config` demande de le relancer.
+
+Toutes les clefs de `app.adn` sont aussi envoyées au navigateur et deviennent des [variables de scope racine](expressions.md#variables-de-scope) :
 
 - `$app` contient l'ensemble de la configuration ;
-- chaque clef est aussi accessible directement : `nom : Anicroche` donne `$nom`.
+- chaque clef est aussi accessible directement : `config` donne `$config`.
 
 ```
 <h1>
-    "$nom"
+    "$config.name"
 ```
 
 > **Note :** `app.adn` est public. Il ne doit contenir aucune donnée sensible.

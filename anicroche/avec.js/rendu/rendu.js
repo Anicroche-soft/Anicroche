@@ -1,7 +1,6 @@
 // Rendu côté serveur d'une page : lance un worker qui exécute le moteur client sur un
 // mini-DOM, puis insère le résultat dans index.html.
 
-import fs from "fs"
 import {Worker} from "worker_threads"
 
 // Temps laissé à la page pour se construire (requêtes à l'API comprises)
@@ -155,12 +154,10 @@ export const rendre_page = (adresse, ip = null) => new Promise((resoudre) =>
     file.push({adresse, arrivee: Date.now(), lancer, resoudre})
 })
 
-// Insère le rendu dans la page d'accueil de l'application (avec.js/index.html).
+// Insère le rendu dans la page de base de l'application (avec.js/index.html complété par app.adn).
 // Les styles et le contenu sont marqués `data-pre-rendu` : le client les retire au démarrage.
-export const assembler_page = (rendu) =>
+export const assembler_page = (rendu, html) =>
 {
-    let html = fs.readFileSync(`avec.js/index.html`, `utf-8`)
-
     if (rendu.classes)
         html = html.replace(/<html\b/, `<html class="${echapper_attribut(rendu.classes)}"`)
 

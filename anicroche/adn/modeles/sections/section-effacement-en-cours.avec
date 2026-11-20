@@ -53,8 +53,8 @@ section [effacement-en-cours, centree]
             "Si vous avez changé d'avis, ou si vous n'êtes pas à l'origine de cette demande, vous pouvez encore restaurer votre compte. Pensez alors à changer votre mot de passe."
         ligne
             bouton-ancre [/compte/export]
-                "Exporter les données"
-            bouton-action [$deconnecter_compte_effacement]
-                "Déconnexion"
+                "Export des données"
             bouton-action [$annuler_effacement]
                 "Restauration"
+            bouton-action [$deconnecter_compte_effacement]
+                "Déconnexion"
