@@ -1,0 +1,65 @@
+@script [
+    $erreur_sessions = false
+
+    const nommer = (session) => session.nom_appareil ?? 'Appareil inconnu'
+
+    // Date courte (« 20 nov. 2026 »), dans le fuseau du visiteur, pour que la ligne tienne sur mobile
+    const dater = (date) => new Date(date)
+        .toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+
+    // L API renvoie les sessions de la plus récente à la plus ancienne
+    const lire_sessions = () =>
+    {
+        const sessions = $compte?.sessions ?? []
+        const actuelle = sessions.find(session => session.est_actuelle)
+
+        $session_actuelle = actuelle ? nommer(actuelle) : ''
+        $autres_sessions  = sessions
+            .filter(session => !session.est_actuelle)
+            .map(session => ({
+                id     : session.id,
+                valeur : `${nommer(session)} · ${dater(session.date_emission)}`,
+                alt    : `Fermer la session ${nommer(session)}`
+            }))
+        $etiquette_autres_sessions = $autres_sessions.length > 1 ? "Autres sessions" : "Autre session"
+    }
+    lire_sessions()
+
+    const fermer = async (ids) =>
+    {
+        const reponses = await Promise.all(ids.map(id => $delete(`session/${encodeURIComponent(id)}`)))
+        const echec    = reponses.find(reponse => reponse.error && reponse.code !== 404)
+
+        $erreur_sessions = echec ? echec.error ?? "Erreur serveur" : false
+
+        await $obtenir_compte()
+        lire_sessions()
+    }
+
+    $fermer_session = (id) => fermer([ id ])
+
+    $fermer_autres_sessions = () => fermer($autres_sessions.map(session => session.id))
+]
+
+section [sessions]
+    titre
+        "Vos sessions ouvertes"
+    carte
+        @if [$erreur_sessions]
+            erreur-formulaire
+                "$erreur_sessions"
+        champ-texte [
+            "Session actuelle", session_actuelle
+            $valeur : $session_actuelle
+            $modifiable : :(
+            $requis : :(
+        ]
+        @if [_ $autres_sessions > 0]
+            champ-liste-donnees [
+                $etiquette_autres_sessions, autres_sessions
+                $donnees : $autres_sessions
+                $action : $fermer_session
+            ]
+            ligne
+                bouton-action [$fermer_autres_sessions]
+                    "Fermer les autres sessions"

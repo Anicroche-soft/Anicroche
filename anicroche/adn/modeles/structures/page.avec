@@ -13,6 +13,7 @@
         )
 
         marquer_onglet_actif(noeud, 1, vars)
+        atteindre_ancre(noeud, vars)
 
         noeud.addEventListener('scroll', () =>
         {
@@ -98,6 +99,34 @@
         if (actif <= 0) return
 
         $basculer_vers_onglet(actif, noeud)
+    }
+
+    // Une adresse avec ancre (/profil#compte) ouvre l onglet qui contient l élément visé, puis
+    // y fait défiler la page jusqu à lui
+    const atteindre_ancre = (page, vars) =>
+    {
+        let id = ''
+        try
+        {
+            id = decodeURIComponent(String($hash ?? '').replace(/^#/, ''))
+        }
+        catch
+        {
+            return
+        }
+        if (!id)
+            return
+
+        const cible  = [...page.querySelectorAll('[id]')].find(element => element.id === id)
+        const onglet = cible?.closest('.onglet')
+        if (!onglet || onglet.parentElement !== page)
+            return
+
+        const onglets = [...page.querySelectorAll(':scope > .onglet')]
+
+        onglet.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'start' })
+        cible.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'nearest' })
+        marquer_onglet_actif(page, onglets.indexOf(onglet) + 1, vars)
     }
 
     const marquer_onglet_actif = (page, n, vars = null) =>

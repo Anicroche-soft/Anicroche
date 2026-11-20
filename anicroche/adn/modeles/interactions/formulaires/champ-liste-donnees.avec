@@ -1,0 +1,60 @@
+@style [
+    .champ-liste-donnees {
+        flex: 1024;
+
+        --l-ecart: 0.5rem;
+    }
+
+    .champ-liste-donnees > legend {
+        display: contents;
+        cursor: default;
+    }
+
+    .champ-liste-donnees .element {
+        flex-direction: row;
+
+        --l-ecart: 0.5rem;
+    }
+
+    /* Chaque donnée a l'allure d'un champ non modifiable */
+    .champ-liste-donnees .donnee {
+        flex: 1024;
+        min-width: 0;
+        height: 2rem;
+
+        border: 0.125rem solid var(--c-vif);
+        border-radius: 0.5rem;
+        padding: 0.375rem;
+
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+
+        cursor: not-allowed;
+
+        --c-flux: var(--c-vif);
+        --p-fonte: var(--p-champ);
+    }
+]
+
+# Liste de données non modifiables sous une seule étiquette. Avec $action, chaque donnée est
+# suivie d'un bouton carré qui appelle $action(donnee.id) ; donnee.alt décrit ce bouton pour
+# les lecteurs d'écran. $donnees : [{ id, valeur, alt }]
+@args [$etiquette, $nom, $donnees, $action : :(]
+
+<fieldset
+    #champ-$nom
+    .champ
+    .champ-liste-donnees
+>
+    <legend .etiquette>
+        "$etiquette"
+    @for-each [$donnee] of [$donnees]
+        <div .element>
+            <span .donnee title="$donnee.valeur">
+                "$donnee.valeur"
+            @if [$action]
+                bouton-action [$action($donnee.id)]
+                    icone-gomme
+                    alt
+                        "$donnee.alt"

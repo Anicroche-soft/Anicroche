@@ -29,10 +29,15 @@
         return reponse
     }
 
+    // Suppression refusée pendant les sept jours qui suivent un changement d adresse principale
+    $date_effacement_possible_suppression = $formater_date($compte?.date_effacement_possible, true)
+
     const lire_erreur_clef = (reponse) =>
     {
         if (!reponse.error)
             return false
+        if (reponse.data?.date_effacement_possible)
+            return reponse.error
         if (reponse.code === 403)
             return "Mot de passe invalide"
         if (reponse.code === 429)
@@ -115,19 +120,28 @@
         titre [centre]
             "Supprimer votre compte"
         carte
-            formulaire [$envoyer_formulaire_profils_suppression]
+            @if [$date_effacement_possible_suppression]
                 information-formulaire
-                    "Votre compte sera suspendu dès votre demande, puis effacé définitivement trente jours plus tard. D'ici là, vous aurez encore la possibilité de restaurer votre compte."
-                @if [_ $choix_profils_suppression > 0]
-                    choix-multiple [
-                        "Profils", profils_a_supprimer
-                        $choix : $choix_profils_suppression
-                        $description : "Tous vos profils vont être anonymisés, cochez uniquement ceux que vous voulez supprimer."
-                    ]
-                bouton-soumission
-                    <span>
-                        "Continuer"
-                    icone-fleche-droite
+                    "Vous ne pouvez pas supprimer votre compte avant le $date_effacement_possible_suppression, car son adresse électronique principale a changé il y a moins de sept jours. Ce délai vous laisse le temps de réagir si quelqu'un d'autre a pris le contrôle de votre compte."
+                ligne
+                    bouton-ancre [/profil#compte]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+            @else
+                formulaire [$envoyer_formulaire_profils_suppression]
+                    information-formulaire
+                        "Votre compte sera suspendu dès votre demande, puis effacé définitivement trente jours plus tard. D'ici là, vous aurez encore la possibilité de restaurer votre compte."
+                    @if [_ $choix_profils_suppression > 0]
+                        choix-multiple [
+                            "Profils", profils_a_supprimer
+                            $choix : $choix_profils_suppression
+                            $description : "Tous vos profils vont être anonymisés, cochez uniquement ceux que vous voulez supprimer."
+                        ]
+                    bouton-soumission
+                        <span>
+                            "Continuer"
+                        icone-fleche-droite
 
 @else-if [$etape = mot_de_passe]
     section [suppression-compte, centree]
@@ -138,8 +152,6 @@
                 @if [$erreur_mot_de_passe_suppression]
                     erreur-formulaire
                         "$erreur_mot_de_passe_suppression"
-                <p>
-                    "Confirmez votre identité : une clef de validation sera ensuite envoyée à votre adresse électronique principale."
                 champ-mot-de-passe ["Mot de passe", mot_de_passe]
                 ligne
                     bouton-action [$revenir_etape_suppression]
@@ -154,7 +166,7 @@
 @else-if [$etape = clef]
     section [suppression-compte, centree]
         titre [centre]
-            "Confirmez la suppression"
+            "Saisissez la clef de validation"
         carte
             formulaire [$envoyer_formulaire_clef_suppression]
                 @if [$succes_clef_suppression]
@@ -163,8 +175,6 @@
                 @if [$erreur_clef_suppression]
                     erreur-formulaire
                         "$erreur_clef_suppression"
-                <p>
-                    "Une clef de validation a été envoyée à votre adresse électronique principale."
                 champ-clef ["Clef de validation", clef]
                 lien-action [$renvoyer_clef_suppression, 30]
                     "Renvoyer la clef"

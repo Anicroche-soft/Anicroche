@@ -1,0 +1,49 @@
+@script [
+    // Action choisie sur le premier onglet : ajout, retrait, principale, naissance ou mot_de_passe
+    $action_edition = null
+
+    $adresse_retiree        = null
+    $nouvelle_adresse       = ''
+    $id_nouvelle_principale = null
+    $mot_de_passe_edition   = null
+    $nouveau_mot_de_passe   = null
+
+    // Identifiants des clefs envoyées, par type et adresse de destination : une clef n est
+    // renvoyée que si l une ou l autre change
+    $clefs_edition = {}
+
+    $erreur_etape_edition = false
+    $erreur_clef_edition  = false
+    $succes_clef_edition  = false
+]
+
+page [:(, $authentification : requise_sans_profil]
+    navigation
+        <div .gauche>
+            fleche-retour [/profil]
+
+        <div .centre>
+            <span>
+                "Modifier le compte"
+
+        <div .droite>
+            icone-horloge
+
+    onglet
+        section-edition-compte [apercu]
+
+    onglet
+        @if [$action_edition = ajout]
+            section-edition-compte [ajout]
+        @else-if [$action_edition = retrait]
+            section-edition-compte [retrait]
+        @else-if [$action_edition = principale]
+            section-edition-compte [principale]
+        @else-if [$action_edition = naissance]
+            section-edition-compte [naissance]
+        @else-if [$action_edition = mot_de_passe]
+            section-edition-compte [mot_de_passe]
+
+    onglet
+        @if [$action_edition -{ [ajout, retrait, principale, mot_de_passe]]
+            section-edition-compte [clef]

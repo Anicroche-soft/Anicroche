@@ -1,0 +1,449 @@
+@script [
+    const LIMITE_ADRESSES = 5
+
+    // Type de clef de chaque action confirmée par une clef
+    const TYPES_CLEFS = {
+        ajout        : 'ajout-courriel',
+        retrait      : 'suppression-courriel',
+        principale   : 'modification-courriel-principal',
+        mot_de_passe : 'modification-mot-de-passe'
+    }
+
+    // Messages de l API, tels qu affichés
+    const MESSAGES = {
+        'Mot de passe invalide'                        : "Mot de passe invalide",
+        'Adresse déjà utilisée'                        : "Cette adresse est déjà utilisée",
+        'Adresse déjà principale'                      : "Cette adresse est déjà votre adresse principale",
+        'Clef trop récente déjà existante'             : "Veuillez réessayer dans trente secondes",
+        'Trop de requêtes'                             : "Trop de demandes : veuillez réessayer dans quelques minutes",
+        'Accès refusé'                                 : "La clef de validation est invalide",
+        "Limite d'adresses atteinte"                   : "Votre compte a déjà cinq adresses électroniques",
+        'Âge minimum non atteint'                      : "Anicroche est réservé aux personnes de 15 ans et plus",
+        'Modification de la date de naissance refusée' : "Cette date de naissance ne peut pas être choisie",
+        'Date de naissance invalide'                   : "Date de naissance invalide"
+    }
+
+    const lire_erreur = (reponse) =>
+    {
+        if (reponse.code === 422 && $action_edition === 'mot_de_passe')
+            return "Le mot de passe doit contenir de 12 à 128 caractères"
+        return MESSAGES[reponse.error] ?? reponse.error ?? "Erreur serveur"
+    }
+
+    // L API renvoie la principale, puis les autres par ordre alphabétique
+    const lire_adresses = () => ($compte?.coordonnees ?? [])
+        .map(adresse => ({ ...adresse, est_principale: !!adresse.est_principale }))
+
+    const principale  = () => lire_adresses().find(adresse => adresse.est_principale) ?? null
+    const secondaires = lire_adresses().filter(adresse => !adresse.est_principale)
+
+    $principale_edition  = principale()?.coordonnee ?? ''
+    $secondaires_edition = secondaires.map(adresse => ({
+        id     : adresse.id,
+        valeur : adresse.coordonnee,
+        alt    : `Retirer l'adresse ${adresse.coordonnee}`
+    }))
+
+    $choix_principale_edition = secondaires.map(adresse => ({ nom: adresse.id, etiquette: adresse.coordonnee }))
+
+    $etiquette_secondaires_edition = secondaires.length > 1
+        ? "Adresses électroniques secondaires"
+        : "Adresse électronique secondaire"
+
+    $limite_adresses_edition = lire_adresses().length >= LIMITE_ADRESSES
+    $date_naissance_edition  = String($compte?.date_naissance ?? '').slice(0, 10)
+
+    // ─── Clefs ───────────────────────────────────────────────────────────────
+
+    // La clef d un ajout va à la nouvelle adresse, les autres à l adresse principale
+    const destination = () => $action_edition === 'ajout' ? $nouvelle_adresse : principale()?.coordonnee
+    const reference   = () => `${TYPES_CLEFS[$action_edition]} ${destination()}`
+    const ids_clefs   = () => $clefs_edition[reference()] ?? []
+
+    const envoyer_clef = async (mot_de_passe) =>
+    {
+        const reponse = await $create('clef', {
+            type       : TYPES_CLEFS[$action_edition],
+            coordonnee : destination(),
+            ...(mot_de_passe ? { mot_de_passe } : {})
+        })
+
+        if (!reponse.error)
+            $clefs_edition[reference()] = [ ...ids_clefs(), reponse.data.id ]
+        return reponse
+    }
+
+    // Arrivée sur l écran de la clef : elle n est envoyée qu une fois par destination, même
+    // après un retour en arrière (comme à la connexion)
+    const atteindre_clef = async (noeud, mot_de_passe) =>
+    {
+        if (!ids_clefs().length)
+        {
+            const reponse = await envoyer_clef(mot_de_passe)
+
+            if (reponse.error)
+            {
+                $erreur_etape_edition = lire_erreur(reponse)
+                return
+            }
+
+            $mot_de_passe_edition = mot_de_passe
+        }
+
+        $erreur_etape_edition = false
+        $erreur_clef_edition  = false
+        $succes_clef_edition  = false
+        $basculer_vers_onglet_suivant(noeud)
+    }
+
+    $renvoyer_clef_edition = async () =>
+    {
+        const reponse = await envoyer_clef($mot_de_passe_edition)
+
+        $succes_clef_edition = reponse.error ? false : "Une nouvelle clef a été envoyée"
+        $erreur_clef_edition = reponse.error ? lire_erreur(reponse) : false
+    }
+
+    // ─── Fin des parcours ────────────────────────────────────────────────────
+
+    const terminer = async () =>
+    {
+        await $obtenir_compte()
+        $navigate_to('/profil#compte')
+    }
+
+    const chemin_compte = () => `compte/${encodeURIComponent($compte.id)}`
+
+    // Requête finale de chaque action confirmée par une clef
+    const CONFIRMATIONS = {
+        ajout        : (preuve) => $create('coordonnee', { type: 'courriel', coordonnee: $nouvelle_adresse, ...preuve }),
+        retrait      : (preuve) => $delete(`coordonnee/${encodeURIComponent($adresse_retiree.id)}`, undefined, preuve),
+        principale   : (preuve) => $update(`coordonnee/${encodeURIComponent($id_nouvelle_principale)}`, { est_principale: true, ...preuve }),
+        mot_de_passe : (preuve) => $update(chemin_compte(), { mot_de_passe: $nouveau_mot_de_passe, ...preuve })
+    }
+
+    $envoyer_formulaire_clef_edition = async () =>
+    {
+        const reponse = await CONFIRMATIONS[$action_edition]({
+            clef : new FormData($node).get('clef'),
+            ids  : ids_clefs()
+        })
+
+        if (reponse.error)
+        {
+            $succes_clef_edition = false
+            $erreur_clef_edition = lire_erreur(reponse)
+            return
+        }
+
+        await terminer()
+    }
+
+    // ─── Choix de l action ───────────────────────────────────────────────────
+
+    const commencer = (action) =>
+    {
+        $action_edition       = action
+        $erreur_etape_edition = false
+        $basculer_vers_onglet_suivant()
+    }
+
+    $commencer_ajout        = () => commencer('ajout')
+    $commencer_principale   = () => commencer('principale')
+    $commencer_naissance    = () => commencer('naissance')
+    $commencer_mot_de_passe = () => commencer('mot_de_passe')
+
+    $commencer_retrait = (id) =>
+    {
+        $adresse_retiree = lire_adresses().find(adresse => adresse.id === id) ?? null
+        commencer('retrait')
+    }
+
+    // ─── Étapes ──────────────────────────────────────────────────────────────
+
+    $envoyer_formulaire_ajout_edition = async () =>
+    {
+        const noeud = $node
+        const data  = new FormData(noeud)
+
+        $nouvelle_adresse = String(data.get('courriel') ?? '').trim()
+        await atteindre_clef(noeud, data.get('mot_de_passe'))
+    }
+
+    $envoyer_formulaire_retrait_edition = async () =>
+    {
+        const noeud = $node
+        await atteindre_clef(noeud, new FormData(noeud).get('mot_de_passe'))
+    }
+
+    $envoyer_formulaire_principale_edition = async () =>
+    {
+        const noeud = $node
+        const data  = new FormData(noeud)
+
+        $id_nouvelle_principale = data.get('nouvelle_principale')
+        await atteindre_clef(noeud, data.get('mot_de_passe'))
+    }
+
+    $envoyer_formulaire_mot_de_passe_edition = async () =>
+    {
+        const noeud = $node
+
+        $nouveau_mot_de_passe = new FormData(noeud).get('mot_de_passe')
+        await atteindre_clef(noeud, null)
+    }
+
+    $envoyer_formulaire_naissance_edition = async () =>
+    {
+        const reponse = await $update(chemin_compte(), {
+            date_naissance : new FormData($node).get('date_naissance')
+        })
+
+        if (reponse.error)
+        {
+            $erreur_etape_edition = lire_erreur(reponse)
+            return
+        }
+
+        await terminer()
+    }
+
+    $revenir_etape_edition = () =>
+    {
+        $erreur_etape_edition = false
+        $erreur_clef_edition  = false
+        $succes_clef_edition  = false
+        $basculer_vers_onglet_precedant()
+    }
+]
+
+@style [
+    .section-edition-compte .carte + .titre {
+        margin-top: 1rem;
+    }
+
+    .section-edition-compte strong {
+        overflow-wrap: anywhere;
+
+        --e-fonte: var(--e-gras);
+    }
+]
+
+@args [$etape]
+
+@if [$etape = apercu]
+    section [edition-compte, centree]
+        titre [centre]
+            "Éditez votre compte"
+        carte
+            champ-courriel [
+                "Adresse électronique principale", adresse_principale
+                $valeur : $principale_edition
+                $modifiable : :(
+                $requis : :(
+            ]
+            @if [_ $secondaires_edition > 0]
+                champ-liste-donnees [
+                    $etiquette_secondaires_edition, adresses_secondaires
+                    $donnees : $secondaires_edition
+                    $action : $commencer_retrait
+                ]
+            ligne
+                bouton-action [$commencer_principale]
+                    "Changer d'adresse principale"
+                bouton-action [$commencer_ajout]
+                    "Ajouter une adresse"
+
+            champ-date [
+                "Date de naissance", date_naissance_actuelle
+                $valeur : $date_naissance_edition
+                $modifiable : :(
+                $requis : :(
+            ]
+            ligne
+                bouton-action [$commencer_naissance]
+                    "Modifier la date de naissance"
+
+            champ-mot-de-passe [
+                "Mot de passe", mot_de_passe_actuel
+                $modifiable : :(
+                $requis : :(
+                $longueur_minimale : 12
+            ]
+            ligne
+                bouton-action [$commencer_mot_de_passe]
+                    "Modifier le mot de passe"
+
+@else-if [$etape = ajout]
+    section [edition-compte, centree]
+        titre [centre]
+            "Ajoutez une adresse"
+        carte
+            @if [$limite_adresses_edition]
+                information-formulaire
+                    "Votre compte a déjà cinq adresses électroniques, le maximum. Retirez-en une pour en ajouter une autre."
+                ligne
+                    bouton-action [$revenir_etape_edition]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+            @else
+                formulaire [$envoyer_formulaire_ajout_edition]
+                    @if [$erreur_etape_edition]
+                        erreur-formulaire
+                            "$erreur_etape_edition"
+                    champ-courriel [
+                        "Nouvelle adresse électronique", courriel
+                        $valeur : $nouvelle_adresse
+                    ]
+                    champ-mot-de-passe ["Mot de passe", mot_de_passe]
+                    ligne
+                        bouton-action [$revenir_etape_edition]
+                            icone-fleche-gauche
+                            alt
+                                "Retour"
+                        bouton-soumission
+                            <span>
+                                "Continuer"
+                            icone-fleche-droite
+
+@else-if [$etape = retrait]
+    section [edition-compte, centree]
+        titre [centre]
+            "Retirez une adresse"
+        carte
+            formulaire [$envoyer_formulaire_retrait_edition]
+                @if [$erreur_etape_edition]
+                    erreur-formulaire
+                        "$erreur_etape_edition"
+                champ-courriel [
+                    "Adresse à retirer", adresse_retiree
+                    $valeur : $adresse_retiree.coordonnee
+                    $modifiable : :(
+                    $requis : :(
+                ]
+                champ-mot-de-passe ["Mot de passe", mot_de_passe]
+                ligne
+                    bouton-action [$revenir_etape_edition]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+                    bouton-soumission
+                        <span>
+                            "Continuer"
+                        icone-fleche-droite
+
+@else-if [$etape = principale]
+    section [edition-compte, centree]
+        titre [centre]
+            "Changez d'adresse principale"
+        carte
+            @if [_ $secondaires_edition = 0]
+                information-formulaire
+                    "Ajoutez d'abord une autre adresse : elle pourra ensuite devenir votre adresse principale."
+                ligne
+                    bouton-action [$revenir_etape_edition]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+            @else
+                formulaire [$envoyer_formulaire_principale_edition]
+                    @if [$erreur_etape_edition]
+                        erreur-formulaire
+                            "$erreur_etape_edition"
+                    choix-option [
+                        "Nouvelle adresse principale", nouvelle_principale
+                        $choix : $choix_principale_edition
+                        $valeur : $id_nouvelle_principale
+                    ]
+                    champ-mot-de-passe ["Mot de passe", mot_de_passe]
+                    ligne
+                        bouton-action [$revenir_etape_edition]
+                            icone-fleche-gauche
+                            alt
+                                "Retour"
+                        bouton-soumission
+                            <span>
+                                "Continuer"
+                            icone-fleche-droite
+
+@else-if [$etape = naissance]
+    section [edition-compte, centree]
+        titre [centre]
+            "Modifiez votre date de naissance"
+        carte
+            formulaire [$envoyer_formulaire_naissance_edition]
+                @if [$erreur_etape_edition]
+                    erreur-formulaire
+                        "$erreur_etape_edition"
+                champ-date [
+                    "Date de naissance", date_naissance
+                    $valeur : $date_naissance_edition
+                ]
+                ligne
+                    bouton-action [$revenir_etape_edition]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+                    bouton-soumission
+                        "Enregistrer"
+
+@else-if [$etape = mot_de_passe]
+    section [edition-compte, centree]
+        titre [centre]
+            "Choisissez un nouveau mot de passe"
+        carte
+            formulaire [$envoyer_formulaire_mot_de_passe_edition]
+                @if [$erreur_etape_edition]
+                    erreur-formulaire
+                        "$erreur_etape_edition"
+                champ-mot-de-passe [
+                    "Nouveau mot de passe", mot_de_passe
+                    $longueur_minimale : 12
+                    $longueur_maximale : 128
+                ]
+                ligne
+                    bouton-action [$revenir_etape_edition]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+                    bouton-soumission
+                        <span>
+                            "Continuer"
+                        icone-fleche-droite
+
+@else-if [$etape = clef]
+    section [edition-compte, centree]
+        titre [centre]
+            "Saisissez la clef de validation"
+        carte
+            formulaire [$envoyer_formulaire_clef_edition]
+                @if [$succes_clef_edition]
+                    succes-formulaire
+                        "$succes_clef_edition"
+                @if [$erreur_clef_edition]
+                    erreur-formulaire
+                        "$erreur_clef_edition"
+                champ-clef ["Clef de validation", clef]
+                lien-action [$renvoyer_clef_edition, 30]
+                    "Renvoyer la clef"
+                @if [$action_edition = principale]
+                    alerte-formulaire
+                        "Après ce changement, votre compte ne pourra pas être supprimé pendant sept jours."
+                @else-if [$action_edition = mot_de_passe]
+                    alerte-formulaire
+                        "Toutes vos autres sessions seront fermées."
+                ligne
+                    bouton-action [$revenir_etape_edition]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+                    bouton-soumission
+                        @if [$action_edition = ajout]
+                            "Ajout de l'adresse"
+                        @else-if [$action_edition = retrait]
+                            "Retrait de l'adresse"
+                        @else-if [$action_edition = principale]
+                            "Changement d'adresse"
+                        @else
+                            "Changement de mot de passe"

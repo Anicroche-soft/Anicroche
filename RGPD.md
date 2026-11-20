@@ -4,7 +4,7 @@ Ce document rassemble ce que le RGPD demande en dehors du code : le registre des
 
 Il doit être tenu à jour à chaque évolution des modèles `.sans` ou de l'hébergement. Les éléments marqués **À compléter** restent à définir.
 
-Dernière mise à jour : 19 novembre 2026.
+Dernière mise à jour : 20 novembre 2026.
 
 ---
 
@@ -40,7 +40,7 @@ En tant qu'éditeur non professionnel, la loi pour la confiance dans l'économie
 |---|---|
 | Finalité | Sécuriser les sessions, permettre à l'utilisateur de voir ses sessions ouvertes (`GET /moi`) et d'en fermer (`DELETE /session/<id>`, effet immédiat), limiter les abus (limitation des requêtes) |
 | Base légale | Intérêt légitime (sécurité du service) — art. 6.1.f |
-| Données | Adresse IP ; agent utilisateur (navigateur) ; nom de l'appareil ; dates d'émission, de validité et de révocation de la session ; jeton de session (haché) |
+| Données | Adresse IP ; agent utilisateur (navigateur) ; nom de l'appareil (déduit de l'agent utilisateur à la connexion, par exemple « Firefox sur Linux ») ; dates d'émission, de validité et de révocation de la session ; jeton de session (haché) |
 | Durée de conservation | Session : 30 jours au plus ; supprimée le lendemain de son expiration ou de sa révocation (`$nettoyer_sessions`). Compteurs de limitation : en mémoire uniquement, quelques minutes |
 
 ### 2.3. Profils
@@ -242,7 +242,7 @@ Les demandes arrivent à l'adresse de contact RGPD (§ 1). **Délai de réponse 
    | Droit | Traitement |
    |---|---|
    | Accès / portabilité (art. 15 et 20) | Export des données du compte (route à développer) ; en attendant, extraction manuelle en JSON : compte (dont date de naissance et date d'acceptation des conditions d'utilisation), coordonnées, sessions, profils gérés |
-   | Rectification (art. 16) | L'utilisateur corrige lui-même ses données depuis son compte (API prête, pages du site à faire), voir le tableau ci-dessous. Profils : identifiant et pseudonyme. Une demande reçue par courriel : l'inviter à le faire en ligne ; si ce n'est pas possible, modification manuelle par l'API (les champs `crypt` et `hash` doivent passer par sans.js, pas par du SQL direct) |
+   | Rectification (art. 16) | L'utilisateur corrige lui-même ses données depuis son compte (page « Modifier le compte », `/compte/edition`, et sessions ouvertes sur `/profil`), voir le tableau ci-dessous. Profils : identifiant et pseudonyme. Une demande reçue par courriel : l'inviter à le faire en ligne ; si ce n'est pas possible, modification manuelle par l'API (les champs `crypt` et `hash` doivent passer par sans.js, pas par du SQL direct) |
    | Effacement (art. 17) | L'utilisateur le demande lui-même depuis son compte (§ 4.1). Une demande reçue par courriel depuis l'adresse du compte : l'inviter à le faire en ligne, ou, si ce n'est pas possible, renseigner `date_demande_effacement` du compte (effacement au bout du délai). Retrait d'une publication anonymisée qui identifie son auteur : vider ses textes |
    | Opposition (art. 21) et retrait du consentement | Arrêter le traitement concerné (ex. décocher les fonctionnalités liées à l'âge) |
    | Limitation (art. 18) | Marquer le compte et suspendre le traitement contesté le temps de la vérification |

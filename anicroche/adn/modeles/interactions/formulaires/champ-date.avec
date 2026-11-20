@@ -20,6 +20,10 @@
     for (let annee = annee_fin; annee >= annee_debut; annee--)
         $annees_champ_date.push(annee)
 
+    // Non modifiable, la date est écrite en toutes lettres dans un champ de texte
+    const morceaux_initiaux = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String($valeur ?? '').slice(0, 10))
+    $date_lisible_champ_date = morceaux_initiaux ? $formater_date(morceaux_initiaux[0]) : ''
+
     const lire_parties = (conteneur) =>
         ['jour', 'mois', 'annee'].map(partie => conteneur.querySelector(`select[data-partie="${partie}"]`))
 
@@ -110,7 +114,7 @@
     }
 
     .champ-date .partie.annee {
-        flex: 1.5;
+        flex: 1;
     }
 
     .champ-date .partie::after {
@@ -172,65 +176,76 @@
     $annee_min : 1900
     $annee_max : :o
     $indice : :(
+    $modifiable : :)
 ]
 
-<fieldset
-    .champ
-    .champ-date
-    @mount="$monter_champ_date()"
->
-    <legend .etiquette>
-        "$etiquette"
-    <div .parties>
-        <label .partie .jour>
-            <select
-                data-partie="jour"
-                aria-label="Jour"
-                [$requis] ? required
-                @change="$mettre_a_jour_champ_date()"
-            >
-                <option value="" selected disabled>
-                    "Jour"
-                @for-each [$jour] of [$jours_champ_date]
-                    <option value="$jour">
-                        "$jour"
-            <div .fleche>
-                icone-fleche-depliable
-        <label .partie .mois>
-            <select
-                data-partie="mois"
-                aria-label="Mois"
-                [$requis] ? required
-                @change="$mettre_a_jour_champ_date()"
-            >
-                <option value="" selected disabled>
-                    "Mois"
-                @for-each [$mois] of [$mois_champ_date]
-                    <option value="$mois.numero">
-                        "$mois.nom"
-            <div .fleche>
-                icone-fleche-depliable
-        <label .partie .annee>
-            <select
-                data-partie="annee"
-                aria-label="Année"
-                [$requis] ? required
-                @change="$mettre_a_jour_champ_date()"
-            >
-                <option value="" selected disabled>
-                    "Année"
-                @for-each [$annee] of [$annees_champ_date]
-                    <option value="$annee">
-                        "$annee"
-            <div .fleche>
-                icone-fleche-depliable
-    <input
-        name="$nom"
-        type="date"
-        tabindex="-1"
-        aria-hidden="true"
-        hidden
+@if [! $modifiable]
+    champ-texte [
+        $etiquette, $nom
+        $valeur : $date_lisible_champ_date
+        $modifiable : :(
+        $requis : :(
+        $indice : $indice
+    ]
+
+@else
+    <fieldset
+        .champ
+        .champ-date
+        @mount="$monter_champ_date()"
     >
-    @if [$indice]
-        indication
-            "$indice"
+        <legend .etiquette>
+            "$etiquette"
+        <div .parties>
+            <label .partie .jour>
+                <select
+                    data-partie="jour"
+                    aria-label="Jour"
+                    [$requis] ? required
+                    @change="$mettre_a_jour_champ_date()"
+                >
+                    <option value="" selected disabled>
+                        "Jour"
+                    @for-each [$jour] of [$jours_champ_date]
+                        <option value="$jour">
+                            "$jour"
+                <div .fleche>
+                    icone-fleche-depliable
+            <label .partie .mois>
+                <select
+                    data-partie="mois"
+                    aria-label="Mois"
+                    [$requis] ? required
+                    @change="$mettre_a_jour_champ_date()"
+                >
+                    <option value="" selected disabled>
+                        "Mois"
+                    @for-each [$mois] of [$mois_champ_date]
+                        <option value="$mois.numero">
+                            "$mois.nom"
+                <div .fleche>
+                    icone-fleche-depliable
+            <label .partie .annee>
+                <select
+                    data-partie="annee"
+                    aria-label="Année"
+                    [$requis] ? required
+                    @change="$mettre_a_jour_champ_date()"
+                >
+                    <option value="" selected disabled>
+                        "Année"
+                    @for-each [$annee] of [$annees_champ_date]
+                        <option value="$annee">
+                            "$annee"
+                <div .fleche>
+                    icone-fleche-depliable
+        <input
+            name="$nom"
+            type="date"
+            tabindex="-1"
+            aria-hidden="true"
+            hidden
+        >
+        @if [$indice]
+            indication
+                "$indice"

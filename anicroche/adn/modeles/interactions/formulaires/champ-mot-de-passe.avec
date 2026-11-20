@@ -8,6 +8,15 @@
     $type = 'password'
     $visible = true
 
+    // Non modifiable, le champ ne montre aucune valeur : seulement autant de points que la
+    // longueur minimale d un mot de passe (12 par défaut)
+    $points_mot_de_passe = '•'.repeat(Number($longueur_minimale) || 12)
+
+    // Contraintes de longueur, seulement si le champ est modifiable (en booléens : l opérateur &
+    // des expressions n accepte pas un nombre)
+    $minimum_champ_mot_de_passe = Boolean($modifiable && $longueur_minimale)
+    $maximum_champ_mot_de_passe = Boolean($modifiable && $longueur_maximale)
+
     $basculer_visibilite_mot_de_passe = () =>
     {
         const $conteneur = $node.closest('.champ-mot-de-passe')
@@ -170,13 +179,14 @@
             [$modifiable] ? .modifiable
             name="$nom"
             type="password"
-            value="$valeur"
-            [$requis] ? required
+            [$modifiable] ? value="$valeur" : value="$points_mot_de_passe"
+            [$requis & $modifiable] ? required
             [! $modifiable] ? readonly
             [! $modifiable] ? tabindex="-1"
-            [$longueur_minimale] ? minlength="$longueur_minimale"
-            [$longueur_maximale] ? maxlength="$longueur_maximale"
-            [$longueur_minimale] ? @input="$mettre_a_jour_barre_progression()"
+            [! $modifiable] ? autocomplete="off"
+            [$minimum_champ_mot_de_passe] ? minlength="$longueur_minimale"
+            [$maximum_champ_mot_de_passe] ? maxlength="$longueur_maximale"
+            [$minimum_champ_mot_de_passe] ? @input="$mettre_a_jour_barre_progression()"
         >
 
         @if [$modifiable]
@@ -187,5 +197,5 @@
             >
                 icone-oeil [$visible]
 
-        @if [$longueur_minimale]
+        @if [$minimum_champ_mot_de_passe]
             <div .barre-progression data-minlength="$longueur_minimale"></div>

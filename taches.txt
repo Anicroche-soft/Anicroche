@@ -1,5 +1,4 @@
 Liste de tâches :
-- rectification du compte sur le site (l'API est prête) : date de naissance, adresses électroniques, mot de passe, sessions ouvertes et leur fermeture
 - export des données
 - prévoir dans les conditions d'utilisation et la politique de confidentialité la fin des comptes (RGPD.md § 4.1) : délai de 30 jours avant l'effacement, suppression après 3 ans d'inactivité, anonymisation des profils, licence sur les publications maintenue après la suppression du compte (non exclusive, gratuite, publication sans nom)
 - permettre de remplacer une adresse principale perdue (changement différé, avec opposition possible depuis l'adresse actuelle)

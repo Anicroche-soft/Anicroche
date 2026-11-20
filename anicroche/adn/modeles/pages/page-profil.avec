@@ -19,3 +19,4 @@ page [$authentification : requise, $page_compte : :)]
     onglet
         section-profils
         section-compte
+        section-sessions

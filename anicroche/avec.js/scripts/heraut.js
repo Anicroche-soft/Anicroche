@@ -164,14 +164,15 @@ export const initialiser_heraut = async () =>
         return data
     })
 
-    definir_variable_racine(`$delete`, async (resource, params) => {
+    // Un corps n est envoyé que s il est donné (confirmation par clef, par exemple)
+    definir_variable_racine(`$delete`, async (resource, params, genes) => {
         const url = construire_url_api(resource, params)
 
         const options = {
             url,
             method: 'DELETE',
-            headers: {},
-            body: undefined
+            headers: genes === undefined ? {} : { 'Content-Type': 'application/json' },
+            body: genes === undefined ? undefined : JSON.stringify(genes)
         }
 
         await executer_actions_http('prior_requested', options)

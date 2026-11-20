@@ -18,7 +18,7 @@ page [:(, $authentification : requise_sans_profil]
 
         <div .centre>
             <span>
-                "Suppression du compte"
+                "Supprimer le compte"
 
         <div .droite>
             icone-horloge

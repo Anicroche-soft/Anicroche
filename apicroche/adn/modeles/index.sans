@@ -413,6 +413,43 @@
             { $coordonnee: coordonnee, $type: type }
         )
 
+    // ─── Appareils ───────────────────────────────────────────────────────────
+
+    // Navigateurs et systèmes reconnus, dans l ordre de test : un agent utilisateur en cite
+    // souvent plusieurs (Edge se dit aussi Chrome et Safari)
+    const NAVIGATEURS = [
+        [ /SamsungBrowser/,             'Samsung Internet' ],
+        [ /\bEdg(e|A|iOS)?\b/,          'Edge'             ],
+        [ /\bOPR\b|Opera/,              'Opera'            ],
+        [ /Firefox|FxiOS/,              'Firefox'          ],
+        [ /Chrome|Chromium|CriOS/,      'Chrome'           ],
+        [ /Safari/,                     'Safari'           ]
+    ]
+
+    const SYSTEMES = [
+        [ /Android/,                    'Android'          ],
+        [ /iPhone|iPod/,                'iPhone'           ],
+        [ /iPad/,                       'iPad'             ],
+        [ /CrOS/,                       'ChromeOS'         ],
+        [ /Windows/,                    'Windows'          ],
+        [ /Mac OS X|Macintosh/,         'macOS'            ],
+        [ /Linux/,                      'Linux'            ]
+    ]
+
+    const reconnaitre = (liste, agent) => liste.find(([ motif ]) => motif.test(agent))?.[1] ?? null
+
+    // Nom lisible de l appareil (« Firefox sur Linux »), ou null s il n est pas reconnu
+    $nommer_appareil = (agent_utilisateur) =>
+    {
+        const agent      = String(agent_utilisateur ?? '')
+        const navigateur = reconnaitre(NAVIGATEURS, agent)
+        const systeme    = reconnaitre(SYSTEMES, agent)
+
+        if (navigateur && systeme)
+            return `${navigateur} sur ${systeme}`
+        return navigateur ?? systeme
+    }
+
     // ─── Âge ─────────────────────────────────────────────────────────────────
 
     // Âge minimum pour s'inscrire seul (RGPD art. 8, loi Informatique et Libertés art. 45)

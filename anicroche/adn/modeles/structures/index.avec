@@ -106,6 +106,12 @@
         cursor: pointer;
     }
 
+    /* Par défaut, un fieldset ne rétrécit pas sous la largeur de son contenu (min-content) :
+       un contenu long le ferait dépasser de son conteneur au lieu de se replier ou d'être coupé */
+    fieldset {
+        min-inline-size: 0;
+    }
+
     /* Étiquette d'un champ de formulaire */
     .etiquette {
         --e-fonte: var(--e-etiquette);

@@ -93,6 +93,28 @@
         }
     }
 
+    // Date lisible (« 19 novembre 2026 », ou « 19 novembre 2026 à 14:05 » avec l heure) : une
+    // date seule AAAA-MM-JJ est lue telle quelle, une date et heure de l API (en UTC) dans le
+    // fuseau du visiteur
+    $formater_date = (date, avec_heure = false) =>
+    {
+        if (!date)
+            return ''
+
+        const jour_seul = /^\d{4}-\d{2}-\d{2}$/.test(String(date))
+        const valeur    = new Date(date)
+        const jour      = valeur.toLocaleDateString('fr-FR', {
+            day      : 'numeric',
+            month    : 'long',
+            year     : 'numeric',
+            timeZone : jour_seul ? 'UTC' : undefined
+        })
+
+        if (!avec_heure || jour_seul)
+            return jour
+        return `${jour} à ${valeur.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+    }
+
     $selectionner_profil = (id) =>
     {
         if (!id)

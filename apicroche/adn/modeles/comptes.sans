@@ -144,6 +144,12 @@
 
         const maintenant = new Date()
 
+        // Adresses chiffrées en base, donc triées ici : la principale, puis par ordre alphabétique
+        compte.coordonnees = (compte.coordonnees ?? []).sort((a, b) =>
+            (b.est_principale ? 1 : 0) - (a.est_principale ? 1 : 0)
+         || String(a.coordonnee).localeCompare(String(b.coordonnee), 'fr')
+        )
+
         compte.date_effacement          = $date_effacement(compte)
         compte.date_effacement_possible = $date_effacement_possible(compte)
         compte.sessions                 = (compte.sessions ?? [])
@@ -342,6 +348,7 @@
             {
                 adresse_ip        : $request.ip,
                 agent_utilisateur : $request.user_agent,
+                nom_appareil      : $nommer_appareil($request.user_agent),
                 id_compte         : coordonnee.id_compte
             }
         )

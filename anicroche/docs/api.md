@@ -11,7 +11,7 @@ L'adresse de l'API est donnée par la variable d'environnement `api_url` du serv
 | `$create(ressource, donnees)` | `POST` avec `donnees` en corps JSON |
 | `$search(ressource, parametres)` | `GET` avec `parametres` dans l'URL (`?clef=valeur`) |
 | `$update(ressource, donnees, parametres)` | `PATCH` avec `donnees` en corps JSON |
-| `$delete(ressource, parametres)` | `DELETE` |
+| `$delete(ressource, parametres, donnees)` | `DELETE`, avec `donnees` en corps JSON si elles sont données |
 
 - `ressource` est le chemin de la route, relatif à l'adresse de l'API (`'connexion'`, `'profil/ABC123'`, `'/moi'`).
 - Les cookies sont envoyés avec chaque requête (`credentials: 'include'`).

@@ -37,6 +37,9 @@
 @else-if [$path ~= '/profil/edition']
     -page-edition-profil
 
+@else-if [$path ~= '/compte/edition']
+    -page-edition-compte
+
 @else-if [$path ~= '/compte/suppression']
     -page-suppression-compte
 
