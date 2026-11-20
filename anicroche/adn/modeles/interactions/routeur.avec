@@ -25,7 +25,8 @@
 @else-if [$path ~= '/connexion']
     -page-connexion
 
-@else-if [$path ~= '/profil']
+# Une page dont les onglets ont chacun leur adresse
+@else-if [$path ~{ ['/profil', '/compte']]
     -page-profil
 
 @else-if [$path ~= '/profil/creation']

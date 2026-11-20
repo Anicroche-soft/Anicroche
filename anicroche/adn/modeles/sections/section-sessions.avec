@@ -43,7 +43,7 @@
 
 section [sessions]
     titre
-        "Vos sessions ouvertes"
+        "Vos sessions"
     carte
         @if [$erreur_sessions]
             erreur-formulaire

@@ -2,10 +2,10 @@ page [$authentification : requise, $page_compte : :)]
     navigation
         <div .centre>
             barre-onglets
-                bouton-onglet
+                bouton-onglet [/profil]
                     <span>
                         "Profil"
-                bouton-onglet
+                bouton-onglet [/compte]
                     <span>
                         "Compte"
 

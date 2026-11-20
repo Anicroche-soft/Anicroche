@@ -214,4 +214,6 @@ Les propriétés `rule`, `can_*` et `when` sont des expressions augure, évalué
 | Textes | `~= /motif/` (expression rationnelle), `_ $texte` (longueur), `:+ "abc"` / `:- "abc"` (garder / retirer des caractères) |
 | Arithmétique | `+`, `-`, `*`, `/`, `%`, `^` |
 
-Un résultat nul ou en erreur compte comme faux. Pour tester qu'une variable est renseignée, utiliser la variable seule (`$context.compte`) : un attribut absent vaut `:x`, si bien que `$context.compte != :o` est vrai même sans compte.
+**Valeur de vérité** (résultat de l'expression, et opérandes de `&`, `|` et `!`) : `:(`, `:o`, `:x` et le texte vide `''` sont faux ; toute autre valeur (nombre, `0` compris, texte non vide, liste, dictionnaire) est vraie. Les règles sont les mêmes que dans avec.js.
+
+Pour tester qu'une variable est renseignée, utiliser la variable seule (`$context.compte`), éventuellement combinée (`$context.compte & $type = page`) : un attribut absent vaut `:x`, si bien que `$context.compte != :o` est vrai même sans compte.

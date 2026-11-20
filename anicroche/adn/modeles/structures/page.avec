@@ -1,4 +1,7 @@
 @script [
+    // Adresse que suit l onglet actif (voir $suivre_adresse_onglet)
+    $chemin_onglets = null
+
     $monter_page = () =>
     {
         const noeud = $node
@@ -12,7 +15,16 @@
             )
         )
 
-        marquer_onglet_actif(noeud, 1, vars)
+        // Une page dont les onglets ont une adresse s ouvre sur l onglet de l adresse actuelle
+        const n_initial = onglet_de_l_adresse(noeud)
+        if (n_initial > 1)
+        {
+            const onglets = noeud.querySelectorAll(':scope > .onglet')
+            onglets[n_initial - 1].scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'start' })
+        }
+
+        $chemin_onglets = $path
+        marquer_onglet_actif(noeud, n_initial || 1, vars)
         atteindre_ancre(noeud, vars)
 
         noeud.addEventListener('scroll', () =>
@@ -35,11 +47,37 @@
             const onglets = noeud.querySelectorAll(':scope > .onglet')
             const n = Math.round(ratio * (onglets.length - 1)) + 1
             marquer_onglet_actif(noeud, n, vars)
+
+            // L adresse suit l onglet une fois le défilement arrêté, pas les onglets traversés
+            clearTimeout(vars.minuteur_adresse)
+            vars.minuteur_adresse = setTimeout(() => synchroniser_adresse(noeud), 150)
         })
+    }
+
+    // $path a changé alors que la page est affichée (lien vers un autre de ses onglets,
+    // $navigate_to…) : la page bascule vers l onglet de la nouvelle adresse
+    $suivre_adresse_onglet = () =>
+    {
+        const page = $node.closest('.page')
+        if (!page)
+            return
+
+        // Avant le montage de la page, c est $monter_page qui choisit l onglet
+        if (!page.querySelector(':scope > .onglet.actif'))
+            return
+
+        $chemin_onglets = $path
+
+        const n = onglet_de_l_adresse(page)
+        const onglets = page.querySelectorAll(':scope > .onglet')
+        if (n && !onglets[n - 1].classList.contains('actif'))
+            $basculer_vers_onglet(n, page)
     }
 
     $demonter_page = async () =>
     {
+        clearTimeout($vars.minuteur_adresse)
+
         if ($vars.onglet_actif && $vars.sur_scroll_onglet)
             $vars.onglet_actif.removeEventListener('scroll', $vars.sur_scroll_onglet)
 
@@ -75,6 +113,7 @@
         cible.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
 
         marquer_onglet_actif(page, n)
+        synchroniser_adresse(page)
     }
 
     $basculer_vers_onglet_suivant = (noeud = $node) =>
@@ -101,7 +140,7 @@
         $basculer_vers_onglet(actif, noeud)
     }
 
-    // Une adresse avec ancre (/profil#compte) ouvre l onglet qui contient l élément visé, puis
+    // Une adresse avec ancre (/compte) ouvre l onglet qui contient l élément visé, puis
     // y fait défiler la page jusqu à lui
     const atteindre_ancre = (page, vars) =>
     {
@@ -127,6 +166,35 @@
         onglet.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'start' })
         cible.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'nearest' })
         marquer_onglet_actif(page, onglets.indexOf(onglet) + 1, vars)
+    }
+
+    // Adresses des onglets, dans l ordre des boutons de la barre (null : onglet sans adresse)
+    const lire_adresses_onglets = (page) =>
+        [...page.querySelectorAll(':scope .bouton-onglet')].map(bouton => bouton.getAttribute('href'))
+
+    // Numéro de l onglet dont l adresse est $path, ou 0
+    const onglet_de_l_adresse = (page) =>
+        lire_adresses_onglets(page).indexOf($path) + 1
+
+    // Remplace l adresse par celle de l onglet actif, sans nouvelle entrée dans l historique.
+    // Rien ne change si l adresse actuelle n est pas celle d un des onglets : la page est
+    // peut-être en train d être quittée
+    const synchroniser_adresse = (page) =>
+    {
+        if (!page.isConnected || page.classList.contains('sortie'))
+            return
+
+        const adresses = lire_adresses_onglets(page)
+        if (!adresses.includes($path))
+            return
+
+        const onglets = [...page.querySelectorAll(':scope > .onglet')]
+        const adresse = adresses[onglets.findIndex(onglet => onglet.classList.contains('actif'))]
+        if (!adresse || adresse === $path)
+            return
+
+        $chemin_onglets = adresse
+        $navigate_to(adresse, true)
     }
 
     const marquer_onglet_actif = (page, n, vars = null) =>
@@ -188,6 +256,12 @@
         display: none;
     }
 
+    /* Sans JavaScript (rendu côté serveur), la page ne défile pas : seul l onglet actif,
+       celui de l adresse, est affiché */
+    :root:not(.avec-js) .page > .onglet:not(.actif) {
+        display: none;
+    }
+
     .page img {
         border-radius: 1rem;
         max-width: 100%;
@@ -197,7 +271,7 @@
 # $authentification : libre, interdite (déconnecté seulement), requise, requise_sans_profil,
 # ou ouverte (aucune vérification : pages reçues par courriel). Un compte dont l'effacement
 # est demandé est traité comme déconnecté, sauf sur la page du compte ($page_compte), qui
-# affiche l'effacement en cours
+# affiche l'effacement en cours ; une page qui exige d'être connecté le renvoie vers elle
 @args [$defilable : :), $authentification : libre, $page_compte : :(]
 
 <div
@@ -206,6 +280,9 @@
     @mount="$monter_page()"
     @unmount="await $demonter_page()"
 >
+    @if [$path != $chemin_onglets]
+        <div hidden @mount="$suivre_adresse_onglet()">
+
     @static
         @if [$page_compte & $connecte & ! $compte_actif]
             navigation
@@ -213,7 +290,7 @@
 
                 <div .centre>
                     <span>
-                        "Effacement du compte"
+                        "Suppression du compte"
 
                 <div .droite>
                     icone-horloge
@@ -233,6 +310,19 @@
 
             onglet
                 section-deja-connecte
+
+        @else-if [$authentification -{ [requise, requise_sans_profil] & $connecte & ! $compte_actif]
+            navigation
+                <div .gauche>
+                    fleche-retour
+
+                <div .centre>
+
+                <div .droite>
+                    icone-horloge
+
+            onglet
+                section-compte-en-suppression
 
         @else-if [$authentification -{ [requise, requise_sans_profil] & ! $compte_actif]
             navigation

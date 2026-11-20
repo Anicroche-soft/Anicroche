@@ -30,7 +30,7 @@
         {
             if (await $obtenir_compte())
             {
-                $navigate_to($compte_actif ? '/' : '/profil')
+                $navigate_to($compte_actif ? '/' : '/compte')
             }
             else
             {

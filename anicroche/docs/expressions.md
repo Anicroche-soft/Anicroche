@@ -38,7 +38,7 @@ Si une variable n'existe dans aucun parent, l'affectation crée la variable dans
 | `$path` | texte | Chemin de l'URL courante (ex : `/page/42`) |
 | `$query` | dictionnaire | Paramètres de la chaîne de requête de l'URL (ex : `{q: "recherche"}` pour `?q=recherche`) |
 | `$hash` | texte | Fragment de l'URL (ex : `#section`) |
-| `$navigate_to` | fonction | Navigue vers une URL (`$navigate_to('/connexion')`, `$navigate_to('/article/42?q=test')`) |
+| `$navigate_to` | fonction | Navigue vers une URL (`$navigate_to('/connexion')`, `$navigate_to('/article/42?q=test')`, `$navigate_to('/compte', :))` pour remplacer l'entrée actuelle de l'historique) |
 | `$navigate_prev` | fonction | Reproduit la flèche "retour" du navigateur (`$navigate_prev()`) |
 | `$navigate_post` | fonction | Reproduit la flèche "suivant" du navigateur (`$navigate_post()`) |
 | `$history` | fonction | Retourne une entrée de l'historique interne (`$history()`, `$history(1)`, `$history(2)`) |
@@ -51,13 +51,15 @@ Si une variable n'existe dans aucun parent, l'affectation crée la variable dans
 
 Précisions :
 
-- `$navigate_to(url)` accepte une URL relative ou absolue.
-- Si l'URL cible est externe (origine différente), la navigation est déléguée au navigateur (rechargement normal).
+- `$navigate_to(url, replace = :()` accepte une URL relative ou absolue. Par défaut, une entrée est ajoutée à l'historique ; avec `:)` en second argument, l'entrée actuelle est remplacée : le bouton « retour » du navigateur ne ramène pas à l'adresse quittée (utile pour les onglets d'une même page, par exemple). Si le remplacement rend l'entrée identique à la précédente (adresse `/profil` saisie depuis `/compte`, puis remplacée par `/compte`, par exemple), le cadriciel revient à cette entrée précédente, pour ne pas laisser deux entrées de suite vers la même adresse ; l'entrée remplacée reste seulement accessible par le bouton « suivant », jusqu'à la navigation suivante. Ce retour nécessite l'API Navigation du navigateur : sans elle, les deux entrées restent.
+- Si l'URL cible est externe (origine différente), la navigation est déléguée au navigateur (rechargement normal, avec `location.replace` en cas de remplacement).
+- Un clic sur un lien `<a>` interne est pris en charge par le cadriciel (navigation sans rechargement), sauf si un gestionnaire `@click` du modèle a déjà appelé `$event.preventDefault()` : le modèle traite alors le clic lui-même.
 - `$history(age = 0)` renvoie l'URL relative (chemin + query + hash) enregistrée lors des navigations internes :
     - `0` = entrée la plus récente,
     - `1` = entrée précédente,
     - etc.
     - si l'entrée demandée n'existe pas, la fonction renvoie `null`.
+    - un remplacement (`$navigate_to(url, :))`, `history.replaceState`, barre oblique finale retirée) remplace l'entrée la plus récente au lieu d'en ajouter une.
 
 ### Arguments de modèle
 
@@ -176,6 +178,8 @@ Les comparaisons peuvent être **chaînées** : `1 < $n < 10` est équivalent à
 | `\|` | Ou logique (court-circuit : le membre droit n'est pas évalué si le gauche est vrai) |
 | `!` | Non logique |
 
+**Valeur de vérité** (résultat d'une condition `@if`, `@unless`, `@while`, `[condition] ?`, et opérandes de `&`, `|` et `!`) : `:(`, `:o`, `:x` (variable absente, par exemple) et le texte vide `''` sont faux ; toute autre valeur (nombre, `0` compris, texte non vide, liste, dictionnaire, fonction) est vraie. Ainsi `$message & ! $erreur` est vrai si `$message` n'est pas vide et `$erreur` vaut `:(`, `:o` ou `''`. Les règles sont les mêmes dans sans.js.
+
 ### Longueur
 
 | Opérateur | Description | Exemple |
@@ -266,6 +270,28 @@ Sans filtrage, une capture s'arrête au premier `/` : elle vaut un segment de ch
 ```
 
 Les variables capturées sont écrites dans le scope courant (ou dans un parent si la variable existe déjà) et immédiatement disponibles dans les expressions, les textes et les scripts.
+
+### Correspondance avec une liste de motifs (`~{`, `}~`)
+
+Ces opérateurs combinent l'appartenance et la correspondance de motif : ils vérifient si un texte correspond à **au moins un** des motifs d'une liste (ou des clés d'un dictionnaire). Les motifs s'écrivent comme pour `~=` (sans expression rationnelle) et de préférence entre guillemets.
+
+| Opérateur | Description | Exemple |
+|---|---|---|
+| `a ~{ b` | `a` correspond à l'un des motifs de `b` | `$path ~{ ['/profil', '/compte']` |
+| `a !~{ b` | `a` ne correspond à aucun des motifs de `b` | `$path !~{ $chemins_publics` |
+| `b }~ a` | l'un des motifs de `b` correspond à `a` | `['/<$id>', '/<$id>/edition'] }~ $path` |
+| `b !}~ a` | aucun des motifs de `b` ne correspond à `a` | `$chemins_publics !}~ $path` |
+
+Les motifs sont essayés dans l'ordre : seul le premier qui correspond écrit ses captures. Les formes inversées (`!~{`, `!}~`) n'écrivent aucune capture.
+
+```
+# Une même page pour plusieurs adresses : le modèle reste en place de l'une à l'autre
+@if [$path ~{ ['/profil', '/compte']]
+    page-profil
+
+@else-if [$path ~{ ['/article/<$id :+ 0123456789>', '/a/<$id :+ 0123456789>']]
+    page-article $id
+```
 
 **Exemple complet — routeur :**
 

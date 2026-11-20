@@ -92,13 +92,15 @@ const coercer_comparable = (a, b) =>
     return { a: ERREUR, b: ERREUR }
 }
 
-const coercer_booleen = (v) =>
+// Valeur de vérité : :(, :o, :x, undefined et le texte vide sont faux ; toute autre valeur
+// (nombre, 0 compris, texte non vide, liste, dictionnaire, fonction…) est vraie
+const est_vrai = (v) =>
 {
     if (est_booleen(v)) return v
-    if (v === NUL) return FAUX
-    if (est_erreur(v))  return FAUX
-    return ERREUR
+    return v !== NUL && v !== undefined && v !== '' && !est_erreur(v)
 }
+
+const coercer_booleen = (v) => est_vrai(v) ? VRAI : FAUX
 
 const decouper_haut_niveau = (str, separateurs) =>
 {
@@ -541,26 +543,17 @@ const op_ne_contient_pas = (a, b) =>
 
 const op_et = (a, b_fn) =>
 {
-    const ba = coercer_booleen(a)
-    if (est_erreur(ba)) return ERREUR
-    if (ba === FAUX) return FAUX
+    if (!est_vrai(a)) return FAUX
     return coercer_booleen(b_fn())
 }
 
 const op_ou = (a, b_fn) =>
 {
-    const ba = coercer_booleen(a)
-    if (est_erreur(ba)) return ERREUR
-    if (ba === VRAI) return VRAI
+    if (est_vrai(a)) return VRAI
     return coercer_booleen(b_fn())
 }
 
-const op_non = (a) =>
-{
-    const ba = coercer_booleen(a)
-    if (est_erreur(ba)) return ERREUR
-    return ba === VRAI ? FAUX : VRAI
-}
+const op_non = (a) => est_vrai(a) ? FAUX : VRAI
 
 const op_longueur = (a) =>
 {
@@ -848,8 +841,7 @@ export const evaluer = (expression, donnees) =>
     {
         const tokens = tokeniser(expression)
         const ast    = parser(tokens)
-        const result = evaluer_noeud(ast, donnees)
-        return result === NUL ? false : est_booleen(result) ? result : !est_erreur(result)
+        return est_vrai(evaluer_noeud(ast, donnees))
     }
     catch
     {

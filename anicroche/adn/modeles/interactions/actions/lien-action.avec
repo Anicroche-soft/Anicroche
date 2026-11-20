@@ -56,17 +56,46 @@
         vars.chronometre = chronometre
     }
 
+    // Dans un formulaire en étapes, tous les onglets sont montés dès l ouverture de la page :
+    // le compte à rebours démarre donc quand l onglet du lien devient actif (l étape est
+    // atteinte, la clef vient d être envoyée), et redémarre à chaque fois qu il le redevient
     $monter_lien_action = ($delai) =>
     {
+        const noeud = $node
+        const vars  = $vars
         const delai = Math.max(0, Math.floor(Number($delai) || 0))
 
-        $vars.delai = delai
+        vars.delai = delai
 
-        demarrer_compte_a_rebours(delai, $node, $vars)
+        const onglet = noeud.closest('.onglet')
+        if (!onglet || delai <= 0)
+        {
+            demarrer_compte_a_rebours(delai, noeud, vars)
+            return
+        }
+
+        let etait_actif = onglet.classList.contains('actif')
+        if (etait_actif)
+            demarrer_compte_a_rebours(delai, noeud, vars)
+
+        vars.observateur_onglet = new MutationObserver(() =>
+        {
+            const actif = onglet.classList.contains('actif')
+            if (actif && !etait_actif)
+                demarrer_compte_a_rebours(delai, noeud, vars)
+            etait_actif = actif
+        })
+        vars.observateur_onglet.observe(onglet, { attributes: true, attributeFilter: ['class'] })
     }
 
     $demonter_lien_action = () =>
     {
+        if ($vars.observateur_onglet)
+        {
+            $vars.observateur_onglet.disconnect()
+            $vars.observateur_onglet = null
+        }
+
         if (!$vars.chronometre) return
 
         clearInterval($vars.chronometre)

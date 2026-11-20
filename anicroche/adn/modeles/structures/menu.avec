@@ -48,7 +48,13 @@
         <span>
             "Gadgets"
 
-    @if [$connecte]
+    # Un compte dont l'effacement est demandé n'a accès qu'à la page du compte
+    @if [$connecte & ! $compte_actif]
+        boite-ancre [/compte, Compte]
+            icone-masque
+            <span>
+                "Compte"
+    @else-if [$connecte]
         boite-ancre [/profil, Profil]
             icone-masque
             <span>

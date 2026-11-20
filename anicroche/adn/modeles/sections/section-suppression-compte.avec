@@ -30,7 +30,10 @@
     }
 
     // Suppression refusée pendant les sept jours qui suivent un changement d adresse principale
-    $date_effacement_possible_suppression = $formater_date($compte?.date_effacement_possible, true)
+    // null quand la suppression est possible : un texte vide rendrait la condition vraie
+    $date_effacement_possible_suppression = $compte?.date_effacement_possible
+        ? $formater_date($compte.date_effacement_possible, true)
+        : null
 
     const lire_erreur_clef = (reponse) =>
     {
@@ -124,7 +127,7 @@
                 information-formulaire
                     "Vous ne pouvez pas supprimer votre compte avant le $date_effacement_possible_suppression, car son adresse électronique principale a changé il y a moins de sept jours. Ce délai vous laisse le temps de réagir si quelqu'un d'autre a pris le contrôle de votre compte."
                 ligne
-                    bouton-ancre [/profil#compte]
+                    bouton-ancre [/compte]
                         icone-fleche-gauche
                         alt
                             "Retour"

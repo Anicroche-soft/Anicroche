@@ -21,6 +21,14 @@
         $navigate_to('/')
     }
 
+    // L effacement en cours s affiche sur la page du compte, quelle que soit l adresse
+    // de la page profil (/profil, /compte) par laquelle on y arrive
+    $aller_a_adresse_compte = () =>
+    {
+        if ($path !== '/compte')
+            $navigate_to('/compte', true)
+    }
+
     $deconnecter_compte_effacement = async () =>
     {
         const reponse = await $create('deconnexion')
@@ -31,6 +39,8 @@
 ]
 
 section [effacement-en-cours, centree]
+    <div hidden style="display: none" @mount="$aller_a_adresse_compte()">
+
     titre [centre]
         "Votre compte va être effacé"
     carte
@@ -38,7 +48,7 @@ section [effacement-en-cours, centree]
             erreur-formulaire
                 "$erreur_annulation_effacement"
         <p>
-            "La suppression de votre compte a été demandé. Il sera supprimé définitivement le $date_effacement_en_cours, et il est suspendu d'ici là."
+            "La suppression de votre compte a été demandée. Il sera supprimé définitivement le $date_effacement_en_cours, et il est suspendu d'ici là."
         <p>
             "Si vous avez changé d'avis, ou si vous n'êtes pas à l'origine de cette demande, vous pouvez encore restaurer votre compte. Pensez alors à changer votre mot de passe."
         ligne

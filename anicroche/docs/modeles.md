@@ -2,7 +2,9 @@
 
 Un fichier `.avec` décrit un fragment d'interface réutilisable. Il est composé de **blocs** organisés par **indentation** (espaces uniquement — les tabulations sont interdites). Les blocs plus indentés sont les enfants du bloc précédent.
 
-Les **commentaires** commencent par `#` et s'étendent jusqu'à la fin de la ligne.
+Les **commentaires** commencent par `#` et s'étendent jusqu'à la fin de la ligne. Une ligne de commentaire peut être indentée comme les blocs qui l'entourent, et un commentaire peut aussi suivre un bloc sur sa ligne, à condition d'en être séparé par un espace. Son contenu (apostrophes, crochets…) est ignoré par l'analyseur. Les lignes vides ou blanches sont également ignorées.
+
+Un `#` placé dans une chaîne (`"n° #3"`), dans une balise (`<div #mon-id>`) ou entre crochets (`@style [ … ]`, arguments) n'ouvre pas de commentaire.
 
 ```
 # Ceci est un commentaire

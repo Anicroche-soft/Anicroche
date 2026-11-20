@@ -14,11 +14,11 @@
 page [:(, $authentification : requise_sans_profil]
     navigation
         <div .gauche>
-            fleche-retour [/profil]
+            fleche-retour [/compte]
 
         <div .centre>
             <span>
-                "Supprimer le compte"
+                "Suppression de compte"
 
         <div .droite>
             icone-horloge

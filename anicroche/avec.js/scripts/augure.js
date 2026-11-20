@@ -28,13 +28,15 @@ const coercer_nombre = (v) =>
     return ERREUR
 }
 
-const coercer_booleen = (v) =>
+// Valeur de vérité : :(, :o, :x, undefined et le texte vide sont faux ; toute autre valeur
+// (nombre, 0 compris, texte non vide, liste, dictionnaire, fonction…) est vraie
+const est_vrai = (v) =>
 {
     if (est_booleen(v)) return v
-    if (v === NUL) return FAUX
-    if (est_erreur(v))  return FAUX
-    return ERREUR
+    return v !== NUL && v !== undefined && v !== '' && !est_erreur(v)
 }
+
+const coercer_booleen = (v) => est_vrai(v) ? VRAI : FAUX
 
 const decouper_haut_niveau = (str, separateurs) =>
 {
@@ -86,6 +88,7 @@ const decouper_haut_niveau = (str, separateurs) =>
 const SMILEYS = [':)', ':(', ':x', ':o']
 
 const OPERATEURS_COMPOSITES = [
+    '!~{', '!}~', '~{', '}~',
     '!-{', '!}-', '-{', '}-',
     '>=', '<=', '!=', '~=',
     ':+', ':-',
@@ -531,26 +534,17 @@ const op_exclure = (a, b, donnees) =>
 
 const op_et = (a, b_fn) =>
 {
-    const ba = coercer_booleen(a)
-    if (est_erreur(ba)) return ERREUR
-    if (ba === FAUX) return FAUX
+    if (!est_vrai(a)) return FAUX
     return coercer_booleen(b_fn())
 }
 
 const op_ou = (a, b_fn) =>
 {
-    const ba = coercer_booleen(a)
-    if (est_erreur(ba)) return ERREUR
-    if (ba === VRAI) return VRAI
+    if (est_vrai(a)) return VRAI
     return coercer_booleen(b_fn())
 }
 
-const op_non = (a) =>
-{
-    const ba = coercer_booleen(a)
-    if (est_erreur(ba)) return ERREUR
-    return ba === VRAI ? FAUX : VRAI
-}
+const op_non = (a) => est_vrai(a) ? FAUX : VRAI
 
 const op_longueur = (a) =>
 {
@@ -615,7 +609,10 @@ const parser_et = (etat) =>
     return gauche
 }
 
-const OPS_COMPARAISON = new Set(['=', '!=', '>', '>=', '<', '<=', '-{', '!-{', '}-', '!}-', '~='])
+const OPS_COMPARAISON = new Set(['=', '!=', '>', '>=', '<', '<=', '-{', '!-{', '}-', '!}-', '~=', '~{', '!~{', '}~', '!}~'])
+
+// Correspondance d un texte avec l un des motifs d une liste : texte ~{ motifs, motifs }~ texte
+const OPS_CORRESPONDANCE_MOTIFS = new Set(['~{', '!~{', '}~', '!}~'])
 
 const parser_comparaison = (etat) =>
 {
@@ -745,7 +742,8 @@ const parser_primaire = (etat) =>
 // Correspondance de motif
 // ============================================================
 
-const op_correspondance = (chaine, motif_brut, donnees) =>
+// ecrire : faux pour vérifier la correspondance sans écrire les variables capturées
+const op_correspondance = (chaine, motif_brut, donnees, ecrire = true) =>
 {
     if (!est_texte(chaine)) return ERREUR
 
@@ -859,6 +857,9 @@ const op_correspondance = (chaine, motif_brut, donnees) =>
     // Vérifier que toute la chaîne a été consommée
     if (pos_chaine !== chaine.length) return FAUX
 
+    if (!ecrire)
+        return VRAI
+
     // Écrire les variables capturées dans le runtime
     for (const [nom, valeur] of Object.entries(captures))
     {
@@ -942,6 +943,33 @@ const evaluer_noeud = (noeud, donnees) =>
             return op_correspondance(gauche, brut, donnees)
         }
 
+        // Motifs d une liste (ou clefs d un dictionnaire) : le premier motif qui correspond
+        // écrit ses captures ; la forme inversée n écrit rien
+        if (OPS_CORRESPONDANCE_MOTIFS.has(noeud.op))
+        {
+            const inverse         = noeud.op.startsWith('!')
+            const motifs_a_gauche = noeud.op.endsWith('~')
+            const texte           = evaluer_noeud(motifs_a_gauche ? noeud.droite : noeud.gauche, donnees)
+            const motifs_evalues  = evaluer_noeud(motifs_a_gauche ? noeud.gauche : noeud.droite, donnees)
+
+            if (est_erreur(texte) || est_erreur(motifs_evalues)) return ERREUR
+
+            const motifs = est_liste(motifs_evalues) ? motifs_evalues
+                : est_dict(motifs_evalues)           ? Object.keys(motifs_evalues)
+                : null
+            if (!motifs || !est_texte(texte)) return ERREUR
+
+            for (const motif of motifs)
+            {
+                if (!est_texte(motif))
+                    continue
+                if (op_correspondance(texte, motif, donnees, !inverse) === VRAI)
+                    return inverse ? FAUX : VRAI
+            }
+
+            return inverse ? VRAI : FAUX
+        }
+
         const gauche = evaluer_noeud(noeud.gauche, donnees)
 
         if (noeud.op === ':+' || noeud.op === ':-')
@@ -1018,6 +1046,5 @@ export const evaluer_valeur_ou_erreur = (str, donnees) =>
 
 export const evaluer = (str, donnees) =>
 {
-    const result = evaluer_valeur(str, donnees)
-    return result === NUL ? false : est_booleen(result) ? result : !est_erreur(result)
+    return est_vrai(evaluer_valeur(str, donnees))
 }

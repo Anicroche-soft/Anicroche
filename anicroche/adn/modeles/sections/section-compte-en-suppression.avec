@@ -1,0 +1,11 @@
+# Page qui exige d'être connecté, ouverte par un compte dont l'effacement est demandé : il est
+# traité comme déconnecté, mais peut encore être restauré depuis la page du compte
+section [compte-en-suppression, centree]
+    titre [centre]
+        "Votre compte est en cours de suppression"
+    carte
+        ligne
+            bouton-ancre [/]
+                "Accueil"
+            bouton-ancre [/compte]
+                "Restauration"

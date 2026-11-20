@@ -15,7 +15,11 @@ section [deja-connecte, centree]
         "Vous êtes déjà connecté"
     carte
         ligne
-            bouton-ancre [/profil]
-                "Profil"
+            @if [$compte_actif]
+                bouton-ancre [/profil]
+                    "Profil"
+            @else
+                bouton-ancre [/compte]
+                    "Compte"
             bouton-action [$deconnecter_compte]
                 "Déconnexion"

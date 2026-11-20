@@ -1,6 +1,17 @@
 @script [
     $basculer_bouton_onglet = () =>
     {
+        const evenement = $event
+
+        // Un onglet avec adresse est un vrai lien : un clic avec modificateur (nouvel onglet,
+        // nouvelle fenêtre…) est laissé au navigateur
+        if ($node.localName === 'a')
+        {
+            if (evenement.ctrlKey || evenement.metaKey || evenement.shiftKey || evenement.button !== 0)
+                return
+            evenement.preventDefault()
+        }
+
         const barre = $node.closest('.barre-onglets')
         if (!barre) return
 
@@ -31,5 +42,14 @@
     }
 ]
 
-<button .bouton-onglet @click="$basculer_bouton_onglet()">
-    @stud
+# $adresse : adresse propre à l'onglet (/profil, /compte…). Le bouton devient alors un lien, et
+# passer sur l'onglet remplace l'adresse dans l'historique (voir page)
+@args [$adresse : :(]
+
+@if [$adresse]
+    <a .bouton-onglet href="$adresse" @click="$basculer_bouton_onglet()">
+        @stud
+
+@else
+    <button .bouton-onglet @click="$basculer_bouton_onglet()">
+        @stud

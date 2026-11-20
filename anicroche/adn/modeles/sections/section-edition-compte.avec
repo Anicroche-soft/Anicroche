@@ -109,7 +109,7 @@
     const terminer = async () =>
     {
         await $obtenir_compte()
-        $navigate_to('/profil#compte')
+        $navigate_to('/compte')
     }
 
     const chemin_compte = () => `compte/${encodeURIComponent($compte.id)}`

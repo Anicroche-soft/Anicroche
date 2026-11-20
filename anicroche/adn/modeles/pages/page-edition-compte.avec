@@ -20,11 +20,11 @@
 page [:(, $authentification : requise_sans_profil]
     navigation
         <div .gauche>
-            fleche-retour [/profil]
+            fleche-retour [/compte]
 
         <div .centre>
             <span>
-                "Modifier le compte"
+                "Édition de compte"
 
         <div .droite>
             icone-horloge

@@ -24,8 +24,7 @@
 
         # Une clef d authentification ou d ajout d adresse est envoyée à l adresse fournie ; les
         # autres ne le sont qu à l adresse principale du compte connecté. $preparer_clef vérifie
-        # les prérequis de chaque type (voir TYPES_PRINCIPALE), car un objet comme $context.compte
-        # ne peut pas être combiné par & dans une expression
+        # les prérequis de chaque type (voir TYPES_PRINCIPALE)
         can_create  : "
             (
                 $type -{ [authentification, ajout-courriel]

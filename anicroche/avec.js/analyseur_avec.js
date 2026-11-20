@@ -63,14 +63,15 @@ const sauter_smileys = (str, pos) =>
     return pos
 }
 
+// Opérateurs composés avec accolades : appartenance (-{, }-) et correspondance de motifs (~{, }~),
+// avec leurs formes inversées
+const OPERATEURS_ACCOLADES = ['!-{', '!}-', '!~{', '!}~', '-{', '}-', '~{', '}~']
+
 // Fonction utilitaire : détecte et saute un opérateur composé avec accolades
 const sauter_operateurs_appartenance = (str, pos) =>
 {
-    if (str[pos] === '!' && str[pos + 1] === '-' && str[pos + 2] === '{') return pos + 3
-    if (str[pos] === '!' && str[pos + 1] === '}' && str[pos + 2] === '-') return pos + 3
-    if (str[pos] === '-' && str[pos + 1] === '{')                         return pos + 2
-    if (str[pos] === '}' && str[pos + 1] === '-')                         return pos + 2
-    return pos
+    const operateur = OPERATEURS_ACCOLADES.find(o => str.startsWith(o, pos))
+    return operateur ? pos + operateur.length : pos
 }
 
 // Le contenu de @script est du JavaScript, celui de @style du CSS : leurs commentaires sont
@@ -101,6 +102,21 @@ const sauter_commentaire = (str, pos, fin, langage) =>
     return pos
 }
 
+// Une ligne vide, blanche ou de commentaire (# après l'indentation éventuelle) est ignorée :
+// renvoie la position qui suit sa fin, ou -1 si la ligne a un contenu. Un commentaire indenté
+// n'est donc pas lu comme du contenu (une apostrophe y ouvrirait une chaîne)
+const sauter_ligne_ignoree = (str, pos, fin) =>
+{
+    let p = pos
+    while (p <= fin && str[p] === ' ')
+        p++
+    if (p <= fin && str[p] !== '\n' && str[p] !== '#')
+        return -1
+    while (p <= fin && str[p] !== '\n')
+        p++
+    return p + 1
+}
+
 const avancer_avec_blocs = (str, pos, fin, blocs, arret, langage = null) =>
 {
     while (pos <= fin && !arret(str, pos, blocs))
@@ -117,6 +133,15 @@ const avancer_avec_blocs = (str, pos, fin, blocs, arret, langage = null) =>
         {
             const apres = sauter_commentaire(str, pos, fin, langage)
             if (apres !== pos) { pos = apres; continue }
+        }
+
+        // Commentaire de fin de ligne : un # hors de tout bloc, en début de mot, va jusqu'à la fin
+        // de la ligne (son contenu, apostrophes comprises, est ignoré)
+        if (blocs === '' && str[pos] === '#' && (pos === 0 || str[pos - 1] === ' ' || str[pos - 1] === '\n'))
+        {
+            while (pos <= fin && str[pos] !== '\n')
+                pos++
+            continue
         }
 
         // Sauter les tokens spéciaux en priorité, hors contexte de chaîne
@@ -297,8 +322,9 @@ const analyser_bloc_avec = (str, deb, fin, fichier, json) =>
         pos = res.pos
         blocs = res.blocs
 
+        // Un commentaire de fin de ligne n'est pas un argument
         let mot = str.substring(deb_mot, pos + 1).trim()
-        if (mot.length > 0)
+        if (mot.length > 0 && mot[0] !== '#')
             bloc.args.push(mot)
         if (str[pos] == '\n' || pos >= fin)
             fini = true
@@ -393,16 +419,14 @@ const analyser_enfants_avec = (str, deb, fin, fichier, json) =>
     while (!fini)
     {
         // Sauter les lignes vides et commentaires AVANT la vérification d'indentation
-        while (pos <= fin && (str[pos] === '\n' || str[pos] === '#'))
+        while (pos <= fin)
         {
-            if (str[pos] === '#')
-                while (pos <= fin && str[pos] !== '\n')
-                    pos++
-            if (pos <= fin)
-                pos++
-            if (pos > fin) { fini = true; break }
+            const apres = sauter_ligne_ignoree(str, pos, fin)
+            if (apres < 0)
+                break
+            pos = apres
         }
-        if (fini) break
+        if (pos > fin) break
 
         // Vérifier l'indentation
         for (let i = 0; i < indentation; i++)
@@ -442,12 +466,12 @@ const analyser_enfants_avec = (str, deb, fin, fichier, json) =>
             let peek = pos + 1 // pos est sur '\n', peek est le début de la ligne suivante
 
             // Sauter les lignes vides et commentaires
-            while (peek <= fin && (str[peek] === '\n' || str[peek] === '#'))
+            while (peek <= fin)
             {
-                if (str[peek] === '#')
-                    while (peek <= fin && str[peek] !== '\n')
-                        peek++
-                if (peek <= fin) peek++
+                const apres = sauter_ligne_ignoree(str, peek, fin)
+                if (apres < 0)
+                    break
+                peek = apres
             }
             if (peek > fin) { fini = true; continue }
 
