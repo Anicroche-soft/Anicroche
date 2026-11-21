@@ -1,17 +1,22 @@
 # Types d anicroches, décrits dans la clef types_anicroches d app.adn. Chaque propriété d un
-# type déclenche une possibilité du script général des anicroches :
-# - libelle        : nom du type affiché par le site (« Page ») ;
+# type déclenche une possibilité du script général des anicroches ; toutes sont facultatives,
+# et une valeur absente ou invalide (signalée au démarrage) prend sa valeur par défaut :
+# - libelle        : nom du type affiché par le site (« Page ») ; par défaut, le nom du type ;
 # - identifiant    : libre (choisi à la création, en minuscules) ou un nombre (clef
-#                    automatique de ce nombre de caractères A-Z0-9) ;
-# - auteurs        : :) si les anicroches du type ont des profils auteurs ;
-# - administration : rôles de profil qui ont tous les droits sur les anicroches du type ;
-# - sources        : rôles des sources, chacun avec son libellé, son format (voir FORMATS) et
-#                    son nombre de sources (0-1, 1-1, 1-N…), rangées par position ; les sources
+#                    automatique de ce nombre de caractères A-Z0-9) ; par défaut 15 ;
+# - auteurs        : :) si les anicroches du type ont des profils auteurs ; par défaut :) ;
+# - administration : rôles de profil qui ont tous les droits sur les anicroches du type ; par
+#                    défaut aucun ;
+# - sources        : rôles des sources, chacun avec son libellé (par défaut, le rôle), son
+#                    format (voir FORMATS, par défaut texte) et son nombre de sources (0-1,
+#                    1-1, 1-N…, par défaut 1-1), rangées par position ; les sources
 #                    obligatoires sont créées vides avec l anicroche ; une source de format
-#                    titre (une seule par type) donne le titre de chaque version ;
+#                    titre (une seule par type) donne le titre de chaque version ; par défaut
+#                    aucune source ;
 # - exceptions     : anicroches créées au démarrage (le type doit avoir un identifiant libre),
 #                    chacune avec son identifiant, le contenu de ses sources obligatoires à
-#                    leur création ({ <rôle> : <contenu> }) et ses spécificités :
+#                    leur création ({ <rôle> : <contenu> }, par défaut aucun) et ses
+#                    spécificités (par défaut aucune) ; par défaut aucune exception :
 #     - legalite    : une version parue ou programmée est toujours publique ;
 #     - preavis     : l anicroche paraît immédiatement (correction mineure) ou au moins 30
 #                     jours plus tard (modification de fond), et sa parution programmée ne peut
@@ -42,20 +47,22 @@
     const CARACTERES_CLEF   = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
     const LONGUEUR_MAXIMALE = 48
 
+    // Clef des messages et commentaires, 36¹⁵ ≈ 2 × 10²³ possibilités : des multiples de 3,
+    // plus courts pour les types peu nombreux, plus longs pour les fichiers
+    const IDENTIFIANT_PAR_DEFAUT = 15
+    const NOMBRE_PAR_DEFAUT      = '1-1'
+
     // Formats de source : ils décident du champ d édition et de l affichage dans le site
     const FORMATS = [ 'titre', 'texte' ]
 
     const SPECIFICITES = [ 'legalite', 'preavis', 'acceptation' ]
 
-    $type_anicroche = (type) =>
-        Object.prototype.hasOwnProperty.call($app.types_anicroches ?? {}, type)
-            ? $app.types_anicroches[type]
-            : null
+    const est_dictionnaire = (valeur) => !!valeur && typeof valeur === 'object' && !Array.isArray(valeur)
 
     // « 1-N » donne { min: 1, max: Infinity }, et null pour une valeur invalide
     $lire_nombre = (texte) =>
     {
-        const morceaux = MOTIF_NOMBRE.exec(String(texte ?? '0-1'))
+        const morceaux = MOTIF_NOMBRE.exec(String(texte ?? NOMBRE_PAR_DEFAUT))
         if (!morceaux)
             return null
 
@@ -64,59 +71,87 @@
         return min <= max ? { min, max } : null
     }
 
-    $sources_type = (type) =>
-        Object.entries($type_anicroche(type)?.sources ?? {})
-            .map(([role, config]) => ({ role, ...$lire_nombre(config?.nombre) }))
+    const identifiant_valide = (identifiant) =>
+        identifiant === 'libre' || (Number.isInteger(identifiant) && identifiant > 0 && identifiant <= LONGUEUR_MAXIMALE)
+
+    const identifiant_lisible = (id) => typeof id === 'string' && MOTIF_LISIBLE.test(id) && id.length <= LONGUEUR_MAXIMALE
+
+    // Configuration complétée de ses valeurs par défaut, la seule lue par le reste des scripts
+    const completer_type = (nom, config) =>
+    {
+        config = est_dictionnaire(config) ? config : {}
+
+        const sources = Object.entries(est_dictionnaire(config.sources) ? config.sources : {}).map(([role, source]) =>
+        {
+            source = est_dictionnaire(source) ? source : {}
+            const nombre = $lire_nombre(source.nombre) ?? $lire_nombre(NOMBRE_PAR_DEFAUT)
+            return {
+                role,
+                libelle : typeof source.libelle === 'string' ? source.libelle : role,
+                format  : FORMATS.includes(source.format) ? source.format : 'texte',
+                min     : nombre.min,
+                max     : nombre.max
+            }
+        })
+
+        return {
+            libelle        : typeof config.libelle === 'string' ? config.libelle : nom,
+            identifiant    : identifiant_valide(config.identifiant) ? config.identifiant : IDENTIFIANT_PAR_DEFAUT,
+            auteurs        : typeof config.auteurs === 'boolean' ? config.auteurs : true,
+            administration : Array.isArray(config.administration) ? config.administration : [],
+            sources,
+            exceptions     : (Array.isArray(config.exceptions) ? config.exceptions : [])
+                .filter(exception => est_dictionnaire(exception) && identifiant_lisible(exception.identifiant))
+                .map(exception => ({
+                    identifiant  : exception.identifiant,
+                    sources      : est_dictionnaire(exception.sources) ? exception.sources : {},
+                    specificites : Array.isArray(exception.specificites)
+                        ? exception.specificites.filter(specificite => SPECIFICITES.includes(specificite))
+                        : []
+                }))
+        }
+    }
+
+    const types_completes = new Map(Object.entries(est_dictionnaire($app.types_anicroches) ? $app.types_anicroches : {})
+        .map(([nom, config]) => [ nom, completer_type(nom, config) ]))
+
+    $type_anicroche = (type) => types_completes.get(type) ?? null
+
+    $sources_type = (type) => $type_anicroche(type)?.sources ?? []
 
     $a_des_auteurs = (type) => $type_anicroche(type)?.auteurs === true
 
-    // Configuration complétée de ses valeurs par défaut ; un maximum illimité (N) vaut null
-    const decrire_type = (nom, config) => ({
-        libelle        : config?.libelle ?? nom,
-        identifiant    : config?.identifiant,
-        auteurs        : config?.auteurs === true,
-        administration : config?.administration ?? [],
-        exceptions     : (config?.exceptions ?? []).map(exception => ({
-            identifiant  : exception?.identifiant,
-            specificites : exception?.specificites ?? []
-        })),
-        sources        : Object.entries(config?.sources ?? {}).map(([role, source]) =>
-        {
-            const nombre = $lire_nombre(source?.nombre)
-            return {
-                role,
-                libelle : source?.libelle ?? role,
-                format  : source?.format ?? 'texte',
-                min     : nombre?.min ?? 0,
-                max     : nombre && Number.isFinite(nombre.max) ? nombre.max : null
-            }
-        })
+    // Le site reçoit les exceptions sans le contenu de leurs sources, et un maximum illimité (N)
+    // vaut null
+    const decrire_type = (type) => ({
+        ...type,
+        exceptions : type.exceptions.map(({ identifiant, specificites }) => ({ identifiant, specificites })),
+        sources    : type.sources.map(source => ({ ...source, max: Number.isFinite(source.max) ? source.max : null }))
     })
 
     $obtenir_types = () =>
     {
         const types = {}
-        for (const [nom, config] of Object.entries($app.types_anicroches ?? {}))
-            types[nom] = decrire_type(nom, config)
+        for (const [nom, type] of types_completes)
+            types[nom] = decrire_type(type)
 
         return $indicate(200, 'Types récupérés', types)
     }
 
     // ─── Exceptions ──────────────────────────────────────────────────────────
 
-    $exceptions_type = (type) =>
-        ($type_anicroche(type)?.exceptions ?? []).filter(exception => exception && typeof exception === 'object')
+    $exceptions_type = (type) => $type_anicroche(type)?.exceptions ?? []
 
     $exception_anicroche = (anicroche) =>
         $exceptions_type(anicroche?.type).find(exception => exception.identifiant === anicroche?.id) ?? null
 
     $a_specificite = (anicroche, specificite) =>
-        ($exception_anicroche(anicroche)?.specificites ?? []).includes(specificite)
+        $exception_anicroche(anicroche)?.specificites.includes(specificite) ?? false
 
     // Identifiants des anicroches de tous les types qui ont la spécificité
     $ids_specificite = (specificite) =>
-        Object.keys($app.types_anicroches ?? {}).flatMap(type => $exceptions_type(type)
-            .filter(exception => (exception.specificites ?? []).includes(specificite))
+        [ ...types_completes.keys() ].flatMap(type => $exceptions_type(type)
+            .filter(exception => exception.specificites.includes(specificite))
             .map(exception => exception.identifiant))
 
     $est_legale = (anicroche) => $a_specificite(anicroche, 'legalite')
@@ -126,7 +161,7 @@
     // ─── Titres ──────────────────────────────────────────────────────────────
 
     $role_titre = (type) =>
-        Object.entries($type_anicroche(type)?.sources ?? {}).find(([, source]) => source?.format === 'titre')?.[0] ?? null
+        $sources_type(type).find(source => source.format === 'titre')?.role ?? null
 
     // Titre des sources résolues d une version (voir $resoudre_sources) : sa source de titre,
     // sinon celle de l exception à sa création, sinon l identifiant
@@ -137,7 +172,7 @@
         const source  = Array.isArray(valeur) ? valeur[0] : valeur
         const contenu = String(source?.contenu ?? '').trim()
 
-        return contenu || (role && $exception_anicroche(anicroche)?.sources?.[role]) || anicroche.id
+        return contenu || (role && $exception_anicroche(anicroche)?.sources[role]) || anicroche.id
     }
 
     $titre_version = async (id_anicroche, numero) =>
@@ -207,7 +242,7 @@
 
         if (identifiant === 'libre')
         {
-            if (typeof $values.id !== 'string' || !MOTIF_LISIBLE.test($values.id) || $values.id.length > LONGUEUR_MAXIMALE)
+            if (!identifiant_lisible($values.id))
                 return $indicate(422, "Identifiant invalide")
 
             if (await $search_one('anicroche', `#id = $id`, { $id: $values.id }))
@@ -326,11 +361,12 @@
 
     // ─── Vérification au démarrage ───────────────────────────────────────────
 
+    // Signale les valeurs invalides, remplacées par leur valeur par défaut
     $verifier_types_anicroches = () =>
     {
         const types = $app.types_anicroches
 
-        if (!types || typeof types !== 'object' || !Object.keys(types).length)
+        if (!est_dictionnaire(types) || !Object.keys(types).length)
         {
             console.log("/!\\ app.adn : aucun type d'anicroche (types_anicroches)")
             return
@@ -339,28 +375,64 @@
         for (const [type, config] of Object.entries(types))
         {
             const avertir = (message) => console.log(`/!\\ app.adn : type ${type} : ${message}`)
-            const identifiant = config?.identifiant
 
-            if (identifiant !== 'libre' && !(Number.isInteger(identifiant) && identifiant > 0 && identifiant <= LONGUEUR_MAXIMALE))
-                avertir(`identifiant invalide (${identifiant}) : libre ou un nombre de 1 à ${LONGUEUR_MAXIMALE}`)
+            if (!est_dictionnaire(config))
+            {
+                avertir(`la configuration doit être un dictionnaire`)
+                continue
+            }
 
-            if (config?.auteurs !== undefined && typeof config.auteurs !== 'boolean')
+            const complet = $type_anicroche(type)
+
+            if (config.libelle !== undefined && typeof config.libelle !== 'string')
+                avertir(`libelle doit être un texte`)
+
+            if (config.identifiant !== undefined && !identifiant_valide(config.identifiant))
+                avertir(`identifiant invalide (${config.identifiant}) : libre ou un nombre de 1 à ${LONGUEUR_MAXIMALE}`)
+
+            if (config.auteurs !== undefined && typeof config.auteurs !== 'boolean')
                 avertir(`auteurs doit valoir :) ou :(`)
 
-            if (!Array.isArray(config?.administration))
+            if (config.administration !== undefined && !Array.isArray(config.administration))
                 avertir(`administration doit être une liste de rôles`)
 
-            if (config?.exceptions !== undefined && !Array.isArray(config.exceptions))
+            if (config.sources !== undefined && !est_dictionnaire(config.sources))
+                avertir(`sources doit être un dictionnaire`)
+
+            for (const [role, source] of Object.entries(est_dictionnaire(config.sources) ? config.sources : {}))
+            {
+                if (!est_dictionnaire(source))
+                {
+                    avertir(`source ${role} : la configuration doit être un dictionnaire`)
+                    continue
+                }
+
+                if (!$lire_nombre(source.nombre))
+                    avertir(`source ${role} : nombre invalide (${source.nombre})`)
+
+                if (source.libelle !== undefined && typeof source.libelle !== 'string')
+                    avertir(`source ${role} : libelle doit être un texte`)
+
+                if (source.format !== undefined && !FORMATS.includes(source.format))
+                    avertir(`source ${role} : format invalide (${source.format}) : ${FORMATS.join(', ')}`)
+            }
+
+            if (complet.sources.filter(source => source.format === 'titre').length > 1)
+                avertir(`une seule source peut avoir le format titre`)
+
+            if (config.exceptions !== undefined && !Array.isArray(config.exceptions))
                 avertir(`exceptions doit être une liste`)
 
-            if (config?.exceptions?.length && identifiant !== 'libre')
+            const exceptions = Array.isArray(config.exceptions) ? config.exceptions : []
+
+            if (exceptions.length && complet.identifiant !== 'libre')
                 avertir(`exceptions demande un identifiant libre`)
 
-            for (const exception of Array.isArray(config?.exceptions) ? config.exceptions : [])
+            for (const exception of exceptions)
             {
                 const id = exception?.identifiant
 
-                if (typeof id !== 'string' || !MOTIF_LISIBLE.test(id) || id.length > LONGUEUR_MAXIMALE)
+                if (!est_dictionnaire(exception) || !identifiant_lisible(id))
                 {
                     avertir(`exception : identifiant invalide (${id})`)
                     continue
@@ -369,34 +441,23 @@
                 const specificites = exception.specificites ?? []
                 if (!Array.isArray(specificites) || specificites.some(specificite => !SPECIFICITES.includes(specificite)))
                     avertir(`exception ${id} : specificites doit être une liste parmi ${SPECIFICITES.join(', ')}`)
-                else if (specificites.includes('acceptation') && !specificites.includes('preavis'))
+                if (Array.isArray(specificites) && specificites.includes('acceptation') && !specificites.includes('preavis'))
                     avertir(`exception ${id} : acceptation demande preavis`)
 
-                for (const [role, contenu] of Object.entries(exception.sources ?? {}))
+                if (exception.sources !== undefined && !est_dictionnaire(exception.sources))
+                    avertir(`exception ${id} : sources doit être un dictionnaire`)
+
+                for (const [role, contenu] of Object.entries(est_dictionnaire(exception.sources) ? exception.sources : {}))
                 {
-                    if (!Object.prototype.hasOwnProperty.call(config?.sources ?? {}, role))
+                    const source = complet.sources.find(source => source.role === role)
+
+                    if (!source)
                         avertir(`exception ${id} : rôle de source inconnu (${role})`)
                     else if (typeof contenu !== 'string')
                         avertir(`exception ${id} : la source ${role} doit être un texte`)
+                    else if (source.min < 1)
+                        avertir(`exception ${id} : la source ${role} n'est pas obligatoire, son contenu n'est jamais créé`)
                 }
-            }
-
-            if (Object.values(config?.sources ?? {}).filter(source => source?.format === 'titre').length > 1)
-                avertir(`une seule source peut avoir le format titre`)
-
-            if (typeof config?.libelle !== 'string')
-                avertir(`libelle manquant`)
-
-            for (const [role, source] of Object.entries(config?.sources ?? {}))
-            {
-                if (!$lire_nombre(source?.nombre))
-                    avertir(`source ${role} : nombre invalide (${source?.nombre})`)
-
-                if (typeof source?.libelle !== 'string')
-                    avertir(`source ${role} : libelle manquant`)
-
-                if (!FORMATS.includes(source?.format))
-                    avertir(`source ${role} : format invalide (${source?.format}) : ${FORMATS.join(', ')}`)
             }
         }
     }

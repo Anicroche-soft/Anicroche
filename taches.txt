@@ -1,5 +1,4 @@
 Tâches :
-- vérifier les valeurs par défaut des types d'anicroches
 - vérifier que l'accès a des données de tables liées à celle pour laquelle on fait la requête utilise bien le système de projection (si ce n'est pas le cas, l'ajouter dans la marche à suivre de Claude)
 - revoir l'organisation des pages d'anicroches
 - relire et compléter les premières versions des pages légales (juridique/conditions-generales-d-utilisation.md, juridique/politique-de-confidentialite.md, juridique/mentions-legales.md : passages « À compléter », adresse d'Infomaniak à vérifier), les publier avant le lancement, et ajouter des liens vers ces pages dans le site

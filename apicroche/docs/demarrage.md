@@ -44,7 +44,7 @@ port   : 5030
 L'application peut y ajouter ses propres clefs. Tout `app.adn` est disponible sous le nom `$app` dans les [scripts](scripts.md#variables-disponibles) et les [expressions augure](magasin.md#expressions-augure) (`rule`, `can_*`, `when`) :
 
 ```
-types : {
+types_anicroches : {
     article : {
         auteurs : :)
     }
@@ -52,7 +52,7 @@ types : {
 ```
 
 ```javascript
-$a_des_auteurs = (type) => $app.types?.[type]?.auteurs === true
+$a_des_auteurs = (type) => $app.types_anicroches?.[type]?.auteurs === true
 ```
 
 `app.adn` est lu au démarrage : une modification demande de relancer le serveur (en mode dev, nodemon le fait dès que le fichier change). Contrairement à celui d'avec.js, il n'est jamais envoyé au navigateur.

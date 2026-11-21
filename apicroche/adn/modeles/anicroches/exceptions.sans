@@ -18,9 +18,9 @@
     // Les exceptions des types d app.adn existent toujours
     $creer_exceptions = async () =>
     {
-        for (const [type, config] of Object.entries($app.types_anicroches ?? {}))
+        for (const type of Object.keys($app.types_anicroches ?? {}))
         {
-            if (config?.identifiant !== 'libre')
+            if ($type_anicroche(type).identifiant !== 'libre')
                 continue
 
             for (const id of $exceptions_type(type).map(exception => exception.identifiant))
