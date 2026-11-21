@@ -11,6 +11,92 @@
     // déconnecté, sauf la page du compte, qui affiche l effacement en cours
     $compte_actif = false
 
+    // Types d anicroches de l API (GET /types), gardés jusqu à l actualisation de la page :
+    // { <nom> : { libelle, identifiant, auteurs, administration, legalite, preavis, sources } }
+    $types_anicroches = {}
+
+    // Types rencontrés mais absents de l API même après rechargement : ils ne la font plus
+    // recharger jusqu à l actualisation de la page
+    const types_inconnus = new Set()
+
+    // Un seul chargement à la fois : les demandes simultanées attendent le même
+    let chargement_types = null
+
+    $charger_types_anicroches = () =>
+    {
+        chargement_types ??= (async () =>
+        {
+            const reponse = await $search('types')
+            if (!reponse.error && reponse.data && typeof reponse.data === 'object')
+                $types_anicroches = reponse.data
+            chargement_types = null
+            return !reponse.error
+        })()
+        return chargement_types
+    }
+
+    // Configuration d un type, ou null s il est inconnu. Un type absent fait recharger les types
+    // une fois : toujours absent, il est retenu comme inconnu (sauf si l API n a pas répondu)
+    $obtenir_type_anicroche = async (nom) =>
+    {
+        if (Object.hasOwn($types_anicroches, nom))
+            return $types_anicroches[nom]
+        if (types_inconnus.has(nom))
+            return null
+
+        const charge = await $charger_types_anicroches()
+
+        if (Object.hasOwn($types_anicroches, nom))
+            return $types_anicroches[nom]
+        if (charge)
+            types_inconnus.add(nom)
+        return null
+    }
+
+    // Version synchrone, pour les gabarits : le type doit déjà avoir été obtenu
+    $type_anicroche = (nom) => Object.hasOwn($types_anicroches, nom) ? $types_anicroches[nom] : null
+
+    // Le rôle est celui du profil sélectionné
+    $administre_type = (nom) => !!$profil && ($type_anicroche(nom)?.administration ?? []).includes($profil.role)
+
+    $est_legale = (anicroche) => ($type_anicroche(anicroche?.type)?.legalite ?? []).includes(anicroche?.id)
+
+    $soumise_au_preavis = (anicroche) => ($type_anicroche(anicroche?.type)?.preavis ?? []).includes(anicroche?.id)
+
+    // Versions programmées des anicroches soumises au préavis, d après les types :
+    // [{ id_anicroche, titre, numero, date_parution }]
+    $lire_versions_a_venir = async () =>
+    {
+        const ids = [ ...new Set(Object.values($types_anicroches).flatMap(type => type.preavis ?? [])) ]
+        const versions = []
+
+        for (const id of ids)
+        {
+            const reponse = await $search(`anicroche/${encodeURIComponent(id)}`)
+            const a_venir = reponse.code === 200 ? reponse.data?.a_venir : null
+            if (a_venir)
+                versions.push({ id_anicroche: id, titre: reponse.data.titre ?? id, ...a_venir })
+        }
+        return versions
+    }
+
+    // Sources d une version (telles que les renvoie l API : une source par rôle, ou une liste
+    // pour un rôle à plusieurs sources), dans l ordre des rôles du type puis des positions :
+    // [{ role, libelle, format, max, position, langue, region, version, contenu }]
+    $lister_sources_anicroche = (type, sources) =>
+        (type?.sources ?? []).flatMap(source =>
+        {
+            const valeur = sources?.[source.role]
+            const liste  = Array.isArray(valeur) ? valeur : valeur ? [ valeur ] : []
+            return liste.map(element => ({
+                role    : source.role,
+                libelle : source.libelle,
+                format  : source.format,
+                max     : source.max,
+                ...element
+            }))
+        })
+
     $add_action('prior_requested', async (options) =>
     {
         if ($jeton_acces)

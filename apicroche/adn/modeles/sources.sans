@@ -58,6 +58,7 @@
     }
 
     # PATCH /source/... { contenu } corrige une source, tant que sa version est un brouillon
+    # sans date de parution
     {
         name         : contenu
         type         : text
@@ -72,15 +73,21 @@
 ]
 
 @script [
-    // Le brouillon d une anicroche est sa dernière version, si elle n a pas de date de publication
-    const lire_brouillon = async (id_anicroche) =>
+    // Les sources d une anicroche ne se modifient que dans sa dernière version, si elle n a pas
+    // de date de parution : une version programmée doit d abord être déprogrammée
+    const exiger_version_modifiable = async (id_anicroche, numero, message) =>
     {
         const derniere = await $search_one('version',
             `#id_anicroche = $id`,
             { $id: id_anicroche },
             { order: 'numero', dir: 'desc' }
         )
-        return derniere && !derniere.date_publication ? derniere : null
+
+        if (!derniere || derniere.numero !== Number(numero) || $est_parue(derniere))
+            return $indicate(422, message)
+
+        if (derniere.date_parution)
+            return $indicate(422, "La parution de cette version est programmée : l'annuler pour la modifier")
     }
 
     $verifier_source = async ($values) =>
@@ -89,9 +96,7 @@
 
         await $verifier_role_source(anicroche, $values.role, $values.position)
 
-        const brouillon = await lire_brouillon($values.id_anicroche)
-        if (!brouillon || brouillon.numero !== Number($values.version))
-            return $indicate(422, "La version doit être le brouillon de l'anicroche")
+        await exiger_version_modifiable($values.id_anicroche, $values.version, "La version doit être le brouillon de l'anicroche")
 
         if ($values.position === undefined || $values.position === null)
             return
@@ -127,25 +132,23 @@
     {
         await $exiger_administration_anicroche($request.params.id_anicroche)
 
-        const brouillon = await lire_brouillon($request.params.id_anicroche)
-        if (!brouillon || brouillon.numero !== Number($request.params.version))
-            return $indicate(422, "Seule une source du brouillon peut être modifiée")
+        await exiger_version_modifiable($request.params.id_anicroche, $request.params.version, "Seule une source du brouillon peut être modifiée")
     }
 
     // La position est commune à toutes les versions : déplacer une source changerait l ordre
-    // d une version publiée, même programmée
+    // d une version parue ou programmée
     $verifier_deplacement_source = async ($request) =>
     {
         await $verifier_modification_source($request)
 
         const publiee = await $search_one('version',
             `
-            #id_anicroche     = $id
-          & #date_publication != null
+            #id_anicroche  = $id
+          & #date_parution != null
             `,
             { $id: $request.params.id_anicroche }
         )
         if (publiee)
-            return $indicate(422, "L'ordre des sources ne peut plus changer une fois une version publiée")
+            return $indicate(422, "L'ordre des sources ne peut plus changer une fois une version parue ou programmée")
     }
 ]

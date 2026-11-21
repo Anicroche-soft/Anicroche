@@ -149,6 +149,11 @@ const analyser_brin_adn = (str, adn) =>
     return (adn)
 }
 
+// Les éléments d'une liste ou d'un dictionnaire sont séparés par un retour à la ligne ou une
+// virgule ([ a, b ], { a : 1, b : 2 })
+const est_separateur = (str, pos) =>
+    str[pos] == '\n' || str[pos] == ','
+
 const analyser_bloc_adn = (str, type) =>
 {
     let adn
@@ -164,7 +169,7 @@ const analyser_bloc_adn = (str, type) =>
     {
         let dans_chaine = false
         let fin = debut
-        while (str[fin] != '\n' || blocs != '')
+        while (!est_separateur(str, fin) || blocs != '')
         {
             if (est_booleen(str, fin, dans_chaine))
                 fin++
@@ -210,7 +215,10 @@ const analyser_bloc_adn = (str, type) =>
             }
             fin++
         }
-        adn = analyser_brin_adn(str.substring(debut, fin + 1), adn)
+        let brin = str.substring(debut, fin + 1)
+        if (brin.slice(-1) == ',')
+            brin = brin.slice(0, -1)
+        adn = analyser_brin_adn(brin, adn)
         if (adn == "invalide")
             return ("invalide")
         debut = fin + 1;

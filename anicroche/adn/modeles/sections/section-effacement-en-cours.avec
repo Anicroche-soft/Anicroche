@@ -1,13 +1,33 @@
 @script [
     $erreur_annulation_effacement = false
 
+    // Versions des pages soumises au préavis parues ou programmées pendant l effacement : elles
+    // sont à accepter pour restaurer le compte (voir POST /restauration)
+    $conditions_effacement = []
+
     $date_effacement_en_cours = $compte?.date_effacement
         ? new Date($compte.date_effacement).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
         : ''
 
+    $charger_conditions_effacement = async () =>
+    {
+        const reponse = await $search('restauration')
+        if (!reponse.error)
+            $conditions_effacement = reponse.data?.conditions ?? []
+    }
+
+    // Les cases des conditions sont obligatoires : le formulaire n est envoyé que cochées
     $annuler_effacement = async () =>
     {
-        const reponse = await $create('restauration')
+        const reponse = await $create('restauration', { accepte_conditions: $conditions_effacement.length > 0 })
+
+        // Une version parue ou programmée depuis l affichage est à accepter à son tour
+        if (reponse.code === 412)
+        {
+            $conditions_effacement        = reponse.data?.conditions ?? []
+            $erreur_annulation_effacement = "Les conditions ont changé : acceptez leurs nouvelles versions"
+            return
+        }
 
         if (reponse.error)
         {
@@ -40,21 +60,27 @@
 
 section [effacement-en-cours, centree]
     <div hidden style="display: none" @mount="$aller_a_adresse_compte()">
+    <div hidden style="display: none" @mount="$charger_conditions_effacement()">
 
     titre [centre]
         "Votre compte va être effacé"
     carte
-        @if [$erreur_annulation_effacement]
-            erreur-formulaire
-                "$erreur_annulation_effacement"
-        <p>
-            "La suppression de votre compte a été demandée. Il sera supprimé définitivement le $date_effacement_en_cours, et il est suspendu d'ici là."
-        <p>
-            "Si vous avez changé d'avis, ou si vous n'êtes pas à l'origine de cette demande, vous pouvez encore restaurer votre compte. Pensez alors à changer votre mot de passe."
-        ligne
-            bouton-ancre [/compte/export]
-                "Export des données"
-            bouton-action [$annuler_effacement]
-                "Restauration"
-            bouton-action [$deconnecter_compte_effacement]
-                "Déconnexion"
+        formulaire [$annuler_effacement]
+            @if [$erreur_annulation_effacement]
+                erreur-formulaire
+                    "$erreur_annulation_effacement"
+            <p>
+                "La suppression de votre compte a été demandée. Il sera supprimé définitivement le $date_effacement_en_cours, et il est suspendu d'ici là."
+            <p>
+                "Si vous avez changé d'avis, ou si vous n'êtes pas à l'origine de cette demande, vous pouvez encore restaurer votre compte. Pensez alors à changer votre mot de passe."
+            @if [_ $conditions_effacement > 0]
+                information-formulaire
+                    "Des pages légales ont changé depuis votre demande : acceptez leurs nouvelles versions pour restaurer votre compte."
+                cases-conditions [$conditions_effacement]
+            ligne
+                bouton-ancre [/compte/export]
+                    "Export des données"
+                bouton-soumission
+                    "Restauration"
+                bouton-action [$deconnecter_compte_effacement]
+                    "Déconnexion"

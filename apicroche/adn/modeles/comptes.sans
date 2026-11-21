@@ -99,6 +99,11 @@
         name  : sessions
         count : 0-N
     }
+
+    {
+        name  : annonces
+        count : 0-N
+    }
 ]
 
 @rules [
@@ -284,6 +289,10 @@
             await $delete_one('compte', `#id = $compte.id`, { $compte: compte })
             throw erreur
         }
+
+        // Pendant un préavis, l étape des conditions annonce aussi les versions à venir : le
+        // nouveau compte ne reçoit pas leur courriel
+        await $enregistrer_annonces(compte.id, await $versions_programmees(), 'inscription')
 
         return $indicate(201, "Inscription réussie")
     }

@@ -489,30 +489,44 @@
         await $creer_sources_obligatoires(anicroche)
     }
 
+    // Les anicroches légales (clef legalite des types d app.adn) existent toujours
     $creer_pages_obligatoires = async () =>
     {
-        const pages = [ 'conditions-generales-d-utilisation', 'mentions-legales', 'politique-de-confidentialite' ]
-
-        for (const id of pages)
+        for (const [type, config] of Object.entries($app.types_anicroches ?? {}))
         {
-            const existante = await $search_one('anicroche', `#id = $id`, { $id: id })
-            if (!existante)
-            {
-                await $create_one('anicroche', { id, type: 'page' })
-                console.log(`  PAGE   ${id} créée`)
-            }
+            if (config?.identifiant !== 'libre' || !Array.isArray(config?.legalite))
+                continue
 
-            // Aussi pour une page créée avant cette règle
-            await $initialiser_anicroche({ id, type: 'page' })
+            for (const id of config.legalite)
+            {
+                const existante = await $search_one('anicroche', `#id = $id`, { $id: id })
+                if (!existante)
+                {
+                    await $create_one('anicroche', { id, type })
+                    console.log(`  ${type.toUpperCase().padEnd(6)} ${id} créée`)
+                }
+                else if (existante.type !== type)
+                {
+                    console.log(`/!\\ app.adn : ${id} est déclarée légale pour le type ${type}, mais elle est de type ${existante.type}`)
+                    continue
+                }
+
+                // Aussi pour une anicroche créée avant cette règle
+                await $initialiser_anicroche({ id, type })
+            }
         }
     }
 
-    // Version publiée la plus récente dont la date est passée
+    // Une version est parue quand sa date de parution est passée
+    $est_parue = (version) =>
+        !!version?.date_parution && new Date(version.date_parution) <= new Date()
+
+    // Version parue la plus récente, quel que soit son accès
     $version_en_vigueur = async (id_anicroche) =>
         await $search_one('version',
             `
-            #id_anicroche     = $id_anicroche
-          & #date_publication <= now
+            #id_anicroche  = $id_anicroche
+          & #date_parution <= now
             `,
             { $id_anicroche: id_anicroche },
             { order: 'numero', dir: 'desc' }

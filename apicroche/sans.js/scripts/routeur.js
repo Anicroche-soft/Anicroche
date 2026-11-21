@@ -311,14 +311,20 @@ const parser_cookies = (cookie_header) =>
     return cookies
 }
 
-const construire_request = (req) => ({
-    ip: lire_ip(req),
-    user_agent: req.headers['user-agent'] ?? null,
-    path: new URL(req.url, 'http://localhost').pathname,
-    headers: req.headers,
-    cookies: parser_cookies(req.headers.cookie),
-    params: req.params ?? {}
-})
+const construire_request = (req) =>
+{
+    const url = new URL(req.url, 'http://localhost')
+
+    return {
+        ip         : lire_ip(req),
+        user_agent : req.headers['user-agent'] ?? null,
+        path       : url.pathname,
+        query      : Object.fromEntries(url.searchParams),
+        headers    : req.headers,
+        cookies    : parser_cookies(req.headers.cookie),
+        params     : req.params ?? {}
+    }
+}
 
 // ─── JWT & Cookies ────────────────────────────────────────────────────────────
 

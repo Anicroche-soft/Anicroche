@@ -131,12 +131,20 @@
         $basculer_vers_onglet_suivant()
     }
 
-    $envoyer_formulaire_inscription = () =>
+    // Pendant un préavis, l étape des conditions annonce les versions à venir : l API les note
+    // comme annoncées au nouveau compte
+    $envoyer_formulaire_inscription = async () =>
     {
-        const data = new FormData($node)
+        const noeud = $node
+        const data  = new FormData(noeud)
         $mot_de_passe_formulaire = data.get('mot_de_passe')
         $erreur_conditions = false
-        $basculer_vers_onglet_suivant()
+
+        $versions_a_venir_inscription = (await $lire_versions_a_venir()).map(version => ({
+            texte : `Une nouvelle version de la page « ${version.titre} » s'appliquera à votre compte à partir du ${$formater_date(version.date_parution)}. `,
+            lien  : `/${version.id_anicroche}?version=${version.numero}`
+        }))
+        $basculer_vers_onglet_suivant(noeud)
     }
 
     $envoyer_formulaire_conditions = async () =>
@@ -340,6 +348,12 @@
                     lien-ancre [/politique-de-confidentialite, $nouvel_onglet : :)]
                         "politique de confidentialité"
                     "."
+                @for-each [$version] of [$versions_a_venir_inscription]
+                    information-formulaire
+                        "$version.texte"
+                        lien-ancre [$version.lien, $nouvel_onglet : :)]
+                            "Consulter cette version"
+                        "."
                 ligne
                     bouton-action [$revenir_a_l_etape_precedente]
                         icone-fleche-gauche

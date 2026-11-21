@@ -2,14 +2,21 @@ nom          : Apicroche
 langue       : fr
 cors_headers : [ X-Profil ]
 
+courriels_annonces_par_jour : 100
+
 types_anicroches : {
     page : {
+        libelle        : Page
         identifiant    : libre
         auteurs        : :(
         administration : [ maitre ]
+        legalite       : [ conditions-generales-d-utilisation, politique-de-confidentialite, mentions-legales ]
+        preavis        : [ conditions-generales-d-utilisation, politique-de-confidentialite ]
         sources        : {
             contenu : {
-                nombre : 1-1
+                libelle : Contenu
+                format  : texte-long
+                nombre  : 1-1
             }
         }
     }

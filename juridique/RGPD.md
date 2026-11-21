@@ -32,7 +32,7 @@ En tant qu'éditeur non professionnel, la loi pour la confiance dans l'économie
 | Finalité | Créer un compte, se connecter (mot de passe ou code envoyé par courriel), maintenir la session |
 | Base légale | Exécution du contrat (CGU) — art. 6.1.b |
 | Personnes concernées | Utilisateurs inscrits, et personnes qui demandent un code sans terminer l'inscription |
-| Données | Adresses électroniques, cinq au plus, dont une principale (chiffrées AES-256-GCM + empreinte HMAC, avec leur date d'ajout) ; mot de passe (haché Argon2id) ; date d'inscription ; date d'acceptation des conditions d'utilisation (preuve de l'acceptation, voir § 11) ; date de dernière activité, avertissements d'inactivité envoyés, date de demande d'effacement (voir § 4) ; date du dernier changement d'adresse principale (voir § 4.1) ; codes de connexion et de confirmation (hachés, valables 15 min, voir § 9) |
+| Données | Adresses électroniques, cinq au plus, dont une principale (chiffrées AES-256-GCM + empreinte HMAC, avec leur date d'ajout) ; mot de passe (haché Argon2id) ; date d'inscription ; date d'acceptation des conditions d'utilisation (preuve de l'acceptation, voir § 11) ; annonces des nouvelles versions des pages soumises au préavis (page, version, moyen et date : preuve de l'information, voir § 11) ; date de dernière activité, avertissements d'inactivité envoyés, date de demande d'effacement (voir § 4) ; date du dernier changement d'adresse principale (voir § 4.1) ; codes de connexion et de confirmation (hachés, valables 15 min, voir § 9) |
 | Destinataires | L'éditeur ; l'hébergeur ; le prestataire d'envoi de courriels (adresse et code) |
 | Durée de conservation | Compte : jusqu'à son effacement (30 jours après la demande), ou 3 ans après la dernière activité (voir § 4). Codes : 15 min de validité, supprimés au plus tard le lendemain (`$nettoyer_clefs`) |
 
@@ -135,6 +135,7 @@ Avant d'ajouter un nouveau prestataire qui reçoit des données personnelles : v
 | Compte inactif | 3 ans après la dernière activité (requête authentifiée, notée au plus une fois par jour), avec au moins 30 jours de préavis : courriels 1 an, 6 mois, 3 mois, 1 mois, 2 semaines, 1 semaine et 1 jour avant | `$traiter_fins_de_comptes` (`effacement.sans`), voir § 4.1 |
 | Compte dont l'effacement est demandé | Suspendu dès la demande, effacé 30 jours après (rappels 14, 7, 3 et 1 jours avant) ; disparition des sauvegardes au bout de leur durée de rotation | `$traiter_fins_de_comptes` (`effacement.sans`), voir § 4.1 |
 | Versions publiées des pages légales | Sans limite : elles prouvent ce que chaque utilisateur a accepté | Voir § 11 |
+| Annonces des nouvelles versions | Jusqu'à l'effacement du compte | Table `annonces`, effacée avec le compte (`effacement.sans`), voir § 11 |
 | Sauvegardes | Celle d'Infomaniak (**À noter** : durée indiquée dans le Manager) | Voir § 7 |
 | Journaux du serveur | **À compléter** | Voir § 2.6 |
 
@@ -153,7 +154,7 @@ Avant d'ajouter un nouveau prestataire qui reçoit des données personnelles : v
 - les comptes gérants d'un profil `maitre` (liste `ROLES_PROTEGES` d'`effacement.sans`) : comptes d'administration du service ;
 - les comptes dont `date_conservation` est dans le futur : champ renseigné à la main en cas de litige, de réquisition judiciaire, de somme due ou de solde restant (relation contractuelle en cours, art. 17.3.b et e). Le motif est noté dans le registre des demandes (§ 9).
 
-**Ce qui est effacé** : le compte, ses coordonnées, ses sessions et ses codes. Pour un profil que le compte gérait avec d'autres, seul le lien de gérance disparaît. Pour un profil dont il était le seul gérant :
+**Ce qui est effacé** : le compte, ses coordonnées, ses sessions, ses codes et ses annonces. Pour un profil que le compte gérait avec d'autres, seul le lien de gérance disparaît. Pour un profil dont il était le seul gérant :
 
 | Choix | Effet |
 |---|---|
@@ -290,21 +291,21 @@ Une analyse d'impact (AIPD) n'est pas nécessaire aujourd'hui. Elle le deviendra
 
 ## 11. Pages légales et preuve d'acceptation des conditions
 
-Les conditions d'utilisation, la politique de confidentialité et les mentions légales (brouillons dans ce dossier) sont des anicroches de type `page` (`conditions-generales-d-utilisation`, `politique-de-confidentialite`, `mentions-legales`), créées automatiquement au démarrage de l'API. Leur texte est versionné : chaque publication crée une version datée, et le site affiche toujours la version en vigueur (la plus récente dont la date de publication est passée).
+Les conditions d'utilisation, la politique de confidentialité et les mentions légales (brouillons dans ce dossier) sont des anicroches de type `page` (`conditions-generales-d-utilisation`, `politique-de-confidentialite`, `mentions-legales`), déclarées légales par la clef `legalite` de `types_anicroches` dans `apicroche/adn/app.adn` et créées automatiquement au démarrage de l'API. Leur texte est versionné : chaque publication crée une version datée, et le site affiche à l'adresse `/<identifiant>` la version en vigueur (la plus récente dont la date de parution est passée) ; `/<identifiant>?version=<numero>` affiche une version précise, parue ou à venir ; sous le texte, l'historique liste la version à venir et toutes les versions parues qui ne sont pas privées, chacune avec son lien.
 
 **Preuve de l'acceptation.** À l'inscription, l'utilisateur coche la case des conditions d'utilisation ; l'API enregistre alors la date (`comptes.date_acceptation_conditions`). La version acceptée est celle qui était en vigueur à cette date. Pour que cette preuve tienne :
 
-- **une version publiée n'est jamais modifiée ni supprimée** : une correction passe par une nouvelle version ;
-- **une version n'est jamais publiée avec une date passée** (l'API le refuse), car elle changerait après coup ce que les utilisateurs ont accepté ;
+- **une version parue n'est jamais modifiée ni supprimée** : une correction passe par une nouvelle version ; seul son accès peut changer ; une version parue ou programmée d'une page légale est toujours publique (l'API refuse un autre accès) ;
+- **une version n'est jamais programmée à une date passée** (l'API le refuse), car elle changerait après coup ce que les utilisateurs ont accepté ;
 - **une page légale n'est jamais supprimée** : la base l'empêche de toute façon tant qu'elle a des versions.
 
-**Publier une page.** Le plus simple est la page d'édition du site, `/<identifiant>/edition` (par exemple `/conditions-generales-d-utilisation/edition`), réservée aux profils de rôle `maitre` : elle crée, enregistre, publie ou supprime un brouillon. Elle s'appuie sur les routes automatiques de l'API :
+**Publier une page.** Le plus simple est la page d'édition du site, `/<identifiant>/edition` (par exemple `/conditions-generales-d-utilisation/edition`), réservée aux profils de rôle `maitre` : elle crée, enregistre, publie immédiatement, programme ou supprime un brouillon, annule une parution programmée et règle l'accès de la version. Elle s'appuie sur les routes automatiques de l'API :
 
 1. `POST /version { id_anicroche }` ouvre un brouillon et renvoie son `numero` (une anicroche naît avec le brouillon de sa version 1 : cette étape ne sert qu'aux versions suivantes) ;
-2. `POST /source { id_anicroche, role : contenu, position : 1, version, langue, region, contenu }` y dépose le texte (`PATCH /source/<id_anicroche>/contenu/1/<version>/<langue>/<region> { contenu }` le corrige tant que la version n'est pas publiée ; une langue ou une région vide s'écrit `-`) ;
-3. `PATCH /version/<id_anicroche>/<numero> { date_publication }` publie le brouillon, immédiatement (`"now"`) ou à une date future.
+2. `POST /source { id_anicroche, role : contenu, position : 1, version, langue, region, contenu }` y dépose le texte (`PATCH /source/<id_anicroche>/contenu/1/<version>/<langue>/<region> { contenu }` le corrige tant que la version n'a pas de date de parution ; une langue ou une région vide s'écrit `-`) ;
+3. `PATCH /version/<id_anicroche>/<numero> { date_parution }` publie le brouillon, immédiatement (`"now"`) ou à une date future ; `{ date_parution : null }` annule une parution programmée, qui redevient modifiable, sauf pour les pages soumises au préavis (clef `preavis` de `types_anicroches` dans `apicroche/adn/app.adn` : les conditions d'utilisation et la politique de confidentialité), qui ne paraissent qu'immédiatement (correction mineure) ou au moins 30 jours plus tard (modification de fond), et dont la parution programmée ne peut être ni annulée ni déplacée (une erreur se corrige directement en base).
 
-Le brouillon reste invisible jusqu'à sa publication. Dans une nouvelle version, seules les sources qui changent sont à déposer : les autres restent celles des versions précédentes.
+L'accès d'une version (`PATCH /version/<id_anicroche>/<numero> { acces }`) décide qui la voit : `prive` (seulement les gérants de la page : profils maîtres, et auteurs pour un type qui en a ; valeur d'un nouveau brouillon), `partage` (toute personne qui a le lien, sans que la page apparaisse dans les listes) ou `public`. Pendant un préavis, la version programmée est rendue publique : le site l'annonce alors sur la page (« Une nouvelle version entrera en vigueur le … ») et sur la version elle-même (« Cette nouvelle version entrera en vigueur le … »), avec un lien de l'une vers l'autre. Dans une nouvelle version, seules les sources qui changent sont à déposer : les autres restent celles des versions précédentes.
 
 **Avant le lancement.** En production, l'inscription est refusée (`503`) tant qu'aucune version des conditions d'utilisation n'est publiée : publier les trois pages avant d'ouvrir le service.
 
@@ -312,11 +313,16 @@ Le brouillon reste invisible jusqu'à sa publication. Dans une nouvelle version,
 
 - **Correction mineure** (faute, reformulation sans effet sur les droits et obligations) : nouvelle version publiée sans annonce.
 - **Modification de fond** :
-  1. publier la nouvelle version à une date future, au moins 30 jours plus tard ;
-  2. pendant ce préavis, l'annoncer par courriel à tous les comptes et par une notification dans le site, avec la date d'entrée en vigueur, un lien vers la nouvelle version et le rappel que le compte peut être supprimé ;
+  1. programmer la nouvelle version à une date future, avec l'accès `public` : l'API exige au moins 30 jours de préavis après le dernier courriel d'annonce, soit 30 jours plus le temps d'envoi estimé (nombre de comptes à prévenir divisé par le quota journalier des annonces), et indique la date minimale ;
+  2. pendant ce préavis, l'annonce part par courriel à tous les comptes, sauf ceux dont l'effacement est en cours (voir ci-dessous) : la tâche `$envoyer_annonces` (`preavis.sans`) envoie chaque heure un lot de courriels à l'adresse principale, un seul par compte si plusieurs pages changent, avec le lien vers chaque nouvelle version, sa date d'entrée en vigueur, et l'explication qu'en continuant à utiliser le service on l'accepte, le compte pouvant être supprimé d'ici là. Le quota journalier est la clef `courriels_annonces_par_jour` d'`app.adn` (100 par défaut), une part du quota de la messagerie (Service Mail d'Infomaniak : 200 ou 500 courriels par 24 heures glissantes selon l'offre, partagés avec les autres courriels du service). La page elle-même affiche aussi la version à venir ;
   3. à cette date, la nouvelle version s'applique à tous les comptes qui continuent d'utiliser le service.
 
-La preuve de l'acceptation d'une version postérieure à l'inscription tient alors à l'annonce : il faut pouvoir montrer qu'elle a été faite, à quelle date et à qui (courriels envoyés). **À développer** : marquage des versions à annoncer, envoi des courriels par lots et notification.
+**Preuve de l'annonce.** La preuve de l'acceptation d'une version postérieure à l'inscription tient à l'annonce : la table `annonces` enregistre, pour chaque compte, la page, la version, le moyen et la date. Une annonce n'est enregistrée qu'après l'envoi réussi du courriel, ce qui permet aussi de reprendre un envoi interrompu sans doublon. Les autres moyens sont :
+
+- `inscription` : un compte créé pendant un préavis voit la version à venir à l'étape des conditions, et ne reçoit donc pas le courriel ;
+- `restauration` : un compte dont l'effacement était en cours n'a pas reçu les annonces. S'il ne connaît pas la version en vigueur d'une page soumise au préavis (parue après sa dernière acceptation des conditions, et jamais annoncée) ou sa version programmée, sa restauration (`POST /restauration`, sur la page du compte ou par le lien du courriel) exige qu'il coche une case par version ; sa date d'acceptation des conditions passe alors à la date de restauration, et chaque version est notée comme annoncée.
+
+Une version est donc connue d'un compte si elle a paru au plus tard à sa date d'acceptation des conditions, ou si elle lui a été annoncée. Les pages n'ayant pas encore de titre, ceux des pages légales utilisés dans les courriels et à la restauration sont écrits dans `preavis.sans`.
 
 Une modification de la politique de confidentialité qui change l'usage des données s'annonce de la même façon. Un nouvel usage fondé sur le consentement demande un consentement distinct, jamais déduit de l'usage du service.
 

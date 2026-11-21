@@ -1,0 +1,36 @@
+@name [ annonces, annonce ]
+
+# Preuve qu une version d une anicroche soumise au préavis a été présentée à un compte : par
+# courriel pendant le préavis, à l inscription, ou à la restauration d un compte dont
+# l effacement était en cours (voir preavis.sans). Les annonces sont effacées avec le compte
+@primary [ id_compte, id_anicroche, version ]
+
+@fields [
+    {
+        name : id_compte
+        type : char
+        size : 12
+    }
+
+    {
+        name : id_anicroche
+        type : char
+        size : 1-48
+    }
+
+    {
+        name : version
+        type : int
+    }
+
+    {
+        name : moyen
+        type : courriel/inscription/restauration
+    }
+
+    {
+        name    : date_annonce
+        type    : datetime
+        default : now
+    }
+]

@@ -1,16 +1,33 @@
 # Types d anicroches, décrits dans la clef types_anicroches d app.adn. Chaque propriété d un
 # type déclenche une possibilité du script général des anicroches :
+# - libelle        : nom du type affiché par le site (« Page ») ;
 # - identifiant    : libre (choisi à la création, en minuscules) ou un nombre (clef
 #                    automatique de ce nombre de caractères A-Z0-9) ;
 # - auteurs        : :) si les anicroches du type ont des profils auteurs ;
 # - administration : rôles de profil qui ont tous les droits sur les anicroches du type ;
-# - sources        : rôles des sources, chacun avec son nombre de sources (0-1, 1-1, 1-N…),
-#                    rangées par position ; les sources obligatoires sont créées vides avec
-#                    l anicroche.
+# - sources        : rôles des sources, chacun avec son libellé, son format (voir FORMATS) et
+#                    son nombre de sources (0-1, 1-1, 1-N…), rangées par position ; les sources
+#                    obligatoires sont créées vides avec l anicroche ;
+# - legalite       : identifiants des anicroches légales, créées au démarrage (le type doit
+#                    avoir un identifiant libre), dont une version parue ou programmée est
+#                    toujours publique ;
+# - preavis        : identifiants des anicroches qui paraissent immédiatement (correction
+#                    mineure) ou au moins 30 jours plus tard (modification de fond), et dont la
+#                    parution programmée ne peut être ni annulée ni déplacée.
 
 @actions [
     {
         prior_run : $verifier_types_anicroches()
+    }
+]
+
+# GET /types donne la configuration de tous les types, la même pour tous : le site la garde en
+# mémoire jusqu à son actualisation
+@routes [
+    {
+        path   : /types
+        method : get
+        action : $obtenir_types()
     }
 ]
 
@@ -19,6 +36,9 @@
     const MOTIF_LISIBLE     = /^(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/
     const CARACTERES_CLEF   = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
     const LONGUEUR_MAXIMALE = 48
+
+    // Formats de source : ils décident du champ d édition et de l affichage dans le site
+    const FORMATS = [ 'texte', 'texte-long' ]
 
     $type_anicroche = (type) =>
         Object.prototype.hasOwnProperty.call($app.types_anicroches ?? {}, type)
@@ -43,6 +63,42 @@
 
     $a_des_auteurs = (type) => $type_anicroche(type)?.auteurs === true
 
+    // Configuration complétée de ses valeurs par défaut ; un maximum illimité (N) vaut null
+    const decrire_type = (nom, config) => ({
+        libelle        : config?.libelle ?? nom,
+        identifiant    : config?.identifiant,
+        auteurs        : config?.auteurs === true,
+        administration : config?.administration ?? [],
+        legalite       : config?.legalite ?? [],
+        preavis        : config?.preavis ?? [],
+        sources        : Object.entries(config?.sources ?? {}).map(([role, source]) =>
+        {
+            const nombre = $lire_nombre(source?.nombre)
+            return {
+                role,
+                libelle : source?.libelle ?? role,
+                format  : source?.format ?? 'texte',
+                min     : nombre?.min ?? 0,
+                max     : nombre && Number.isFinite(nombre.max) ? nombre.max : null
+            }
+        })
+    })
+
+    $obtenir_types = () =>
+    {
+        const types = {}
+        for (const [nom, config] of Object.entries($app.types_anicroches ?? {}))
+            types[nom] = decrire_type(nom, config)
+
+        return $indicate(200, 'Types récupérés', types)
+    }
+
+    $est_legale = (anicroche) =>
+        ($type_anicroche(anicroche.type)?.legalite ?? []).includes(anicroche.id)
+
+    $soumise_au_preavis = (anicroche) =>
+        ($type_anicroche(anicroche.type)?.preavis ?? []).includes(anicroche.id)
+
     // ─── Droits ──────────────────────────────────────────────────────────────
 
     // Le rôle est celui du profil sélectionné
@@ -55,6 +111,24 @@
 
         if (!$administre_type(type))
             return $indicate(403, 'Accès refusé')
+    }
+
+    // Les profils qui administrent le type d une anicroche et ses auteurs la gèrent : ils voient
+    // toutes ses versions, brouillons compris
+    $gere_anicroche = async (anicroche) =>
+    {
+        if ($administre_type(anicroche.type))
+            return true
+        if (!$context.profil || !$a_des_auteurs(anicroche.type))
+            return false
+
+        return !!await $search_one('auteur_anicroche',
+            `
+            #id_anicroche = $id
+          & #id_profil    = $id_profil
+            `,
+            { $id: anicroche.id, $id_profil: $context.profil.id }
+        )
     }
 
     // Renvoie l anicroche, après avoir vérifié que le profil administre son type
@@ -141,8 +215,8 @@
     {
         const brouillon = await $search_one('version',
             `
-            #id_anicroche     = $id
-          & #date_publication = null
+            #id_anicroche  = $id
+          & #date_parution = null
             `,
             { $id: anicroche.id },
             { order: 'numero', dir: 'desc' }
@@ -223,10 +297,28 @@
             if (!Array.isArray(config?.administration))
                 avertir(`administration doit être une liste de rôles`)
 
+            for (const clef of [ 'legalite', 'preavis' ])
+            {
+                if (config?.[clef] !== undefined && !(Array.isArray(config[clef]) && config[clef].every(id => typeof id === 'string')))
+                    avertir(`${clef} doit être une liste d'identifiants`)
+            }
+
+            if (config?.legalite?.length && identifiant !== 'libre')
+                avertir(`legalite demande un identifiant libre`)
+
+            if (typeof config?.libelle !== 'string')
+                avertir(`libelle manquant`)
+
             for (const [role, source] of Object.entries(config?.sources ?? {}))
             {
                 if (!$lire_nombre(source?.nombre))
                     avertir(`source ${role} : nombre invalide (${source?.nombre})`)
+
+                if (typeof source?.libelle !== 'string')
+                    avertir(`source ${role} : libelle manquant`)
+
+                if (!FORMATS.includes(source?.format))
+                    avertir(`source ${role} : format invalide (${source?.format}) : ${FORMATS.join(', ')}`)
             }
         }
     }

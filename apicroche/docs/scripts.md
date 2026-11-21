@@ -42,6 +42,7 @@ Le bloc `@script` d'un modèle contient du JavaScript. Les fonctions déclarées
 | `ip` | Adresse IP du client. Si la connexion vient d'un mandataire de confiance (variable `trusted_proxies`), c'est la dernière adresse de `X-Forwarded-For`, celle ajoutée par le mandataire inverse ; sinon, l'adresse de la connexion |
 | `user_agent` | En-tête `User-Agent` |
 | `path` | Chemin de l'URL |
+| `query` | Paramètres de la chaîne de requête (`{ version: '2' }` pour `?version=2`), toujours sous forme de texte. Une clef répétée garde sa dernière valeur |
 | `headers` | En-têtes de la requête |
 | `cookies` | Cookies de la requête (`{ nom: valeur }`) |
 | `params` | Valeurs des [captures](routes.md#chemins-et-captures) `<$nom>` du chemin de la route |

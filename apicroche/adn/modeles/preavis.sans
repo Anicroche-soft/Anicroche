@@ -1,0 +1,212 @@
+# Préavis des anicroches de la clef preavis des types (voir types.sans) : une version programmée
+# est une modification de fond, annoncée à chaque compte avant sa parution (voir RGPD.md § 11).
+# Une version est connue d un compte s il l a acceptée (version parue au plus tard à la date
+# d acceptation des conditions) ou si elle lui a été annoncée (table annonces)
+
+@actions [
+    {
+        periodically : $envoyer_annonces()
+        period       : 1h
+    }
+]
+
+@script [
+    // Part du quota d envoi de la messagerie (par 24 heures glissantes : 200 ou 500 courriels
+    // selon l offre Service Mail d Infomaniak) réservée aux annonces : clef
+    // courriels_annonces_par_jour d app.adn, 100 par défaut
+    const quota_annonces = () =>
+    {
+        const quota = Number($app.courriels_annonces_par_jour)
+        return Number.isInteger(quota) && quota > 0 ? quota : 100
+    }
+
+    // Les pages légales n ont pas encore de source de titre
+    const TITRES = {
+        'conditions-generales-d-utilisation' : "Conditions générales d'utilisation",
+        'politique-de-confidentialite'       : "Politique de confidentialité",
+        'mentions-legales'                   : "Mentions légales"
+    }
+
+    $titre_anicroche = (id) => TITRES[id] ?? id
+
+    const ids_preavis = () =>
+        Object.values($app.types_anicroches ?? {}).flatMap(config => config?.preavis ?? [])
+
+    // Versions programmées des anicroches soumises au préavis
+    $versions_programmees = async () =>
+    {
+        const programmees = []
+        for (const id of ids_preavis())
+        {
+            const derniere = await $search_one('version',
+                `#id_anicroche = $id`,
+                { $id: id },
+                { order: 'numero', dir: 'desc' }
+            )
+            if (derniere?.date_parution && !$est_parue(derniere))
+                programmees.push(derniere)
+        }
+        return programmees
+    }
+
+    const decrire = (version, a_venir) => ({
+        id_anicroche  : version.id_anicroche,
+        titre         : $titre_anicroche(version.id_anicroche),
+        numero        : version.numero,
+        date_parution : version.date_parution,
+        a_venir
+    })
+
+    // Versions en vigueur et programmées que le compte ne connaît pas encore :
+    // [{ id_anicroche, titre, numero, date_parution, a_venir }]
+    $versions_a_presenter = async (compte) =>
+    {
+        const annonces = await $search_all('annonces', `#id_compte = $id`, { $id: compte.id })
+        const annoncee = (version) => annonces.some(annonce =>
+            annonce.id_anicroche === version.id_anicroche && annonce.version === version.numero)
+        const acceptation = compte.date_acceptation_conditions ? new Date(compte.date_acceptation_conditions) : null
+
+        const versions = []
+        for (const id of ids_preavis())
+        {
+            const en_vigueur = await $version_en_vigueur(id)
+            const acceptee   = acceptation && en_vigueur && new Date(en_vigueur.date_parution) <= acceptation
+            if (en_vigueur && !acceptee && !annoncee(en_vigueur))
+                versions.push(decrire(en_vigueur, false))
+        }
+
+        for (const version of await $versions_programmees())
+            if (!annoncee(version))
+                versions.push(decrire(version, true))
+
+        return versions
+    }
+
+    // Une annonce déjà enregistrée garde son moyen et sa date
+    $enregistrer_annonces = async (id_compte, versions, moyen) =>
+    {
+        for (const version of versions)
+        {
+            const valeurs = {
+                $id_compte    : id_compte,
+                $id_anicroche : version.id_anicroche,
+                $version      : version.numero
+            }
+            const existante = await $search_one('annonce',
+                `
+                #id_compte    = $id_compte
+              & #id_anicroche = $id_anicroche
+              & #version      = $version
+                `,
+                valeurs
+            )
+            if (!existante)
+                await $create_one('annonce', {
+                    id_compte    : id_compte,
+                    id_anicroche : version.id_anicroche,
+                    version      : version.numero,
+                    moyen
+                })
+        }
+    }
+
+    // Comptes à prévenir : tous, sauf ceux dont l effacement est en cours
+    const lire_comptes_a_prevenir = async () =>
+        await $search_all('comptes',
+            `#date_demande_effacement = null`,
+            {},
+            { select: 'id ; date_acceptation_conditions', order: 'id' }
+        )
+
+    // Jours d envoi nécessaires pour prévenir tous les comptes avec le quota des annonces
+    $jours_envoi_annonces = async () =>
+        Math.ceil((await lire_comptes_a_prevenir()).length / quota_annonces())
+
+    const formater_date = (date) => new Date(date).toLocaleDateString('fr-FR', {
+        day      : 'numeric',
+        month    : 'long',
+        year     : 'numeric',
+        timeZone : 'Europe/Paris'
+    })
+
+    const rediger_annonce = (versions) =>
+    {
+        const lignes = versions.map(version =>
+            `<li><a href="${process.env.app_url ?? ''}/${version.id_anicroche}?version=${version.numero}">${version.titre}</a>, `
+          + `applicable à partir du ${formater_date(version.date_parution)}</li>`
+        ).join('')
+
+        return `<p>Nous mettons à jour les documents suivants :</p>`
+             + `<ul>${lignes}</ul>`
+             + `<p>En continuant à utiliser Anicroche après leur entrée en vigueur, vous acceptez ces nouvelles versions. `
+             + `Si vous ne les acceptez pas, vous pouvez supprimer votre compte d'ici là, depuis la page de votre compte.</p>`
+    }
+
+    // Toutes les heures, un lot de comptes reçoit l annonce des versions programmées qu ils ne
+    // connaissent pas, en un seul courriel à leur adresse principale. L annonce n est enregistrée
+    // qu après l envoi : un envoi interrompu reprend sans doublon. Un échec arrête le lot (quota
+    // de la messagerie atteint, serveur indisponible…)
+    $envoyer_annonces = async () =>
+    {
+        const programmees = (await $versions_programmees()).map(version => decrire(version, true))
+        if (!programmees.length)
+            return
+
+        // Comptes qui ont déjà l annonce de chaque version programmée
+        const prevenus = new Map()
+        for (const version of programmees)
+        {
+            const annonces = await $search_all('annonces',
+                `
+                #id_anicroche = $id
+              & #version      = $numero
+                `,
+                { $id: version.id_anicroche, $numero: version.numero }
+            )
+            prevenus.set(version, new Set(annonces.map(annonce => annonce.id_compte)))
+        }
+
+        let reste = Math.ceil(quota_annonces() / 24)
+
+        for (const compte of await lire_comptes_a_prevenir())
+        {
+            if (reste <= 0)
+                break
+
+            const versions = programmees.filter(version => !prevenus.get(version).has(compte.id))
+            if (!versions.length)
+                continue
+
+            const principale = await $search_one('coordonnee',
+                `
+                #id_compte = $id
+              & #est_principale
+                `,
+                { $id: compte.id }
+            )
+            if (!principale)
+                continue
+
+            try
+            {
+                await $send_email({
+                    to      : principale.coordonnee,
+                    subject : "Mise à jour des conditions d'Anicroche",
+                    content : rediger_annonce(versions)
+                })
+            }
+            catch (erreur)
+            {
+                console.log(`/!\\ annonce non envoyée : ${erreur.message}`)
+                return
+            }
+
+            await $enregistrer_annonces(compte.id, versions, 'courriel')
+            reste--
+        }
+
+        const envoyees = Math.ceil(quota_annonces() / 24) - reste
+        if (envoyees)
+            console.log(`  ANNONCES ${envoyees} envoyée(s)`)
+    }
+]

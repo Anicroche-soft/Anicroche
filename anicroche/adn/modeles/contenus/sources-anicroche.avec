@@ -1,0 +1,17 @@
+@style [
+    .sources-anicroche > .source-texte {
+        white-space: pre-line;
+    }
+]
+
+# Sources d une anicroche, listées par $lister_sources_anicroche : chacune s affiche selon
+# son format (texte ou texte-long)
+@args [$sources]
+
+<div .sources-anicroche>
+    @for-each [$source] of [$sources]
+        @if [$source.format = 'texte-long']
+            texte-mis-en-forme [$source.contenu]
+        @else
+            <p .source-texte>
+                "$source.contenu"

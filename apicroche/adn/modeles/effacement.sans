@@ -26,8 +26,19 @@
         action : $demander_effacement($body)
     }
 
+    # Versions des pages soumises au préavis à accepter pour restaurer le compte connecté dont
+    # l effacement est demandé
+    {
+        path   : /restauration
+        method : get
+        action : $consulter_restauration()
+    }
+
     # Restaure le compte : avec le jeton du lien d un courriel d effacement ou d inactivité,
-    # sans connexion, ou sans jeton pour le compte connecté dont l effacement est demandé
+    # sans connexion, ou sans jeton pour le compte connecté dont l effacement est demandé.
+    # Un compte dont l effacement est annulé n a pas reçu les annonces : s il ne connaît pas
+    # une version en vigueur ou à venir d une page soumise au préavis, la réponse est 412 avec
+    # ces versions ({ conditions }), jusqu à ce que le corps contienne accepte_conditions : true
     {
         path   : /restauration
         action : $restaurer_compte($body)
@@ -261,6 +272,7 @@
 
         // Les liens de gérance des profils partagés sont supprimés avec le compte
         await $delete_all('sessions', `#id_compte = $id`, { $id: compte.id })
+        await $delete_all('annonces', `#id_compte = $id`, { $id: compte.id })
         if (adresses.length)
             await $delete_all('clefs', `#hachage_coordonnee -{ $adresses`, { $adresses: adresses })
         await $delete_all('coordonnees', `#id_compte = $id`, { $id: compte.id })
@@ -420,17 +432,50 @@
         return $indicate(200, "Effacement demandé", { date_effacement })
     }
 
-    // Corps : { jeton }, lu dans le lien d un courriel, ou vide pour le compte connecté
+    const lire_compte = async (id) => await $search_one('compte', `#id = $id`, { $id: id })
+
+    $consulter_restauration = async () =>
+    {
+        await $exiger_compte({ effacement_demande: true })
+
+        const compte = await lire_compte($context.compte.id)
+        if (!compte.date_demande_effacement)
+            return $indicate(409, "Aucun effacement en cours", { motif: 'effacement' })
+
+        return $indicate(200, "Conditions de la restauration", { conditions: await $versions_a_presenter(compte) })
+    }
+
+    // Les versions inconnues du compte doivent être acceptées avant l annulation : la date
+    // d acceptation des conditions passe à maintenant, et chacune est notée comme annoncée
+    const annuler_avec_conditions = async (compte, accepte) =>
+    {
+        const conditions = await $versions_a_presenter(compte)
+
+        if (conditions.length && accepte !== true)
+            return $indicate(412, "Acceptation des conditions requise", { motif: 'effacement', conditions })
+
+        await annuler(compte)
+
+        if (!conditions.length)
+            return
+
+        await $update_one('compte', `#id = $id`, { date_acceptation_conditions: 'now' }, { $id: compte.id })
+        await $enregistrer_annonces(compte.id, conditions, 'restauration')
+    }
+
+    // Corps : { jeton, accepte_conditions }, le jeton étant lu dans le lien d un courriel ou
+    // absent pour le compte connecté
     $restaurer_compte = async ($body) =>
     {
         if ($body.jeton === undefined)
         {
             await $exiger_compte({ effacement_demande: true })
 
-            if (!$context.compte.date_demande_effacement)
+            const compte = await lire_compte($context.compte.id)
+            if (!compte.date_demande_effacement)
                 return $indicate(409, "Aucun effacement en cours", { motif: 'effacement' })
 
-            await annuler($context.compte)
+            await annuler_avec_conditions(compte, $body.accepte_conditions)
 
             return $indicate(200, "Effacement annulé", { motif: 'effacement' })
         }
@@ -452,7 +497,7 @@
             if (demande === null || demande !== payload.demande)
                 return $indicate(409, "Aucun effacement en cours", { motif: 'effacement' })
 
-            await annuler(compte)
+            await annuler_avec_conditions(compte, $body.accepte_conditions)
 
             return $indicate(200, "Effacement annulé", { motif: 'effacement' })
         }

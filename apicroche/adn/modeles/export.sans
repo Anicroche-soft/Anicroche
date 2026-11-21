@@ -1,5 +1,6 @@
 # Export des données du compte connecté (RGPD art. 15 et 20), y compris pendant l effacement
-# demandé : le compte, ses adresses, ses sessions, les profils qu il gère et leurs anicroches.
+# demandé : le compte, ses adresses, ses sessions, les annonces des pages soumises au préavis
+# qu il a reçues, les profils qu il gère et leurs anicroches.
 # Les empreintes, les clefs et les identifiants internes en sont exclus, comme les autres
 # gérants d un profil partagé (données d autres personnes).
 
@@ -50,6 +51,18 @@
             date_revocation   : session.date_revocation
         }))
 
+    const lire_annonces = async (id_compte) =>
+        (await $search_all('annonces',
+            `#id_compte = $id`,
+            { $id: id_compte },
+            { order: 'date_annonce' }
+        )).map(annonce => ({
+            anicroche    : annonce.id_anicroche,
+            version      : annonce.version,
+            moyen        : annonce.moyen,
+            date_annonce : annonce.date_annonce
+        }))
+
     const lire_anicroches = async (id_profil) =>
     {
         const anicroches = []
@@ -75,8 +88,9 @@
                 id       : anicroche.id,
                 type     : anicroche.type,
                 versions : versions.map(version => ({
-                    numero           : version.numero,
-                    date_publication : version.date_publication
+                    numero        : version.numero,
+                    date_parution : version.date_parution,
+                    acces         : version.acces
                 })),
                 sources  : sources.map(source => ({
                     role     : source.role,
@@ -135,6 +149,7 @@
                 coordonnees     : await lire_coordonnees(id_compte)
             },
             sessions    : await lire_sessions(id_compte),
+            annonces    : await lire_annonces(id_compte),
             profils     : await lire_profils(id_compte)
         }
 

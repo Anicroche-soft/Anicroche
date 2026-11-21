@@ -2,6 +2,9 @@
 
 @primary [ id_anicroche, numero ]
 
+# Une version est un brouillon tant qu elle n est pas parue : sans date de parution, ou avec
+# une parution programmée. Ses sources ne se modifient que sans date de parution : une
+# version programmée doit d abord être déprogrammée
 @fields [
     # POST /version { id_anicroche } crée le brouillon suivant de l anicroche
     {
@@ -18,27 +21,43 @@
         type : int
     }
 
-    # PATCH /version/<$id_anicroche>/<$numero> { date_publication } publie le brouillon :
-    # maintenant ("now") ou à une date future
+    # PATCH /version/<$id_anicroche>/<$numero> { date_parution } fait paraître le brouillon
+    # maintenant ("now") ou le programme à une date future ; null annule une parution
+    # programmée, sauf pour une anicroche soumise au préavis (voir types.sans)
     {
-        name         : date_publication
+        name         : date_parution
         type         : datetime
         count        : 0-1
         can_update   : ':)'
-        prior_update : "$verifier_publication($values, $request)"
+        prior_update : "$verifier_parution($values, $request)"
+    }
+
+    # PATCH /version/<$id_anicroche>/<$numero> { acces }, parue ou non :
+    # - prive   : seuls les gérants de l anicroche la voient (voir $gere_anicroche) ;
+    # - partage : visible de quiconque demande l anicroche, mais absente des listes ;
+    # - public  : visible de tous, et listée.
+    # Une version datée (parue ou programmée) d une anicroche légale est toujours publique :
+    # la version en vigueur et celle qui est annoncée doivent pouvoir être lues
+    {
+        name       : acces
+        type       : prive/partage/public
+        default    : prive
+        can_update : ':)'
     }
 ]
 
-# Une version publiée ne change plus : seul un brouillon peut être modifié ou supprimé
-# (DELETE /version/<$id_anicroche>/<$numero> supprime le brouillon et ses sources)
+# DELETE /version/<$id_anicroche>/<$numero> supprime un brouillon non programmé et ses sources
 @rules [
-    restrict_update : "#date_publication = null"
+    prior_update    : "$verifier_modification_version($values, $request)"
     can_delete      : "$context.compte"
-    restrict_delete : "#date_publication = null"
+    restrict_delete : "#date_parution = null"
     prior_delete    : $supprimer_sources_brouillon($values)
 ]
 
 @script [
+    const MARGE         = 60 * 1000
+    const JOURS_PREAVIS = 30
+
     $preparer_brouillon = async ($values) =>
     {
         await $exiger_administration_anicroche($values.id_anicroche)
@@ -49,7 +68,7 @@
             { order: 'numero', dir: 'desc' }
         )
 
-        if (derniere && !derniere.date_publication)
+        if (derniere && !$est_parue(derniere))
             return $indicate(409, "Un brouillon existe déjà", { numero: derniere.numero })
 
         $values.numero = (derniere?.numero ?? 0) + 1
@@ -73,29 +92,81 @@
         $add_to_data('numero', $values.numero)
     }
 
-    $verifier_publication = async ($values, $request) =>
+    // L état de la version après la modification est vérifié : la date et l accès peuvent
+    // changer ensemble
+    $verifier_modification_version = async ($values, $request) =>
     {
         const anicroche = await $exiger_administration_anicroche($request.params.id_anicroche)
-
-        if (!('date_publication' in $values))
+        if (!$est_legale(anicroche))
             return
 
-        // Une date passée réécrirait l historique : les acceptations des conditions déjà
-        // enregistrées désigneraient une autre version. Une minute de marge couvre le délai
-        // de la requête ; "now" publie immédiatement
-        if ($values.date_publication !== 'now')
+        const version = await $search_one('version',
+            `
+            #id_anicroche = $id
+          & #numero       = $numero
+            `,
+            { $id: anicroche.id, $numero: Number($request.params.numero) }
+        )
+        const date  = 'date_parution' in $values ? $values.date_parution : version?.date_parution
+        const acces = $values.acces ?? version?.acces
+
+        if (date && acces !== 'public')
+            return $indicate(422, "Cette page est légale : une version parue ou programmée doit être publique")
+    }
+
+    $verifier_parution = async ($values, $request) =>
+    {
+        const anicroche = await $exiger_administration_anicroche($request.params.id_anicroche)
+        const numero    = Number($request.params.numero)
+        const version   = await $search_one('version',
+            `
+            #id_anicroche = $id
+          & #numero       = $numero
+            `,
+            { $id: anicroche.id, $numero: numero }
+        )
+
+        // Une version parue ne change plus de date : les acceptations des conditions déjà
+        // enregistrées désigneraient une autre version
+        if ($est_parue(version))
+            return $indicate(422, "Une version parue ne peut plus changer de date")
+
+        // Le préavis annoncé doit être tenu : une erreur se corrige directement en base
+        if (version?.date_parution && $soumise_au_preavis(anicroche))
+            return $indicate(422, "La parution programmée d'une page soumise au préavis ne peut être ni annulée ni déplacée")
+
+        if ($values.date_parution === null)
+            return
+
+        // Une minute de marge couvre le délai de la requête ; "now" fait paraître immédiatement
+        if ($values.date_parution !== 'now')
         {
-            const date = new Date($values.date_publication)
+            const date = new Date($values.date_parution)
 
             if (Number.isNaN(date.getTime()))
-                return $indicate(422, "Date de publication invalide")
+                return $indicate(422, "Date de parution invalide")
 
-            if (date < new Date(Date.now() - 60 * 1000))
-                return $indicate(422, "La date de publication ne peut pas être passée")
+            if (date < new Date(Date.now() - MARGE))
+                return $indicate(422, "La date de parution ne peut pas être passée")
 
-            $values.date_publication = date
+            // Une page soumise au préavis paraît immédiatement (correction mineure) ou après un
+            // préavis d au moins 30 jours (modification de fond), compté à partir du dernier
+            // courriel d annonce : les jours d envoi, selon le quota, s y ajoutent
+            if ($soumise_au_preavis(anicroche))
+            {
+                const jours   = JOURS_PREAVIS + await $jours_envoi_annonces()
+                const minimum = new Date(Date.now() + jours * 24 * 60 * 60 * 1000)
+
+                if (date < new Date(minimum.getTime() - MARGE))
+                    return $indicate(422,
+                        `Cette page est soumise au préavis : elle paraît immédiatement (correction mineure) ou au plus tôt le ${minimum.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' })} (modification de fond : ${JOURS_PREAVIS} jours de préavis après l'envoi des annonces)`,
+                        { date_minimale: minimum }
+                    )
+            }
+
+            $values.date_parution = date
         }
 
-        await $verifier_sources_publiables(anicroche, Number($request.params.numero))
+        await $verifier_sources_publiables(anicroche, numero)
     }
 ]

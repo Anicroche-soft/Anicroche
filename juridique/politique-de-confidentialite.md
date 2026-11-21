@@ -12,7 +12,7 @@ Pour toute question ou demande sur vos données : **À compléter** (adresse de 
 
 | Usage | Données | Fondement |
 |---|---|---|
-| Créer votre compte et vous connecter | Adresses électroniques (cinq au plus), mot de passe, codes de connexion et de confirmation, date d'inscription, date d'acceptation des conditions d'utilisation | Exécution du contrat (les conditions d'utilisation) |
+| Créer votre compte et vous connecter | Adresses électroniques (cinq au plus), mot de passe, codes de connexion et de confirmation, date d'inscription, date d'acceptation des conditions d'utilisation, annonces des nouvelles versions des conditions et de cette politique (date et moyen : courriel, inscription ou restauration du compte) | Exécution du contrat (les conditions d'utilisation) |
 | Sécuriser votre compte et limiter les abus | Adresse IP, navigateur et appareil utilisés, dates de vos sessions | Intérêt légitime : la sécurité du service |
 | Vérifier votre âge | Date de naissance | Obligation légale (âge minimum de 15 ans) et protection des mineurs |
 | Faire vivre vos profils | Identifiant, pseudonyme, date de création, contenus publiés | Exécution du contrat |

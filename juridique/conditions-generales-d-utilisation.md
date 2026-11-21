@@ -10,7 +10,7 @@ Anicroche est un service gratuit de création et de divertissement. Les présent
 
 L'inscription suppose d'accepter ces conditions : la date de cette acceptation est enregistrée avec le compte. La version acceptée est celle qui était en vigueur à cette date.
 
-Les conditions peuvent évoluer. Chaque version est datée et reste consultable. Une modification de fond est annoncée à chaque utilisateur, par courriel et dans le site, au moins 30 jours avant son entrée en vigueur. L'utilisateur qui refuse la nouvelle version peut supprimer son compte avant cette date ; s'il continue d'utiliser le service après, il est réputé l'accepter. Les corrections qui ne changent ni ses droits ni ses obligations s'appliquent sans annonce.
+Les conditions peuvent évoluer. Chaque version est datée et reste consultable. Une modification de fond est annoncée à chaque utilisateur, par courriel et dans le site, au moins 30 jours avant son entrée en vigueur. L'utilisateur qui refuse la nouvelle version peut supprimer son compte avant cette date ; s'il continue d'utiliser le service après, il est réputé l'accepter. Les corrections qui ne changent ni ses droits ni ses obligations s'appliquent sans annonce. Un compte dont la suppression a été demandée ne reçoit pas ces annonces : pour le restaurer, l'utilisateur doit accepter les versions parues ou annoncées depuis sa demande.
 
 ## 3. Inscription et compte
 

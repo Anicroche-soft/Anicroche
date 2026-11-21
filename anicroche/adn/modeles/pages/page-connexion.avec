@@ -15,6 +15,9 @@
     $succes_clef         = false
     $erreur_clef         = false
     $erreur_conditions   = false
+
+    // Versions à venir des pages soumises au préavis, annoncées à l étape des conditions
+    $versions_a_venir_inscription = []
 ]
 
 page [:(, $authentification : interdite]

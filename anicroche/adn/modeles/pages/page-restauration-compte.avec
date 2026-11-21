@@ -1,4 +1,26 @@
-page [:(, $authentification : ouverte]
+@script [
+    // attente, invalide, effacement_annule ou restaure
+    $etat_restauration   = 'attente'
+    $erreur_restauration = false
+    $erreur_conditions_restauration = false
+
+    // Versions à accepter avant la restauration (réponse 412 de l API) : elles ajoutent un
+    // onglet entre la demande et la confirmation
+    $conditions_restauration = []
+
+    // Le jeton est dans le fragment de l'adresse, que le navigateur n'envoie pas au serveur.
+    // Il est retiré de l'adresse dès le chargement (historique, favoris, partage) et n'est
+    // utilisé qu'au clic : un analyseur de liens qui ouvre la page ne restaure rien
+    $jeton_restauration = String($hash ?? '').replace(/^#/, '')
+
+    if (location.hash)
+        history.replaceState(history.state, '', location.pathname + location.search)
+
+    if (!$jeton_restauration)
+        $etat_restauration = 'invalide'
+]
+
+page [$authentification : ouverte]
     navigation
         <div .gauche>
 
@@ -10,4 +32,14 @@ page [:(, $authentification : ouverte]
             icone-horloge
 
     onglet
-        section-restauration-compte
+        section-restauration-compte [demande]
+
+    onglet
+        @if [_ $conditions_restauration > 0]
+            section-restauration-compte [conditions]
+        @else
+            section-restauration-compte [confirmation]
+
+    onglet
+        @if [_ $conditions_restauration > 0]
+            section-restauration-compte [confirmation]

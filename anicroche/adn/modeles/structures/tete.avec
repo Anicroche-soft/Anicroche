@@ -9,7 +9,7 @@
             )
         )
 
-        await $obtenir_compte()
+        await Promise.all([ $obtenir_compte(), $charger_types_anicroches() ])
         $phase = 'navigation'
     }
 ]

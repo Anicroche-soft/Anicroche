@@ -1,79 +1,138 @@
 @script [
-    $etat_restauration   = 'attente'
-    $erreur_restauration = false
-
-    // Le jeton est dans le fragment de l'adresse, que le navigateur n'envoie pas au serveur.
-    // Il est retiré de l'adresse dès le chargement (historique, favoris, partage) et n'est
-    // utilisé qu'au clic : un analyseur de liens qui ouvre la page ne restaure rien
-    const jeton = String($hash ?? '').replace(/^#/, '')
-
-    if (location.hash)
-        history.replaceState(history.state, '', location.pathname + location.search)
-
-    if (!jeton)
-        $etat_restauration = 'invalide'
-
-    $restaurer_compte = async () =>
+    // Envoie la demande ; renvoie vrai si le compte est restauré. Les erreurs sont affichées
+    // dans l onglet de la demande ou dans celui des conditions
+    const restaurer = async (accepte_conditions) =>
     {
-        const reponse = await $create('restauration', { jeton })
+        const reponse = await $create('restauration', { jeton: $jeton_restauration, accepte_conditions })
+
+        // Le compte ne connaît pas les dernières versions des conditions : elles sont à accepter
+        if (reponse.code === 412)
+        {
+            $conditions_restauration = reponse.data?.conditions ?? []
+            return false
+        }
 
         // Jeton invalide ou expiré, effacement déjà annulé, compte disparu : la connexion
         // reste le moyen de restaurer le compte
         if ([403, 404, 409].includes(reponse.code))
         {
             $etat_restauration = 'invalide'
-            return
+            return false
         }
 
         if (reponse.error)
         {
             $erreur_restauration = reponse.error ?? "Erreur serveur"
-            return
+            return false
         }
 
         $etat_restauration = reponse.data?.motif === 'effacement' ? 'effacement_annule' : 'restaure'
+        return true
+    }
+
+    // Restauré, le compte passe à la confirmation ; avec des conditions à accepter, il passe à
+    // l onglet qui les présente
+    $demander_restauration = async () =>
+    {
+        const noeud = $node
+
+        $erreur_restauration = false
+        const restaure = await restaurer(false)
+
+        if (restaure || $conditions_restauration.length)
+            requestAnimationFrame(() => $basculer_vers_onglet_suivant(noeud))
+    }
+
+    // Les cases sont obligatoires : le formulaire n est envoyé que cochées
+    $envoyer_formulaire_conditions_restauration = async () =>
+    {
+        const noeud = $node
+
+        $erreur_conditions_restauration = false
+        const nombre = $conditions_restauration.length
+
+        if (await restaurer(true))
+            return $basculer_vers_onglet_suivant(noeud)
+
+        // Une version est apparue entre-temps, ou la demande a échoué
+        if ($etat_restauration === 'invalide')
+            $basculer_vers_onglet_precedant(noeud)
+        else
+            $erreur_conditions_restauration = $conditions_restauration.length !== nombre
+                ? "Les conditions ont changé : acceptez leurs nouvelles versions"
+                : $erreur_restauration
+    }
+
+    $revenir_a_la_demande_restauration = () =>
+    {
+        $basculer_vers_onglet_precedant()
     }
 ]
 
-section [restauration-compte, centree]
-    @if [$etat_restauration = invalide]
-        titre [centre]
-            "Connectez-vous pour restaurer votre compte"
-        carte
-            bouton-ancre [/connexion]
-                "Connexion"
+@args [$etape]
 
-    @else-if [$etat_restauration = effacement_annule]
-        titre [centre]
-            "Désinscription annulée"
-        carte
-            succes-formulaire
-                "Votre compte est restauré : il est de nouveau actif."
-            <p>
-                "Si vous n'êtes pas à l'origine de la demande de suppression, changez votre mot de passe."
-            ligne
+@if [$etape = demande]
+    section [restauration-compte, centree]
+        @if [$etat_restauration = invalide]
+            titre [centre]
+                "Connectez-vous pour restaurer votre compte"
+            carte
                 bouton-ancre [/connexion]
                     "Connexion"
 
-    @else-if [$etat_restauration = restaure]
-        titre [centre]
-            "Compte restauré"
-        carte
-            succes-formulaire
-                "Votre compte est restauré : merci !"
-            ligne
-                bouton-ancre [/]
-                    "Accueil"
+        @else
+            titre [centre]
+                "Restaurer votre compte"
+            carte
+                @if [$erreur_restauration]
+                    erreur-formulaire
+                        "$erreur_restauration"
+                <p>
+                    "Votre compte Anicroche doit être supprimé prochainement. Pour le restaurer, il suffit de confirmer ici, sans vous connecter."
+                ligne
+                    bouton-action [$demander_restauration]
+                        "Restauration"
 
-    @else
+@else-if [$etape = conditions]
+    section [restauration-conditions, centree]
         titre [centre]
-            "Restaurer votre compte"
+            "Acceptez les nouvelles conditions"
         carte
-            @if [$erreur_restauration]
-                erreur-formulaire
-                    "$erreur_restauration"
-            <p>
-                "Votre compte Anicroche doit être supprimé prochainement. Pour le restaurer, il suffit de confirmer ici, sans vous connecter."
-            ligne
-                bouton-action [$restaurer_compte]
-                    "Restauration"
+            formulaire [$envoyer_formulaire_conditions_restauration]
+                @if [$erreur_conditions_restauration]
+                    erreur-formulaire
+                        "$erreur_conditions_restauration"
+                information-formulaire
+                    "Des pages légales ont changé depuis la demande de suppression : acceptez leurs nouvelles versions pour restaurer votre compte."
+                cases-conditions [$conditions_restauration]
+                ligne
+                    bouton-action [$revenir_a_la_demande_restauration]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+                    bouton-soumission
+                        "Restauration"
+
+@else-if [$etape = confirmation]
+    section [restauration-confirmation, centree]
+        @if [$etat_restauration = effacement_annule]
+            titre [centre]
+                "Désinscription annulée"
+            carte
+                succes-formulaire
+                    "Votre compte est restauré : il est de nouveau actif."
+                <p>
+                    "Si vous n'êtes pas à l'origine de la demande de suppression, changez votre mot de passe."
+                ligne
+                    bouton-ancre [/connexion]
+                        "Connexion"
+
+        @else-if [$etat_restauration = restaure]
+            titre [centre]
+                "Compte restauré"
+            carte
+                succes-formulaire
+                    "Votre compte est restauré : merci !"
+                ligne
+                    bouton-ancre [/]
+                        "Accueil"

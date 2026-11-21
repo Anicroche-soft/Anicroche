@@ -1,14 +1,16 @@
 Tâches :
+- ajouter un bouton de création de nouveau profil
+- réorganiser les modèles de tables de l'API dans divers dossiers
+- gérer la transition entre deux mêmes pages qui contiennent une valeur (id) différente
+- vérifier les valeurs par défaut des types d'anicroches
+- vérifier que l'accès a des données de tables liées à celle pour laquelle on fait la requête utilise bien le système de projection (si ce n'est pas le cas, l'ajouter dans la marche à suivre de Claude)
+- revoir l'organisation des pages d'Anicroches
 - relire et compléter les premières versions des pages légales (juridique/conditions-generales-d-utilisation.md, juridique/politique-de-confidentialite.md, juridique/mentions-legales.md : passages « À compléter », adresse d'Infomaniak à vérifier), les publier avant le lancement, et ajouter des liens vers ces pages dans le site
-- mettre en place le préavis des pages légales (voir juridique/RGPD.md § 11) :
-    - principe : acceptation tacite, sans nouvelle validation par l'utilisateur ; une modification de fond s'applique 30 jours au moins après son annonce, l'utilisateur qui la refuse pouvant supprimer son compte d'ici là ; une correction mineure se publie sans annonce
-    - pages concernées : les conditions générales d'utilisation et la politique de confidentialité (pour un changement de l'usage des données), pas les mentions légales, qui doivent être exactes à tout moment ; toutes restent du type `page`, et la configuration du type (types_anicroches d'app.adn) indique les identifiants exceptionnels soumis au préavis
-    - publication : choix entre modification de fond et correction mineure pour ces pages, date de publication refusée à moins de 30 jours pour une modification de fond ; publication à une date future depuis la page d'édition (aujourd'hui uniquement immédiate) ; possibilité d'annuler ou de repousser une publication programmée, aujourd'hui verrouillée
-    - lecture : afficher la version à venir pendant le préavis (« nouvelle version applicable le … »), et l'historique des versions de chaque page légale, que les textes promettent consultable
-    - annonce : courriel à tous les comptes (à décider : comptes dont l'effacement est en cours), envoyé par lots par une tâche périodique (taille calée sur les limites SMTP d'Infomaniak), un seul courriel si plusieurs pages changent ensemble ; notification dans le site pendant le préavis (boîte de notifications, ou bandeau provisoire)
-    - preuve : trace des envois (date de la dernière version annoncée sur le compte, ou table des annonces), qui sert aussi à reprendre un envoi interrompu sans doublon
-    - inscription pendant un préavis : annoncer aussi la version à venir au nouveau compte
-- lecture des types d'anicroches par le site : exposer types_anicroches de l'API (route GET /types par exemple), puis faire lire à la page d'édition `administration` et `sources` au lieu de vérifier en dur le rôle `maitre` et le type `page` (sans génération automatique du site selon le type)
+- finir le préavis des pages légales (voir juridique/RGPD.md § 11, l'essentiel est fait) :
+    - tester avec un compte maître : programmation (date minimale de 30 jours plus le temps d'envoi), envoi horaire des annonces (preavis.sans), annonce à l'inscription, acceptation à la restauration (page /compte et lien du courriel)
+    - régler courriels_annonces_par_jour (app.adn, 100 par défaut) selon l'offre Service Mail (200 ou 500 courriels par 24 heures)
+    - zone de publication propre aux pages soumises au préavis, avec un bouton « Enregistrer en tant que correction » et un bouton « Enregistrer en tant que mise à jour »
+    - plus tard : avis des versions à venir dans tout le site (avec la boîte de notifications), et une source de titre pour les pages, qui remplacera les titres écrits dans preavis.sans
 - compléter juridique/RGPD.md :
     - adresse de contact RGPD (§ 1)
     - référence et date du contrat de sous-traitance (DPA) d'Infomaniak, couvrant serveur, base et courriels (§ 3)
