@@ -56,33 +56,46 @@
         vars.chronometre = chronometre
     }
 
+    // Avec $depart (date de la dernière action, en millisecondes), le délai court depuis cette
+    // date : revenir sur l onglet sans nouvelle action ne le relance pas
+    const restant = (vars) =>
+    {
+        if (!vars.depart)
+            return vars.delai
+        const date = vars.depart()
+        if (!date)
+            return 0
+        return Math.max(0, vars.delai - Math.floor((Date.now() - date) / 1000))
+    }
+
     // Dans un formulaire en étapes, tous les onglets sont montés dès l ouverture de la page :
     // le compte à rebours démarre donc quand l onglet du lien devient actif (l étape est
-    // atteinte, la clef vient d être envoyée), et redémarre à chaque fois qu il le redevient
-    $monter_lien_action = ($delai) =>
+    // atteinte, la clef vient d être envoyée)
+    $monter_lien_action = ($delai, $depart) =>
     {
         const noeud = $node
         const vars  = $vars
         const delai = Math.max(0, Math.floor(Number($delai) || 0))
 
-        vars.delai = delai
+        vars.delai  = delai
+        vars.depart = typeof $depart === 'function' ? $depart : null
 
         const onglet = noeud.closest('.onglet')
         if (!onglet || delai <= 0)
         {
-            demarrer_compte_a_rebours(delai, noeud, vars)
+            demarrer_compte_a_rebours(restant(vars), noeud, vars)
             return
         }
 
         let etait_actif = onglet.classList.contains('actif')
         if (etait_actif)
-            demarrer_compte_a_rebours(delai, noeud, vars)
+            demarrer_compte_a_rebours(restant(vars), noeud, vars)
 
         vars.observateur_onglet = new MutationObserver(() =>
         {
             const actif = onglet.classList.contains('actif')
             if (actif && !etait_actif)
-                demarrer_compte_a_rebours(delai, noeud, vars)
+                demarrer_compte_a_rebours(restant(vars), noeud, vars)
             etait_actif = actif
         })
         vars.observateur_onglet.observe(onglet, { attributes: true, attributeFilter: ['class'] })
@@ -112,9 +125,7 @@
         await $fonction()
 
         if (vars.delai > 0)
-        {
-            demarrer_compte_a_rebours(vars.delai, noeud, vars)
-        }
+            demarrer_compte_a_rebours(restant(vars), noeud, vars)
     }
 ]
 
@@ -124,6 +135,8 @@
         width: fit-content;
 
         text-decoration: underline transparent;
+
+        --c-flux: var(--c-vif);
 
         transition: text-decoration-color var(--d-animation);
     }
@@ -141,12 +154,13 @@
 @args [
     $fonction
     $delai : :(
+    $depart : :(
 ]
 
 <button
     .lien-action
     type="button"
-    @mount="$monter_lien_action($delai)"
+    @mount="$monter_lien_action($delai, $depart)"
     @unmount="$demonter_lien_action()"
     @click="$clic_lien_action()"
 >

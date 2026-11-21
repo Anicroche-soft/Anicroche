@@ -220,6 +220,13 @@ const valider_bloc_avec = (bloc, str, pos, fichier) =>
             if (bloc.enfants.length <= 0)
                 erreur(`${bloc.args[0]} doit avoir au moins un enfant`, fichier, str, pos)
         }
+        else if (bloc.args[0] == `@key`)
+        {
+            if (bloc.args.length != 2)
+                erreur(`${bloc.args[0]} doit avoir un argument : ${bloc.args[0]} [valeur]`, fichier, str, pos)
+            if (bloc.enfants.length <= 0)
+                erreur(`${bloc.args[0]} doit avoir au moins un enfant`, fichier, str, pos)
+        }
         else if (bloc.args[0] == `@static`)
         {
             if (bloc.args.length != 1)

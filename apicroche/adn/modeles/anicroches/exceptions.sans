@@ -1,0 +1,45 @@
+@actions [
+    {
+        prior_run : $creer_exceptions()
+    }
+]
+
+@script [
+    // Toute anicroche naît avec le brouillon de sa première version et ses sources obligatoires
+    $initialiser_anicroche = async (anicroche) =>
+    {
+        const version = await $search_one('version', `#id_anicroche = $id`, { $id: anicroche.id })
+        if (!version)
+            await $create_one('version', { id_anicroche: anicroche.id, numero: 1 })
+
+        await $creer_sources_obligatoires(anicroche)
+    }
+
+    // Les exceptions des types d app.adn existent toujours
+    $creer_exceptions = async () =>
+    {
+        for (const [type, config] of Object.entries($app.types_anicroches ?? {}))
+        {
+            if (config?.identifiant !== 'libre')
+                continue
+
+            for (const id of $exceptions_type(type).map(exception => exception.identifiant))
+            {
+                const existante = await $search_one('anicroche', `#id = $id`, { $id: id })
+                if (!existante)
+                {
+                    await $create_one('anicroche', { id, type })
+                    console.log(`  ${type.toUpperCase().padEnd(6)} ${id} créée`)
+                }
+                else if (existante.type !== type)
+                {
+                    console.log(`/!\\ app.adn : ${id} est une exception du type ${type}, mais elle est de type ${existante.type}`)
+                    continue
+                }
+
+                // Aussi pour une anicroche créée avant cette règle
+                await $initialiser_anicroche({ id, type })
+            }
+        }
+    }
+]

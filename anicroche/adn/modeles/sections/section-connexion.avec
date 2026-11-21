@@ -17,11 +17,13 @@
 
             if (deja_envoyee || !reponse.error)
             {
-                if (reponse)
-                    $ids.push(reponse.data.id)
                 $courriel_formulaire = data.get('courriel')
+                if (reponse)
+                {
+                    $ids.push(reponse.data.id)
+                    $courriels_clefs.set($courriel_formulaire, Date.now())
+                }
                 $basculer_vers_onglet_suivant()
-                $courriels_clefs.add($courriel_formulaire)
             }
             else
             {
@@ -57,6 +59,7 @@
         if (!reponse.error)
         {
             $ids.push(reponse.data.id)
+            $courriels_clefs.set($courriel_formulaire, Date.now())
             $succes_clef   = "Une nouvelle clef a été envoyée"
             $erreur_clef = false
         }
@@ -66,6 +69,8 @@
             $succes_clef   = false
         }
     }
+
+    $depart_clef = () => $courriels_clefs.get($courriel_formulaire) ?? null
 
     $envoyer_formulaire_clef = async () =>
     {
@@ -111,7 +116,7 @@
         }
     }
 
-    // Même âge minimum que l API, qui vérifie aussi : voir age_minimum dans index.sans
+    // Même âge minimum que l API, qui vérifie aussi : voir age_minimum dans age.sans
     const AGE_MINIMUM = 15
 
     const calculer_age = (date_naissance) =>
@@ -141,8 +146,9 @@
         $erreur_conditions = false
 
         $versions_a_venir_inscription = (await $lire_versions_a_venir()).map(version => ({
-            texte : `Une nouvelle version de la page « ${version.titre} » s'appliquera à votre compte à partir du ${$formater_date(version.date_parution)}. `,
-            lien  : `/${version.id_anicroche}?version=${version.numero}`
+            titre : version.titre,
+            date  : $formater_date(version.date_parution),
+            lien  : `/${version.id_anicroche}/${version.numero}`
         }))
         $basculer_vers_onglet_suivant(noeud)
     }
@@ -257,7 +263,7 @@
                     $modifiable : :(
                 ]
                 champ-clef ["Clef de validation", clef]
-                lien-action [$renvoyer_clef, 30]
+                lien-action [$renvoyer_clef, 30, $depart_clef]
                     "Renvoyer la clef"
                 ligne
                     bouton-action [$basculer_vers_section_courriel]
@@ -344,16 +350,16 @@
                         "conditions d'utilisation"
                     "."
                 information-formulaire
-                    "Vos données sont traitées comme l'explique la "
+                    "Vos données seront traitées conformément à la "
                     lien-ancre [/politique-de-confidentialite, $nouvel_onglet : :)]
                         "politique de confidentialité"
                     "."
                 @for-each [$version] of [$versions_a_venir_inscription]
-                    information-formulaire
-                        "$version.texte"
+                    <p>
+                        "Une nouvelle version de la page « "
                         lien-ancre [$version.lien, $nouvel_onglet : :)]
-                            "Consulter cette version"
-                        "."
+                            "$version.titre"
+                        " » entrera en vigueur le $version.date."
                 ligne
                     bouton-action [$revenir_a_l_etape_precedente]
                         icone-fleche-gauche

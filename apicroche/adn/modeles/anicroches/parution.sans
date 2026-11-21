@@ -1,0 +1,69 @@
+@script [
+    // Une version est parue quand sa date de parution est passée
+    $est_parue = (version) =>
+        !!version?.date_parution && new Date(version.date_parution) <= new Date()
+
+    // Version parue la plus récente, quel que soit son accès
+    $version_en_vigueur = async (id_anicroche) =>
+        await $search_one('version',
+            `
+            #id_anicroche  = $id_anicroche
+          & #date_parution <= now
+            `,
+            { $id_anicroche: id_anicroche },
+            { order: 'numero', dir: 'desc' }
+        )
+
+    // Une source par rôle et par position pour une version donnée :
+    // - une source non remplacée par une version plus récente reste valable
+    // - préférence de langue : langue et région préférées, puis langue seule, puis sans langue
+    // Un rôle à plusieurs sources (nombre maximum au-dessus de 1) donne une liste rangée par
+    // position, les autres une source seule
+    $resoudre_sources = (type, lignes, numero) =>
+    {
+        const { langue, region } = $langue_preferee()
+        const preferences = [ [ langue, region ], [ langue, '' ], [ '', '' ] ]
+        const rang = (ligne) =>
+        {
+            const index = preferences.findIndex(([l, r]) => l === ligne.langue && r === ligne.region)
+            return index < 0 ? preferences.length : index
+        }
+
+        const retenues = new Map()
+        for (const ligne of lignes)
+        {
+            if (ligne.version > numero)
+                continue
+
+            const clef      = `${ligne.role}|${ligne.position}`
+            const actuelle  = retenues.get(clef)
+            const meilleure = !actuelle
+                || rang(ligne) < rang(actuelle)
+                || (rang(ligne) === rang(actuelle) && ligne.version > actuelle.version)
+
+            if (meilleure)
+                retenues.set(clef, ligne)
+        }
+
+        const multiples = new Set($sources_type(type).filter(source => source.max > 1).map(source => source.role))
+        const sources   = {}
+
+        for (const ligne of [ ...retenues.values() ].sort((a, b) => a.position - b.position))
+        {
+            const source = {
+                position : ligne.position,
+                langue   : ligne.langue,
+                region   : ligne.region,
+                version  : ligne.version,
+                contenu  : ligne.contenu
+            }
+
+            if (multiples.has(ligne.role))
+                (sources[ligne.role] ??= []).push(source)
+            else
+                sources[ligne.role] ??= source
+        }
+
+        return sources
+    }
+]

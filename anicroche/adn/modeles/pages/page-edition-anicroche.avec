@@ -1,8 +1,7 @@
 @script [
-    // chargement, interdite, introuvable ou prete
-    $etat_edition           = 'chargement'
+    // interdite, introuvable ou prete
+    $etat_edition           = 'introuvable'
     $anicroche_edition      = null
-    $chemin_edition_charge  = null
     $type_edition           = null
     $sources_publiees       = []
     $sources_brouillon      = []
@@ -28,14 +27,10 @@
     // Une valeur vide s écrit - dans une adresse de l API
     const segment = (valeur) => valeur === '' ? '-' : encodeURIComponent(valeur)
 
-    // Le modèle reste en place quand on passe d une anicroche à une autre :
-    // le chargement suit donc $path plutôt que l exécution du script
+    // Chargée avant l affichage de la page, puis rechargée après chaque action
     $charger_edition = async () =>
     {
         const chemin = $path
-        if ($chemin_edition_charge !== chemin)
-            $etat_edition = 'chargement'
-        $chemin_edition_charge = chemin
 
         // Sans profil, aucun type ne peut être administré
         if (!$profil)
@@ -92,7 +87,7 @@
             .map(source => ({ role: source.role, etiquette: `Ajouter : ${source.libelle}` }))
         $acces_edition          = (brouillon ?? reponse.data).acces ?? 'prive'
         $date_parution_edition  = brouillon?.date_parution ? $formater_date(brouillon.date_parution, true) : ''
-        $lien_brouillon_edition = brouillon ? `${chemin.slice(0, -SUFFIXE.length)}?version=${brouillon.numero}` : ''
+        $lien_brouillon_edition = brouillon ? `${chemin.slice(0, -SUFFIXE.length)}/${brouillon.numero}` : ''
         $etat_edition           = 'prete'
     }
 
@@ -319,10 +314,11 @@
         await $charger_edition()
         afficher_succes("Brouillon supprimé")
     }
-]
 
-@if [$path != $chemin_edition_charge]
-    <div hidden @mount="$charger_edition()">
+    // La page n est affichée qu une fois l anicroche chargée : le routeur montre d ici là son
+    // modèle d attente
+    await $charger_edition()
+]
 
 page [$authentification : requise_sans_profil]
     navigation
@@ -337,10 +333,7 @@ page [$authentification : requise_sans_profil]
                     "Édition"
 
     onglet
-        @if [$etat_edition = chargement]
-            section-chargement
-
-        @else-if [$etat_edition = interdite]
+        @if [$etat_edition = interdite]
             section [edition-interdite, centree]
                 titre [centre]
                     "Vous ne pouvez pas modifier ce contenu"
@@ -390,10 +383,10 @@ page [$authentification : requise_sans_profil]
                             erreur-formulaire
                                 "$erreur_edition"
                         @for-each [$source] of [$sources_brouillon]
-                            @if [$source.format = 'texte-long']
-                                champ-texte-long [$source.etiquette, $source.nom, $valeur : $source.contenu]
-                            @else
+                            @if [$source.format = 'titre']
                                 champ-texte [$source.etiquette, $source.nom, $valeur : $source.contenu, $requis : :(]
+                            @else
+                                champ-texte-long [$source.etiquette, $source.nom, $valeur : $source.contenu]
                         @if [_ $ajouts_edition > 0]
                             ligne
                                 @for-each [$ajout] of [$ajouts_edition]

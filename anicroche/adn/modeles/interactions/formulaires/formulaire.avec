@@ -2,17 +2,17 @@
     $envoyer_formulaire = () =>
     {
         $event.preventDefault()
-        $fonction()
+
+        const formulaire = $node
+        if ($est_en_attente(formulaire))
+            return
+        $attendre_action([ formulaire, $event.submitter ], $fonction())
     }
 ]
 
 @style [
     .formulaire .ligne {
         gap: 0.5rem;
-    }
-
-    .formulaire :is(.lien-ancre, .lien-action, .lien-soumission) {
-        --c-flux: var(--c-vif);
     }
 ]
 

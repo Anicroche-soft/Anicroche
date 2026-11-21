@@ -8,7 +8,7 @@
     $age_insuffisant           = false
     $ids           = []
 
-    $courriels_clefs     = new Set()
+    $courriels_clefs     = new Map()
 
     $erreur_courriel     = false
     $erreur_mot_de_passe = false

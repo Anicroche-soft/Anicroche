@@ -14,6 +14,7 @@
         justify-content: safe center;
 
         transition: outline-color var(--d-animation),
+                    border-color var(--d-animation),
                     background var(--d-animation);
 
         --f-fond:  var(--c-vif);
@@ -30,6 +31,8 @@
 
     .bouton-ancre:hover,
     .bouton-ancre:focus {
+        border-color: var(--c-plus);
+
         --f-fond: var(--c-plus);
         --c-fond: var(--c-plus);
     }

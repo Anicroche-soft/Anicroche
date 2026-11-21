@@ -11,26 +11,19 @@
 ]
 
 @script [
-    // Part du quota d envoi de la messagerie (par 24 heures glissantes : 200 ou 500 courriels
-    // selon l offre Service Mail d Infomaniak) réservée aux annonces : clef
-    // courriels_annonces_par_jour d app.adn, 100 par défaut
+    // La moitié de la limite d envoi de la messagerie (email_limit du .env, en courriels par
+    // 24 heures glissantes, 200 par défaut) est réservée aux annonces, le reste aux autres courriels
     const quota_annonces = () =>
     {
-        const quota = Number($app.courriels_annonces_par_jour)
-        return Number.isInteger(quota) && quota > 0 ? quota : 100
+        const limite = Number(process.env.email_limit)
+        return Math.floor((Number.isInteger(limite) && limite > 0 ? limite : 200) / 2)
     }
 
-    // Les pages légales n ont pas encore de source de titre
-    const TITRES = {
-        'conditions-generales-d-utilisation' : "Conditions générales d'utilisation",
-        'politique-de-confidentialite'       : "Politique de confidentialité",
-        'mentions-legales'                   : "Mentions légales"
-    }
+    // Arrondi vers le bas : une fenêtre de 24 heures contient exactement 24 envois horaires,
+    // le quota tient donc même après un redémarrage
+    const annonces_par_heure = () => Math.max(1, Math.floor(quota_annonces() / 24))
 
-    $titre_anicroche = (id) => TITRES[id] ?? id
-
-    const ids_preavis = () =>
-        Object.values($app.types_anicroches ?? {}).flatMap(config => config?.preavis ?? [])
+    const ids_preavis = () => $ids_specificite('preavis')
 
     // Versions programmées des anicroches soumises au préavis
     $versions_programmees = async () =>
@@ -49,16 +42,17 @@
         return programmees
     }
 
-    const decrire = (version, a_venir) => ({
+    const decrire = async (version, a_venir) => ({
         id_anicroche  : version.id_anicroche,
-        titre         : $titre_anicroche(version.id_anicroche),
+        titre         : await $titre_version(version.id_anicroche, version.numero),
         numero        : version.numero,
         date_parution : version.date_parution,
-        a_venir
+        a_venir,
+        a_accepter    : !a_venir && $ids_specificite('acceptation').includes(version.id_anicroche)
     })
 
     // Versions en vigueur et programmées que le compte ne connaît pas encore :
-    // [{ id_anicroche, titre, numero, date_parution, a_venir }]
+    // [{ id_anicroche, titre, numero, date_parution, a_venir, a_accepter }]
     $versions_a_presenter = async (compte) =>
     {
         const annonces = await $search_all('annonces', `#id_compte = $id`, { $id: compte.id })
@@ -72,12 +66,12 @@
             const en_vigueur = await $version_en_vigueur(id)
             const acceptee   = acceptation && en_vigueur && new Date(en_vigueur.date_parution) <= acceptation
             if (en_vigueur && !acceptee && !annoncee(en_vigueur))
-                versions.push(decrire(en_vigueur, false))
+                versions.push(await decrire(en_vigueur, false))
         }
 
         for (const version of await $versions_programmees())
             if (!annoncee(version))
-                versions.push(decrire(version, true))
+                versions.push(await decrire(version, true))
 
         return versions
     }
@@ -118,9 +112,9 @@
             { select: 'id ; date_acceptation_conditions', order: 'id' }
         )
 
-    // Jours d envoi nécessaires pour prévenir tous les comptes avec le quota des annonces
+    // Jours d envoi nécessaires pour prévenir tous les comptes au rythme des lots horaires
     $jours_envoi_annonces = async () =>
-        Math.ceil((await lire_comptes_a_prevenir()).length / quota_annonces())
+        Math.ceil((await lire_comptes_a_prevenir()).length / (annonces_par_heure() * 24))
 
     const formater_date = (date) => new Date(date).toLocaleDateString('fr-FR', {
         day      : 'numeric',
@@ -129,10 +123,17 @@
         timeZone : 'Europe/Paris'
     })
 
+    // Les titres sont des sources écrites dans le site
+    const echapper_html = (texte) => String(texte)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+
     const rediger_annonce = (versions) =>
     {
         const lignes = versions.map(version =>
-            `<li><a href="${process.env.app_url ?? ''}/${version.id_anicroche}?version=${version.numero}">${version.titre}</a>, `
+            `<li><a href="${process.env.app_url ?? ''}/${version.id_anicroche}/${version.numero}">${echapper_html(version.titre)}</a>, `
           + `applicable à partir du ${formater_date(version.date_parution)}</li>`
         ).join('')
 
@@ -148,7 +149,7 @@
     // de la messagerie atteint, serveur indisponible…)
     $envoyer_annonces = async () =>
     {
-        const programmees = (await $versions_programmees()).map(version => decrire(version, true))
+        const programmees = await Promise.all((await $versions_programmees()).map(version => decrire(version, true)))
         if (!programmees.length)
             return
 
@@ -166,7 +167,7 @@
             prevenus.set(version, new Set(annonces.map(annonce => annonce.id_compte)))
         }
 
-        let reste = Math.ceil(quota_annonces() / 24)
+        let reste = annonces_par_heure()
 
         for (const compte of await lire_comptes_a_prevenir())
         {
@@ -205,7 +206,7 @@
             reste--
         }
 
-        const envoyees = Math.ceil(quota_annonces() / 24) - reste
+        const envoyees = annonces_par_heure() - reste
         if (envoyees)
             console.log(`  ANNONCES ${envoyees} envoyée(s)`)
     }

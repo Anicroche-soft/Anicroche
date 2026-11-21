@@ -7,4 +7,5 @@
 
 ligne [centree, $retour : :(]
     icone-erreur
-    @stud
+    <p>
+        @stud

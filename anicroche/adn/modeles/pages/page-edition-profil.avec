@@ -1,3 +1,14 @@
+@script [
+    // Nombre de profils dérivés du profil édité, s il est racine : chargé avant l affichage de
+    // la page, le routeur montre d ici là son modèle d attente
+    $nombre_derives_edition = 0
+    if ($profil && !$profil.identifiant.includes('.'))
+    {
+        const reponse = await $search(`profil/${encodeURIComponent($profil.id)}/derives`)
+        $nombre_derives_edition = reponse.error ? 0 : reponse.data?.nombre ?? 0
+    }
+]
+
 page [$authentification : requise]
     navigation
         <div .gauche>

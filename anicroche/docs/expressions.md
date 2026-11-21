@@ -286,6 +286,7 @@ Les motifs sont essayés dans l'ordre : seul le premier qui correspond écrit se
 
 ```
 # Une même page pour plusieurs adresses : le modèle reste en place de l'une à l'autre
+# (voir @key pour le reconstruire à chaque adresse)
 @if [$path ~{ ['/profil', '/compte']]
     page-profil
 

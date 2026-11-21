@@ -624,6 +624,12 @@ const construire_fichier = (bloc, donnees) =>
 
 const construire_enfants = (bloc, donnees) =>
 {
+    // @static ne fige que les conditions de ses enfants directs : sans cela, les branches,
+    // modèles et boucles qu'elles construisent hériteraient du drapeau
+    const static_direct = donnees.static_direct === true
+    if (static_direct)
+        donnees = { ...donnees, static_direct: false }
+
     // Pré-scan : les modèles d'attente (?) et de repli (!) déclarés à ce niveau priment sur ceux hérités
     for (const enfant of bloc.enfants)
     {
@@ -689,7 +695,7 @@ const construire_enfants = (bloc, donnees) =>
                     i = fin - 1
                     elsable = false
 
-                    enfants.push(...construire_conditionnel(chaine, donnees))
+                    enfants.push(...construire_conditionnel(chaine, static_direct ? { ...donnees, static_direct: true } : donnees))
                 }
                 else if (enfant.args[0] === `@else-if` || enfant.args[0] === `@else`)
                 {
@@ -750,6 +756,10 @@ const construire_enfants = (bloc, donnees) =>
                 break
             case `@for-each`:
                 enfants.push(...construire_for_each(enfant, donnees))
+                elsable = false
+                break
+            case `@key`:
+                enfants.push(...construire_cle(enfant, static_direct ? { ...donnees, static_direct: true } : donnees))
                 elsable = false
                 break
             case `@static`:
@@ -935,6 +945,97 @@ const construire_conditionnel = (chaine, donnees) =>
             })
         }
     }
+
+    return [ancre_debut, ...noeuds_actifs, ancre_fin]
+}
+
+// Valeur comparable d une clef @key : deux listes ou dictionnaires de même contenu sont égaux
+const empreinte_cle = (valeur) =>
+{
+    try
+    {
+        return JSON.stringify(valeur) ?? String(valeur)
+    }
+    catch
+    {
+        return String(valeur)
+    }
+}
+
+// Construit un bloc @key : son contenu est démonté puis reconstruit chaque fois que la valeur
+// de la clef change, même si le reste ne change pas (une même page pour une autre adresse)
+const construire_cle = (bloc, donnees) =>
+{
+    const ancre_debut = document.createComment(`@key`)
+    const ancre_fin   = document.createComment(`/@key`)
+    const expression  = decapsuler(bloc.args[1])
+
+    // Les dépendances sont relevées à chaque lecture, comme pour une condition
+    const lire_cle = () =>
+    {
+        definir_noeud_courant(ancre_debut)
+        const valeur = empreinte_cle(evaluer_valeur(expression, donnees))
+        effacer_noeud_courant()
+        return valeur
+    }
+
+    let cle_active = lire_cle()
+    const noeuds_actifs = construire_enfants(bloc, donnees)
+
+    if (donnees.static_direct || !(ancre_debut._avec_deps?.size > 0))
+        return [ancre_debut, ...noeuds_actifs, ancre_fin]
+
+    let transition_en_cours = false
+    let reconstruction_en_attente = false
+
+    const reconstruire = async () =>
+    {
+        transition_en_cours = true
+
+        await vider_entre_ancres(ancre_debut, ancre_fin)
+
+        const nouveaux_noeuds = construire_enfants(bloc, donnees)
+        ancre_fin.before(...nouveaux_noeuds)
+
+        queueMicrotask(() => {
+            nouveaux_noeuds.forEach(n => {
+                if (n.nodeType === 1 && document.contains(n))
+                    monter_noeud(n)
+            })
+        })
+
+        transition_en_cours = false
+
+        // La clef a changé pendant la transition : une seule reconstruction de plus suffit
+        if (reconstruction_en_attente)
+        {
+            reconstruction_en_attente = false
+            reconstruire()
+        }
+    }
+
+    const desabonner = observer_sculpteur((propriete) =>
+    {
+        if (!ancre_debut._avec_deps?.has(propriete)) return
+
+        if (!ancre_debut.parentNode)
+        {
+            desabonner()
+            return
+        }
+        if (en_retrait(ancre_debut))
+            return
+
+        const nouvelle_cle = lire_cle()
+        if (nouvelle_cle === cle_active) return
+
+        cle_active = nouvelle_cle
+
+        if (transition_en_cours)
+            reconstruction_en_attente = true
+        else
+            reconstruire()
+    })
 
     return [ancre_debut, ...noeuds_actifs, ancre_fin]
 }
@@ -1362,7 +1463,175 @@ const ajouter_modeles = (noeuds, entrees) =>
     porteur._avec_modeles.push(...entrees)
 }
 
-const construire_modele = (bloc, donnees) =>
+// Modèle d attente affiché qu un contenu en cours de construction peut reprendre (voir
+// construire_apres_script) : { cle, noeuds, prise }. Seul le premier modèle construit le reçoit
+let reprise_attente = null
+
+// Un modèle d attente ou de repli se reconnaît à son nom et à ses arguments
+const cle_substitut = (bloc_substitut) => bloc_substitut ? bloc_substitut.args.join(' ').slice(1) : null
+
+// Modèle d attente (?nom) ou de repli (!nom) déclaré dans le bloc, construit à la place d un
+// modèle qui n est pas encore prêt ou qui a échoué. Un modèle d attente identique déjà affiché
+// (reprise) est repris tel quel : il ne disparaît pas pour réapparaître aussitôt
+const construire_substitut = (bloc_substitut, donnees, classes, reprise = null) =>
+{
+    const cle = cle_substitut(bloc_substitut)
+    if (cle && reprise && !reprise.prise && reprise.cle === cle)
+    {
+        reprise.prise = true
+        return reprise.noeuds
+    }
+
+    const nom_substitut = bloc_substitut?.args[0].slice(1)
+    const noeuds = nom_substitut && donnees.dependances[nom_substitut]
+        ? construire_modele(
+            { type: 'modele', args: [nom_substitut, ...bloc_substitut.args.slice(1)], enfants: [] },
+            donnees
+          )
+        : []
+    appliquer_classes_racine(noeuds, classes)
+    return noeuds
+}
+
+// Monte un nœud et ses descendants, les plus profonds d abord : des nœuds construits avant
+// d être insérés n ont pas pu se monter eux-mêmes
+const monter_arbre = (noeud) =>
+{
+    if (noeud.nodeType !== 1)
+        return
+    for (const enfant of noeud.children)
+        monter_arbre(enfant)
+    monter_noeud(noeud)
+}
+
+// Place des nœuds à la place d une ancre, puis les monte
+const remplacer_ancre = (ancre, noeuds) =>
+{
+    ancre.after(...noeuds)
+    ancre.remove()
+    queueMicrotask(() => noeuds.forEach(n => {
+        if (document.contains(n)) monter_arbre(n)
+    }))
+}
+
+const desactiver_modeles = (modeles) =>
+{
+    for (const { nom, scope } of modeles)
+    {
+        desactiver_style(nom)
+        desactiver_script(nom, scope)
+    }
+}
+
+// Un modèle dont le script attend (await) n est construit qu à la fin de celui-ci : le modèle
+// d attente du bloc est affiché d ici là, et le modèle de repli si le script échoue. Ses style
+// et script, déjà activés, sont inscrits sur le groupe d attente : un retrait entre-temps les
+// désactive, et ils passent sinon aux nœuds construits.
+// Un modèle différé garde affiché son propre modèle d attente pendant le script : il le confie
+// à l ancre (_avec_attente_externe : { cle, noeuds, reprendre_modeles, retirer_ancre }).
+// Le contenu est construit avant le retrait du modèle d attente : s il commence par le même
+// modèle d attente, il le reprend, et c est lui qui le retirera
+const construire_apres_script = (attente_script, construire, modele_actif, classes, donnees, sans_attente = false, reprise = null) =>
+{
+    const ancre          = document.createComment(`await ${modele_actif.nom}`)
+    const noeuds_attente = sans_attente ? [] : construire_substitut(donnees.attente, donnees, classes, reprise)
+    ancre._avec_attente_script = true
+
+    const porteur            = porteur_modeles([ancre, ...noeuds_attente])
+    const nb_modeles_attente = porteur?._avec_modeles?.length ?? 0
+    ajouter_modeles([ancre, ...noeuds_attente], [modele_actif])
+
+    const present = () => ancre.parentNode && !en_retrait(ancre)
+
+    ;(async () =>
+    {
+        let reussi = true
+        try
+        {
+            await attente_script
+        }
+        catch
+        {
+            reussi = false
+        }
+
+        // Bloc retiré, ou en cours de retrait : celui qui le retire désactive le modèle
+        if (!present()) return
+
+        const attente = ancre._avec_attente_externe ?? {
+            cle               : noeuds_attente.length ? cle_substitut(donnees.attente) : null,
+            noeuds            : noeuds_attente,
+            reprendre_modeles : () => [],
+            retirer_ancre     : () => {}
+        }
+
+        // Le modèle et ses englobants, à reporter sur ce qui remplace l attente
+        const modeles = [
+            ...(porteur?._avec_modeles?.splice(nb_modeles_attente) ?? []),
+            ...attente.reprendre_modeles()
+        ]
+
+        const retirer_attente = async () =>
+        {
+            await Promise.all(attente.noeuds.map(n => demonter_noeud(n)))
+            if (!present()) return false
+            for (const n of attente.noeuds)
+            {
+                nettoyer_noeud(n)
+                n.parentNode?.removeChild(n)
+            }
+            attente.retirer_ancre()
+            return true
+        }
+
+        if (!reussi)
+        {
+            const [ echoue, ...englobants ] = modeles
+            desactiver_modeles([ echoue ])
+            if (!await retirer_attente())
+                return desactiver_modeles(englobants)
+
+            const noeuds_repli = construire_substitut(donnees.repli, donnees, classes)
+            ajouter_modeles(noeuds_repli, englobants)
+            return remplacer_ancre(ancre, noeuds_repli)
+        }
+
+        const reprise_contenu = attente.cle ? { cle: attente.cle, noeuds: attente.noeuds, prise: false } : null
+        const precedente      = reprise_attente
+        reprise_attente       = reprise_contenu
+        let noeuds
+        try
+        {
+            noeuds = construire()
+        }
+        finally
+        {
+            reprise_attente = precedente
+        }
+
+        // Le contenu a repris le modèle d attente : il est inséré tout de suite, et un
+        // commentaire porte les modèles, le premier élément étant le modèle d attente repris
+        if (reprise_contenu?.prise)
+        {
+            attente.retirer_ancre()
+            const porteur_contenu = document.createComment(modele_actif.nom)
+            porteur_contenu._avec_modeles = modeles
+            return remplacer_ancre(ancre, [ porteur_contenu, ...noeuds ])
+        }
+
+        if (!await retirer_attente())
+        {
+            noeuds.forEach(n => nettoyer_noeud(n))
+            return desactiver_modeles(modeles)
+        }
+        ajouter_modeles(noeuds, modeles)
+        remplacer_ancre(ancre, noeuds)
+    })()
+
+    return [ancre, ...noeuds_attente]
+}
+
+const construire_modele = (bloc, donnees, options = {}) =>
 {
     const nom_complet = bloc.args[0]
     const est_attente  = nom_complet[0] === '?'
@@ -1376,18 +1645,13 @@ const construire_modele = (bloc, donnees) =>
     if (est_attente || est_repli)
         return []
 
+    // La reprise d'un modèle d'attente n'est offerte qu'au premier modèle construit
+    const reprise   = reprise_attente
+    reprise_attente = null
+
     if (differe && !donnees.dependances[nom])
     {
-        // Construire les nœuds du modèle d'attente
-        const bloc_attente = donnees.attente
-        const nom_attente  = bloc_attente?.args[0].slice(1)
-        const noeuds_attente = nom_attente && donnees.dependances[nom_attente]
-            ? construire_modele(
-                { type: 'modele', args: [nom_attente, ...bloc_attente.args.slice(1)], enfants: [] },
-                donnees
-              )
-            : []
-                appliquer_classes_racine(noeuds_attente, classes)
+        const noeuds_attente = construire_substitut(donnees.attente, donnees, classes, reprise)
 
         const ancre = document.createComment(`-${nom}`)
 
@@ -1413,6 +1677,23 @@ const construire_modele = (bloc, donnees) =>
             chargements_en_cours.set(nom, promesse)
         }
 
+        // Démonte et retire le modèle d'attente, puis renvoie les modèles englobants à reporter
+        // sur les nœuds qui le remplacent, ou null si le bloc a été retiré entre-temps (celui qui
+        // l'a retiré a nettoyé le modèle d'attente)
+        const retirer_attente = async () =>
+        {
+            await Promise.all(noeuds_attente.map(n => demonter_noeud(n)))
+            if (!ancre.parentNode || en_retrait(ancre)) return null
+
+            const modeles_englobants = reprendre_modeles_englobants()
+            for (const n of noeuds_attente)
+            {
+                nettoyer_noeud(n)
+                n.parentNode?.removeChild(n)
+            }
+            return modeles_englobants
+        }
+
         (async () =>
         {
             await chargements_en_cours.get(nom)
@@ -1420,53 +1701,28 @@ const construire_modele = (bloc, donnees) =>
             // Bloc retiré, ou en cours de retrait : celui qui le retire nettoie le modèle d'attente
             if (!ancre.parentNode || en_retrait(ancre)) return
 
-            await Promise.all(noeuds_attente.map(n => demonter_noeud(n)))
-
-            // Le bloc a été retiré pendant le démontage (navigation entre-temps) : celui qui l'a
-            // retiré a nettoyé le modèle d'attente, le modèle chargé n'est pas construit
-            if (!ancre.parentNode || en_retrait(ancre)) return
-
-            // Supprimer le modèle d'attente
-            const modeles_englobants = reprendre_modeles_englobants()
-            for (const n of noeuds_attente)
-            {
-                nettoyer_noeud(n)
-                n.parentNode?.removeChild(n)
-            }
-
             if (!donnees.dependances[nom])
             {
                 // Échec de chargement : afficher le modèle de repli
-                const bloc_repli   = donnees.repli
-                const nom_repli    = bloc_repli?.args[0].slice(1)
-                const noeuds_repli = nom_repli && donnees.dependances[nom_repli]
-                    ? construire_modele(
-                        { type: 'modele', args: [nom_repli, ...bloc_repli.args.slice(1)], enfants: [] },
-                        donnees
-                      )
-                    : []
-                appliquer_classes_racine(noeuds_repli, classes)
+                const modeles_englobants = await retirer_attente()
+                if (!modeles_englobants) return
+                const noeuds_repli = construire_substitut(donnees.repli, donnees, classes)
                 ajouter_modeles(noeuds_repli, modeles_englobants)
-                ancre.after(...noeuds_repli)
-                ancre.remove()
-                queueMicrotask(() => noeuds_repli.forEach(n => {
-                    if (n.nodeType === 1 && document.contains(n)) monter_noeud(n)
-                }))
-                return
+                return remplacer_ancre(ancre, noeuds_repli)
             }
 
-            const noeuds = construire_modele({ ...bloc, args: [nom, ...bloc.args.slice(1)] }, donnees)
-            appliquer_classes_racine(noeuds, classes)
-            ajouter_modeles(noeuds, modeles_englobants)
-            ancre.after(...noeuds)
-            ancre.remove()
-
-            queueMicrotask(() => {
-                noeuds.forEach(n => {
-                    if (n.nodeType === 1 && document.contains(n))
-                        monter_noeud(n)
-                })
-            })
+            // Le modèle d'attente reste affiché jusqu'à la fin du script du modèle (await), au lieu
+            // de laisser place à un second modèle d'attente : il est confié à l'attente du script
+            const [ ancre_script ] = construire_modele(
+                { ...bloc, args: [nom, ...bloc.args.slice(1)], classes }, donnees, { sans_attente: true, differer: true }
+            )
+            ancre.after(ancre_script)
+            ancre_script._avec_attente_externe = {
+                cle               : noeuds_attente.length ? cle_substitut(donnees.attente) : null,
+                noeuds            : noeuds_attente,
+                reprendre_modeles : reprendre_modeles_englobants,
+                retirer_ancre     : () => ancre.remove()
+            }
         })()
 
         return [ancre, ...noeuds_attente]
@@ -1699,6 +1955,7 @@ const construire_modele = (bloc, donnees) =>
         }
     }
 
+    let attente_script = null
     for (const enfant of modele.enfants)
     {
         if (enfant.type === `instruction` && enfant.args[0] === `@style`)
@@ -1709,7 +1966,7 @@ const construire_modele = (bloc, donnees) =>
         if (enfant.type === `instruction` && enfant.args[0] === `@script`)
         {
             const js = retirer_crochets(enfant.args[1])
-            activer_script(nom, js, scope_modele, args)
+            attente_script = activer_script(nom, js, scope_modele, args) ?? attente_script
         }
     }
 
@@ -1720,11 +1977,22 @@ const construire_modele = (bloc, donnees) =>
         tenons: [...donnees.tenons, { enfants: bloc.enfants, donnees }]
     }
 
-    const noeuds = construire_bloc(modele, donnees_modele)
-    appliquer_classes_racine(noeuds, classes)
+    const construire = () =>
+    {
+        const noeuds = construire_bloc(modele, donnees_modele)
+        appliquer_classes_racine(noeuds, classes)
+        return noeuds
+    }
+
     // Le porteur garde la liste des modèles qu'il représente (un modèle dont la racine est un
     // autre modèle en ajoute un), pour désactiver leurs styles et scripts au retrait
-    ajouter_modeles(noeuds, [{ nom, scope: scope_modele }])
+    const modele_actif = { nom, scope: scope_modele }
+
+    if (attente_script || options.differer)
+        return construire_apres_script(attente_script ?? Promise.resolve(), construire, modele_actif, classes, donnees, options.sans_attente, reprise)
+
+    const noeuds = construire()
+    ajouter_modeles(noeuds, [modele_actif])
 
     return noeuds
 }

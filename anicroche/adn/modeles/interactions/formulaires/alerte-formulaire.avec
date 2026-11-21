@@ -7,4 +7,5 @@
 
 ligne [centree, $retour : :(]
     icone-alerte
-    @stud
+    <p>
+        @stud

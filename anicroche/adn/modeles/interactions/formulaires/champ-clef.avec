@@ -104,6 +104,13 @@
         atteindre_case(elements, index - 1)
     }
 
+    const tout_effacer = (elements) =>
+    {
+        elements.chiffres.forEach((case_clef) => ecrire_chiffre(case_clef, ''))
+        synchroniser(elements)
+        atteindre_case(elements, 0)
+    }
+
     const envoyer_formulaire = (noeud) =>
     {
         const formulaire = noeud.form
@@ -178,7 +185,10 @@
         case 'Backspace':
         case 'Delete':
             evenement.preventDefault()
-            effacer(elements, index, evenement.key === 'Backspace')
+            if (evenement.ctrlKey || evenement.metaKey || evenement.altKey)
+                tout_effacer(elements)
+            else
+                effacer(elements, index, evenement.key === 'Backspace')
             break
         case 'ArrowLeft':
             evenement.preventDefault()
@@ -214,6 +224,11 @@
         {
             evenement.preventDefault()
             saisir(elements, index, evenement.data ?? evenement.dataTransfer?.getData('text') ?? '')
+        }
+        else if (/^delete(Word|SoftLine|HardLine|EntireSoftLine)/.test(type))
+        {
+            evenement.preventDefault()
+            tout_effacer(elements)
         }
         else if (type.startsWith('delete'))
         {

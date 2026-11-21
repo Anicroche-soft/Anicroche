@@ -14,7 +14,9 @@
         justify-content: safe center;
 
         transition: outline-color var(--d-animation),
-                    background var(--d-animation);
+                    border-color var(--d-animation),
+                    background var(--d-animation),
+                    color var(--d-animation);
 
         --f-fond:  var(--c-vif);
         --c-fond:  var(--c-vif);
@@ -24,12 +26,14 @@
         --p-fonte: var(--p-bouton);
     }
 
-    .bouton-soumission:has(> .icone):not(:has(> .icone ~ .icone)):not(:has(> :not(.icone):not(.alt))) {
+    .bouton-soumission:has(> .icone):not(:has(> .icone ~ .icone)):not(:has(> :not(.icone):not(.alt):not(.attente))) {
         flex: 1;
     }
 
     .bouton-soumission:hover,
     .bouton-soumission:focus {
+        border-color: var(--c-plus);
+
         --f-fond: var(--c-plus);
         --c-fond: var(--c-plus);
     }
@@ -37,6 +41,90 @@
     .bouton-soumission .icone {
         margin: -0.25rem;
         flex-shrink: 0;
+    }
+
+    /* Deux traits de 10 sur un tour de 100, à un demi-tour l un de l autre : centrés au départ
+       en haut et en bas. Les décalages sont calculés par $attendre_action : un calc() qui donne
+       un nombre sans unité n est pas accepté par stroke-dashoffset */
+    @keyframes tour-attente-bouton-soumission {
+        from {
+            stroke-dashoffset: var(--debut-tour-attente, 0);
+        }
+        50% {
+            stroke-dashoffset: var(--milieu-tour-attente, -50);
+        }
+        to {
+            stroke-dashoffset: var(--fin-tour-attente, -100);
+        }
+    }
+
+    /* Même fond qu au survol, bordure comprise ; contenu à 75 % : la couleur pour un texte posé
+       directement dans le bouton, l opacité pour les éléments (icônes, span…) */
+    .bouton-soumission.en-attente {
+        cursor: progress;
+        border-color: var(--c-plus);
+        color: color-mix(in oklch, var(--c-flux) 75%, transparent);
+
+        --f-fond: var(--c-plus);
+        --c-fond: var(--c-plus);
+    }
+
+    .bouton-soumission > :not(.attente) {
+        transition: outline-color var(--d-animation),
+                    opacity var(--d-animation);
+    }
+
+    .bouton-soumission.en-attente > :not(.attente) {
+        opacity: 0.75;
+    }
+
+    /* Contre le bord intérieur de la bordure (l inset est compté depuis celui-ci). Masqué par
+       visibility plutôt que display, pour que ses dimensions restent mesurables */
+    .bouton-soumission > .attente {
+        position: absolute;
+        inset: 0;
+
+        width: 100%;
+        height: 100%;
+
+        overflow: visible;
+        pointer-events: none;
+
+        opacity: 0;
+        visibility: hidden;
+
+        transition: opacity var(--d-animation),
+                    visibility 0s var(--d-animation);
+    }
+
+    .bouton-soumission.en-attente > .attente {
+        opacity: 1;
+        visibility: visible;
+
+        transition: opacity var(--d-animation);
+    }
+
+    /* Trait décalé d une demi-épaisseur vers l intérieur du SVG ; son rayon suit celui du
+       bouton (0.5rem), réduit de la bordure et de la demi-épaisseur */
+    .bouton-soumission > .attente > rect {
+        x: 0.0625rem;
+        y: 0.0625rem;
+        width: calc(100% - 0.125rem);
+        height: calc(100% - 0.125rem);
+        rx: 0.3125rem;
+
+        fill: none;
+        stroke: var(--c-creme);
+        stroke-width: 0.125rem;
+        stroke-linecap: round;
+        stroke-dasharray: 10 40;
+    }
+
+    /* Ne tourne que pendant l attente et le fondu qui la suit */
+    /* La courbe s applique à chaque demi-tour, d un milieu (haut ou bas) à l autre : départ en
+       accélérant, arrivée en ralentissant, avec une vitesse nulle à chaque milieu */
+    .bouton-soumission:is(.en-attente, .fin-attente) > .attente > rect {
+        animation: tour-attente-bouton-soumission calc(var(--d-animation) * 4) cubic-bezier(0.65, 0, 0.35, 1) infinite;
     }
 ]
 
@@ -48,3 +136,6 @@
     [$type] ? value="$type"
 >
     @stud
+
+    <svg .attente aria-hidden="true">
+        <rect pathLength="100">

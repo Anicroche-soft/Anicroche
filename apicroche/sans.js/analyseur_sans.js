@@ -908,6 +908,13 @@ const verifier_hooks = (tables, generiques) =>
     for (const generique of generiques)
         verifier(generique.fichier, lister_hooks_generique(generique), fonctions_generiques, dans_tables,
             'un hook générique n\'appelle que les fonctions des fichiers génériques (sans @name)')
+
+    // Les tâches périodiques et les routes des autres tables ne compilent pas le @script d une
+    // table : l erreur n apparaîtrait qu à l exécution, et seulement dans ces cas-là
+    for (const generique of generiques)
+        for (const nom of new Set([...(generique.script ?? '').matchAll(/(\$\w+)\s*\(/g)].map(m => m[1])))
+            if (!fonctions_generiques.has(nom) && origines_tables.has(nom))
+                console.log(`/!\\ \`${generique.fichier}\` : ${nom} est définie dans \`${origines_tables.get(nom)}\`, or un fichier générique n'appelle que les fonctions des fichiers génériques (sans @name)`)
 }
 
 export const charger_modeles = (dossier) =>

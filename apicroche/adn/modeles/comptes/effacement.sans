@@ -38,7 +38,9 @@
     # sans connexion, ou sans jeton pour le compte connecté dont l effacement est demandé.
     # Un compte dont l effacement est annulé n a pas reçu les annonces : s il ne connaît pas
     # une version en vigueur ou à venir d une page soumise au préavis, la réponse est 412 avec
-    # ces versions ({ conditions }), jusqu à ce que le corps contienne accepte_conditions : true
+    # ces versions ({ conditions }), jusqu à ce que le corps les liste toutes dans
+    # conditions_acceptees, chacune sous la forme <id_anicroche>:<numero> : cochée pour une
+    # version a_accepter (spécificité acceptation des exceptions), seulement présentée pour les autres
     {
         path   : /restauration
         action : $restaurer_compte($body)
@@ -446,12 +448,15 @@
     }
 
     // Les versions inconnues du compte doivent être acceptées avant l annulation : la date
-    // d acceptation des conditions passe à maintenant, et chacune est notée comme annoncée
-    const annuler_avec_conditions = async (compte, accepte) =>
+    // d acceptation des conditions passe à maintenant, et chacune est notée comme annoncée.
+    // Chaque version est nommée : une version parue ou programmée depuis l affichage des
+    // conditions n est pas acceptée à l insu du compte
+    const annuler_avec_conditions = async (compte, acceptees) =>
     {
         const conditions = await $versions_a_presenter(compte)
+        const cochees    = Array.isArray(acceptees) ? acceptees : []
 
-        if (conditions.length && accepte !== true)
+        if (conditions.some(condition => !cochees.includes(`${condition.id_anicroche}:${condition.numero}`)))
             return $indicate(412, "Acceptation des conditions requise", { motif: 'effacement', conditions })
 
         await annuler(compte)
@@ -463,7 +468,7 @@
         await $enregistrer_annonces(compte.id, conditions, 'restauration')
     }
 
-    // Corps : { jeton, accepte_conditions }, le jeton étant lu dans le lien d un courriel ou
+    // Corps : { jeton, conditions_acceptees }, le jeton étant lu dans le lien d un courriel ou
     // absent pour le compte connecté
     $restaurer_compte = async ($body) =>
     {
@@ -475,7 +480,7 @@
             if (!compte.date_demande_effacement)
                 return $indicate(409, "Aucun effacement en cours", { motif: 'effacement' })
 
-            await annuler_avec_conditions(compte, $body.accepte_conditions)
+            await annuler_avec_conditions(compte, $body.conditions_acceptees)
 
             return $indicate(200, "Effacement annulé", { motif: 'effacement' })
         }
@@ -497,7 +502,7 @@
             if (demande === null || demande !== payload.demande)
                 return $indicate(409, "Aucun effacement en cours", { motif: 'effacement' })
 
-            await annuler_avec_conditions(compte, $body.accepte_conditions)
+            await annuler_avec_conditions(compte, $body.conditions_acceptees)
 
             return $indicate(200, "Effacement annulé", { motif: 'effacement' })
         }

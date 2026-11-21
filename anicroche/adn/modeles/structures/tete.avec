@@ -1,5 +1,5 @@
 @script [
-    $monter_tete = async () =>
+    $monter_tete = () =>
     {
         const noeud = $node
         noeud.classList.add('entree')
@@ -8,9 +8,6 @@
                 noeud.classList.remove('entree')
             )
         )
-
-        await Promise.all([ $obtenir_compte(), $charger_types_anicroches() ])
-        $phase = 'navigation'
     }
 ]
 

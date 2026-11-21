@@ -1,6 +1,4 @@
 @script [
-    $phase = 'chargement'
-
     $connecte = null
     $jeton_acces = null
 
@@ -12,7 +10,7 @@
     $compte_actif = false
 
     // Types d anicroches de l API (GET /types), gardés jusqu à l actualisation de la page :
-    // { <nom> : { libelle, identifiant, auteurs, administration, legalite, preavis, sources } }
+    // { <nom> : { libelle, identifiant, auteurs, administration, exceptions, sources } }
     $types_anicroches = {}
 
     // Types rencontrés mais absents de l API même après rechargement : ils ne la font plus
@@ -59,15 +57,22 @@
     // Le rôle est celui du profil sélectionné
     $administre_type = (nom) => !!$profil && ($type_anicroche(nom)?.administration ?? []).includes($profil.role)
 
-    $est_legale = (anicroche) => ($type_anicroche(anicroche?.type)?.legalite ?? []).includes(anicroche?.id)
+    // Exceptions : [{ identifiant, specificites }], specificites parmi legalite, preavis et acceptation
+    $a_specificite = (anicroche, specificite) =>
+        ($type_anicroche(anicroche?.type)?.exceptions ?? [])
+            .some(exception => exception.identifiant === anicroche?.id && exception.specificites.includes(specificite))
 
-    $soumise_au_preavis = (anicroche) => ($type_anicroche(anicroche?.type)?.preavis ?? []).includes(anicroche?.id)
+    $est_legale = (anicroche) => $a_specificite(anicroche, 'legalite')
+
+    $soumise_au_preavis = (anicroche) => $a_specificite(anicroche, 'preavis')
 
     // Versions programmées des anicroches soumises au préavis, d après les types :
     // [{ id_anicroche, titre, numero, date_parution }]
     $lire_versions_a_venir = async () =>
     {
-        const ids = [ ...new Set(Object.values($types_anicroches).flatMap(type => type.preavis ?? [])) ]
+        const ids = Object.values($types_anicroches).flatMap(type => (type.exceptions ?? [])
+            .filter(exception => exception.specificites.includes('preavis'))
+            .map(exception => exception.identifiant))
         const versions = []
 
         for (const id of ids)
@@ -75,7 +80,7 @@
             const reponse = await $search(`anicroche/${encodeURIComponent(id)}`)
             const a_venir = reponse.code === 200 ? reponse.data?.a_venir : null
             if (a_venir)
-                versions.push({ id_anicroche: id, titre: reponse.data.titre ?? id, ...a_venir })
+                versions.push({ id_anicroche: id, ...a_venir, titre: a_venir.titre ?? id })
         }
         return versions
     }
@@ -220,6 +225,85 @@
 
         return true
     }
+
+    // ─── Attente des boutons ─────────────────────────────────────────────────
+
+    $est_en_attente = (noeud) => noeud?.getAttribute('aria-busy') === 'true'
+
+    // Décalages du tour des traits : le tracé du rect commence en haut à gauche, après l arrondi,
+    // et sa distance au milieu du haut (sur un tour de 100) dépend des proportions du bouton.
+    // Le premier trait (10 de long) y est centré au départ
+    const placer_indicateur_attente = (noeud) =>
+    {
+        const trait = noeud.querySelector(':scope > .attente > rect')
+        if (!trait)
+            return
+
+        const { width, height } = trait.getBBox()
+        const rayon     = Math.min(parseFloat(getComputedStyle(trait).rx) || 0, width / 2, height / 2)
+        const perimetre = trait.getTotalLength()
+        if (perimetre <= 0)
+            return
+
+        const debut = 5 - (width / 2 - rayon) / perimetre * 100
+        noeud.style.setProperty('--debut-tour-attente',  debut.toFixed(3))
+        noeud.style.setProperty('--milieu-tour-attente', (debut - 50).toFixed(3))
+        noeud.style.setProperty('--fin-tour-attente',    (debut - 100).toFixed(3))
+    }
+
+    // Durée de --d-animation en millisecondes, celle du fondu de l indicateur
+    const duree_animation = (noeud) =>
+    {
+        const valeur = getComputedStyle(noeud).getPropertyValue('--d-animation').trim()
+        const nombre = parseFloat(valeur) || 0
+        return valeur.endsWith('ms') ? nombre : nombre * 1000
+    }
+
+    // Une action est asynchrone quand elle renvoie une promesse : les noeuds donnés restent en
+    // attente (aria-busy, .en-attente) jusqu à ce qu elle se termine, réussie ou non. Une action
+    // synchrone ne touche à rien : aucun état n est posé, il n y a donc rien à retirer
+    $attendre_action = async (noeuds, resultat) =>
+    {
+        if (typeof resultat?.then !== 'function')
+            return resultat
+
+        const liste = [ noeuds ].flat().filter(Boolean)
+
+        // Dans le try : même une erreur pendant la pose de l état passe par le finally
+        try
+        {
+            liste.forEach(noeud =>
+            {
+                noeud.setAttribute('aria-busy', 'true')
+                noeud.classList.remove('fin-attente')
+                noeud.classList.add('en-attente')
+                placer_indicateur_attente(noeud)
+            })
+
+            return await resultat
+        }
+        finally
+        {
+            liste.forEach(noeud =>
+            {
+                noeud.removeAttribute('aria-busy')
+
+                // Les traits continuent de tourner pendant leur fondu
+                noeud.classList.replace('en-attente', 'fin-attente')
+                setTimeout(() =>
+                {
+                    if (!noeud.classList.contains('en-attente'))
+                        noeud.classList.remove('fin-attente')
+                }, duree_animation(noeud))
+            })
+        }
+    }
+
+    // ─── Démarrage ───────────────────────────────────────────────────────────
+
+    // Compte et types d anicroches, chargés au démarrage : le routeur attend leur chargement,
+    // sous le même modèle d attente que la page demandée
+    $demarrage = Promise.all([ $obtenir_compte(), $charger_types_anicroches() ])
 ]
 
 tete

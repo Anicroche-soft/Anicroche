@@ -133,6 +133,8 @@
         right: 0.125rem;
         top: 0.125rem;
         bottom: 0.125rem;
+        /* Au-dessus du ::after du cadre, qui recouvrait le contour de focus */
+        z-index: 1;
 
         display: flex;
 

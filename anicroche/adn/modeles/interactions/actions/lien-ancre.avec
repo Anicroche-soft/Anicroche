@@ -5,6 +5,8 @@
 
         text-decoration: underline transparent;
 
+        --c-flux: var(--c-vif);
+
         transition: text-decoration-color var(--d-animation),
                     outline-color var(--d-animation);
     }

@@ -2,19 +2,6 @@
     const coordonnee_principale = () =>
         $compte?.coordonnees?.find(coordonnee => coordonnee.est_principale)?.coordonnee ?? null
 
-    const charger_profils = async () =>
-    {
-        if ($profils_suppression !== null)
-            return
-
-        const reponse = await $search('desinscription')
-        $profils_suppression       = reponse.error ? [] : reponse.data.profils
-        $choix_profils_suppression = $profils_suppression.map(profil => ({
-            nom       : profil.id,
-            etiquette : `@${profil.identifiant}`
-        }))
-    }
-
     // La clef n'est envoyée qu'avec le bon mot de passe
     const envoyer_clef = async (mot_de_passe) =>
     {
@@ -25,9 +12,14 @@
         })
 
         if (!reponse.error)
+        {
             $ids_suppression.push(reponse.data.id)
+            $date_clef_suppression = Date.now()
+        }
         return reponse
     }
+
+    $depart_clef_suppression = () => $date_clef_suppression
 
     // Suppression refusée pendant les sept jours qui suivent un changement d adresse principale
     // null quand la suppression est possible : un texte vide rendrait la condition vraie
@@ -55,20 +47,23 @@
         $basculer_vers_onglet_suivant()
     }
 
+    // La clef n est envoyée qu une fois, même après un retour en arrière (comme à la connexion)
     $envoyer_formulaire_mot_de_passe_suppression = async () =>
     {
-        const mot_de_passe = new FormData($node).get('mot_de_passe')
-        const reponse      = await envoyer_clef(mot_de_passe)
-
-        // Le mot de passe est vérifié avant le délai entre deux clefs : une clef envoyée il y a
-        // moins de trente secondes reste valable
-        if (reponse.error && !(reponse.code === 429 && $ids_suppression.length))
+        if (!$ids_suppression.length)
         {
-            $erreur_mot_de_passe_suppression = lire_erreur_clef(reponse)
-            return
+            const mot_de_passe = new FormData($node).get('mot_de_passe')
+            const reponse      = await envoyer_clef(mot_de_passe)
+
+            if (reponse.error)
+            {
+                $erreur_mot_de_passe_suppression = lire_erreur_clef(reponse)
+                return
+            }
+
+            $mot_de_passe_suppression = mot_de_passe
         }
 
-        $mot_de_passe_suppression        = mot_de_passe
         $erreur_mot_de_passe_suppression = false
         $basculer_vers_onglet_suivant()
     }
@@ -111,9 +106,6 @@
         $succes_clef_suppression         = false
         $basculer_vers_onglet_precedant()
     }
-
-    if ($etape === 'profils')
-        charger_profils()
 ]
 
 @args [$etape]
@@ -179,7 +171,7 @@
                     erreur-formulaire
                         "$erreur_clef_suppression"
                 champ-clef ["Clef de validation", clef]
-                lien-action [$renvoyer_clef_suppression, 30]
+                lien-action [$renvoyer_clef_suppression, 30, $depart_clef_suppression]
                     "Renvoyer la clef"
                 alerte-formulaire
                     "Toutes vos sessions seront fermées, celle-ci comprise."

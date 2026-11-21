@@ -1,4 +1,16 @@
-page [$authentification : libre_sans_profil]
+@style [
+    /* La navigation attend aussi : liens et boutons gardent leur propre curseur (règle a,
+       button de index) */
+    .page-chargement .navigation {
+        cursor: wait;
+    }
+
+    .page-chargement:is(.entree, .sortie) .navigation {
+        cursor: default;
+    }
+]
+
+page.page-chargement [$authentification : libre_sans_profil]
     navigation
         <div .gauche>
             fleche-retour

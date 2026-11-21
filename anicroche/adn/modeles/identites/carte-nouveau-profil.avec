@@ -1,0 +1,98 @@
+@script [
+    // L ancre est une sœur du disque, pas son parent : on écoute toute la carte. L œuf, modèle
+    // enfant, n est cherché qu au survol : il peut ne pas être encore construit au montage
+    $monter_carte_nouveau_profil = () =>
+    {
+        const disque = $node
+        const carte  = disque.closest('.carte-nouveau-profil')
+
+        if (!carte) return
+
+        let en_cours = false
+
+        const animer = () =>
+        {
+            const oeuf = disque.querySelector('.icone-oeuf')
+            if (en_cours || !oeuf) return
+
+            en_cours = true
+            oeuf.classList.add('anime')
+            oeuf.addEventListener('animationend', () =>
+            {
+                en_cours = false
+                oeuf.classList.remove('anime')
+            }, { once: true })
+        }
+
+        $vars.animer = animer
+        $vars.carte  = carte
+
+        carte.addEventListener('mouseenter', animer)
+        carte.addEventListener('focusin',    animer)
+    }
+
+    $demonter_carte_nouveau_profil = () =>
+    {
+        const { animer, carte } = $vars
+
+        if (!carte) return
+
+        carte.removeEventListener('mouseenter', animer)
+        carte.removeEventListener('focusin',    animer)
+    }
+]
+
+@style [
+    @keyframes tremblement-oeuf {
+        0%   { transform: rotate(  0deg ); }
+        15%  { transform: rotate(-15deg ); }
+        29%  { transform: rotate( 13deg ); }
+        42%  { transform: rotate(-11deg ); }
+        54%  { transform: rotate(  9deg ); }
+        65%  { transform: rotate( -7deg ); }
+        75%  { transform: rotate(  5deg ); }
+        84%  { transform: rotate( -3deg ); }
+        92%  { transform: rotate(  1deg ); }
+        100% { transform: rotate(  0deg ); }
+    }
+
+    .carte-nouveau-profil > .disque {
+        height: var(--h-avatar);
+        aspect-ratio: 1 / 1;
+        flex-shrink: 0;
+
+        border: 0.125rem solid var(--c-vif);
+        border-radius: 50%;
+
+        display: grid;
+        place-items: center;
+
+        --c-flux: var(--c-vif);
+    }
+
+    /* Rotation autour de la base de l œuf, comme posé sur une table */
+    .carte-nouveau-profil .icone-oeuf {
+        transform-origin: 50% 95%;
+    }
+
+    .carte-nouveau-profil .icone-oeuf.anime {
+        animation: tremblement-oeuf calc(var(--d-animation) * 2) ease-in-out;
+    }
+]
+
+carte.carte-profil.carte-nouveau-profil
+    boite-ancre [
+        /profil/creation
+        $etendue : :)
+        $alt : "Créer un profil"
+    ]
+    <div
+        .disque
+        @mount="$monter_carte_nouveau_profil()"
+        @unmount="$demonter_carte_nouveau_profil()"
+    >
+        icone-oeuf
+    <div .noms>
+        <span .pseudonyme>
+            lien-ancre [/profil/creation]
+                "Nouveau profil"

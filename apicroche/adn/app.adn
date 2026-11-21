@@ -2,22 +2,46 @@ nom          : Apicroche
 langue       : fr
 cors_headers : [ X-Profil ]
 
-courriels_annonces_par_jour : 100
-
 types_anicroches : {
     page : {
         libelle        : Page
         identifiant    : libre
         auteurs        : :(
         administration : [ maitre ]
-        legalite       : [ conditions-generales-d-utilisation, politique-de-confidentialite, mentions-legales ]
-        preavis        : [ conditions-generales-d-utilisation, politique-de-confidentialite ]
         sources        : {
+            titre : {
+                libelle : Titre
+                format  : titre
+                nombre  : 1-1
+            }
             contenu : {
                 libelle : Contenu
-                format  : texte-long
+                format  : texte
                 nombre  : 1-1
             }
         }
+        exceptions     : [
+            {
+                identifiant  : conditions-generales-d-utilisation
+                sources      : {
+                    titre : "Conditions générales d'utilisation"
+                }
+                specificites : [ legalite, preavis, acceptation ]
+            }
+            {
+                identifiant  : politique-de-confidentialite
+                sources      : {
+                    titre : "Politique de confidentialité"
+                }
+                specificites : [ legalite, preavis ]
+            }
+            {
+                identifiant  : mentions-legales
+                sources      : {
+                    titre : "Mentions légales"
+                }
+                specificites : [ legalite ]
+            }
+        ]
     }
 }

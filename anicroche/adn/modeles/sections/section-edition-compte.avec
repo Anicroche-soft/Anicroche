@@ -69,9 +69,14 @@
         })
 
         if (!reponse.error)
-            $clefs_edition[reference()] = [ ...ids_clefs(), reponse.data.id ]
+        {
+            $clefs_edition[reference()]       = [ ...ids_clefs(), reponse.data.id ]
+            $dates_clefs_edition[reference()] = Date.now()
+        }
         return reponse
     }
+
+    $depart_clef_edition = () => $dates_clefs_edition[reference()] ?? null
 
     // Arrivée sur l écran de la clef : elle n est envoyée qu une fois par destination, même
     // après un retour en arrière (comme à la connexion)
@@ -425,7 +430,7 @@
                     erreur-formulaire
                         "$erreur_clef_edition"
                 champ-clef ["Clef de validation", clef]
-                lien-action [$renvoyer_clef_edition, 30]
+                lien-action [$renvoyer_clef_edition, 30, $depart_clef_edition]
                     "Renvoyer la clef"
                 @if [$action_edition = principale]
                     alerte-formulaire

@@ -1,0 +1,39 @@
+@actions [
+    {
+        prior_respond : $normaliser_coordonnee()
+    }
+]
+
+@script [
+    $normaliser_coordonnee = () =>
+    {
+        if (typeof $body?.coordonnee === 'string')
+            $body.coordonnee = $body.coordonnee.trim().toLowerCase()
+    }
+
+    $lire_courriels = async (id_compte) =>
+        (await $search_all('coordonnees',
+            `
+            #id_compte = $id_compte
+          & #type      = courriel
+            `,
+            { $id_compte: id_compte }
+        )).map(coordonnee => coordonnee.coordonnee)
+
+    // Toutes les adresses du compte sont prévenues : un voleur qui aurait changé l adresse
+    // principale n empêche pas l ancienne d être avertie
+    $ecrire_courriels = async (adresses, sujet, contenu) =>
+    {
+        for (const adresse of adresses)
+        {
+            try
+            {
+                await $send_email({ to: adresse, subject: sujet, content: contenu })
+            }
+            catch (erreur)
+            {
+                console.log(`/!\\ courriel au compte non envoyé : ${erreur.message}`)
+            }
+        }
+    }
+]

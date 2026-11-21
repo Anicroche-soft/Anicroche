@@ -1,9 +1,9 @@
 @script [
     // Envoie la demande ; renvoie vrai si le compte est restauré. Les erreurs sont affichées
     // dans l onglet de la demande ou dans celui des conditions
-    const restaurer = async (accepte_conditions) =>
+    const restaurer = async (conditions_acceptees) =>
     {
-        const reponse = await $create('restauration', { jeton: $jeton_restauration, accepte_conditions })
+        const reponse = await $create('restauration', { jeton: $jeton_restauration, conditions_acceptees })
 
         // Le compte ne connaît pas les dernières versions des conditions : elles sont à accepter
         if (reponse.code === 412)
@@ -37,13 +37,13 @@
         const noeud = $node
 
         $erreur_restauration = false
-        const restaure = await restaurer(false)
+        const restaure = await restaurer([])
 
         if (restaure || $conditions_restauration.length)
             requestAnimationFrame(() => $basculer_vers_onglet_suivant(noeud))
     }
 
-    // Les cases sont obligatoires : le formulaire n est envoyé que cochées
+    // L API vérifie que chaque version est présentée, et cochée s il faut l accepter
     $envoyer_formulaire_conditions_restauration = async () =>
     {
         const noeud = $node
@@ -51,16 +51,16 @@
         $erreur_conditions_restauration = false
         const nombre = $conditions_restauration.length
 
-        if (await restaurer(true))
+        if (await restaurer(new FormData(noeud).getAll('conditions_acceptees')))
             return $basculer_vers_onglet_suivant(noeud)
 
-        // Une version est apparue entre-temps, ou la demande a échoué
+        // Une version est apparue entre-temps, une case n est pas cochée, ou la demande a échoué
         if ($etat_restauration === 'invalide')
             $basculer_vers_onglet_precedant(noeud)
+        else if ($conditions_restauration.length !== nombre)
+            $erreur_conditions_restauration = "Les conditions ont changé : acceptez leurs nouvelles versions"
         else
-            $erreur_conditions_restauration = $conditions_restauration.length !== nombre
-                ? "Les conditions ont changé : acceptez leurs nouvelles versions"
-                : $erreur_restauration
+            $erreur_conditions_restauration = $erreur_restauration || "Acceptez les nouvelles conditions pour restaurer votre compte"
     }
 
     $revenir_a_la_demande_restauration = () =>
@@ -96,15 +96,15 @@
 @else-if [$etape = conditions]
     section [restauration-conditions, centree]
         titre [centre]
-            "Acceptez les nouvelles conditions"
+            "Pages légales mises à jour"
         carte
             formulaire [$envoyer_formulaire_conditions_restauration]
                 @if [$erreur_conditions_restauration]
                     erreur-formulaire
                         "$erreur_conditions_restauration"
                 information-formulaire
-                    "Des pages légales ont changé depuis la demande de suppression : acceptez leurs nouvelles versions pour restaurer votre compte."
-                cases-conditions [$conditions_restauration]
+                    "Des pages légales ont changé depuis la demande de suppression."
+                conditions-restauration [$conditions_restauration]
                 ligne
                     bouton-action [$revenir_a_la_demande_restauration]
                         icone-fleche-gauche

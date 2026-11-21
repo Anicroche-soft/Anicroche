@@ -1,11 +1,9 @@
 @script [
-    // chargement, introuvable, non_publiee ou trouvee
-    $etat_anicroche           = 'chargement'
+    // introuvable, non_publiee ou trouvee
+    $etat_anicroche           = 'introuvable'
     $anicroche                = null
     $sources_anicroche        = []
     $libelle_anicroche        = ''
-    $chemin_anicroche_charge  = null
-    $version_anicroche_charge = ''
 
     // Avis au-dessus du contenu : texte, puis lien vers l autre version
     $avis_anicroche       = ''
@@ -22,7 +20,7 @@
         $texte_avis_anicroche = texte_lien
     }
 
-    // /<id> montre la version en vigueur, /<id>?version=<numero> une version précise. Les
+    // /<id> montre la version en vigueur, /<id>/<numero> une version précise. Les
     // gérants de l anicroche (auteurs, ou profils qui administrent son type) reçoivent aussi
     // son brouillon : /<id> en montre l aperçu tant qu aucune version n est parue, et un lien
     // y mène sinon
@@ -30,7 +28,7 @@
     {
         const a_venir   = anicroche.a_venir
         const brouillon = anicroche.brouillon ?? null
-        const lien      = (numero) => `${chemin}?version=${numero}`
+        const lien      = (numero) => `${chemin}/${numero}`
         const date      = (valeur) => $formater_date(valeur)
 
         avis('')
@@ -73,7 +71,7 @@
         const entrees = []
         const entree  = (numero, texte) => entrees.push({
             texte,
-            lien     : numero === anicroche.en_vigueur ? chemin : `${chemin}?version=${numero}`,
+            lien     : numero === anicroche.en_vigueur ? chemin : `${chemin}/${numero}`,
             affichee : numero === anicroche.version
         })
 
@@ -86,17 +84,14 @@
         $historique_anicroche = entrees
     }
 
-    // Le modèle reste en place quand on passe d une anicroche ou d une version à une autre :
-    // le chargement suit donc l adresse plutôt que l exécution du script
-    $charger_anicroche = async () =>
+    // Le routeur reconstruit la page à chaque adresse (@key) : /<id> ou /<id>/<numero>
+    const charger_anicroche = async () =>
     {
-        const chemin  = $path
-        const version = $query.version ?? ''
-        $chemin_anicroche_charge  = chemin
-        $version_anicroche_charge = version
-        $etat_anicroche = 'chargement'
+        const adresse                = $path
+        const [ segment, version = '' ] = adresse.slice(1).split('/')
+        const chemin                 = `/${segment}`
 
-        const id = $lire_identifiant_anicroche(chemin.slice(1))
+        const id = $lire_identifiant_anicroche(segment)
         if (!id || (version !== '' && !/^[1-9][0-9]*$/.test(version)))
         {
             $etat_anicroche = 'introuvable'
@@ -106,13 +101,13 @@
         const reponse = await $search(`anicroche/${encodeURIComponent(id)}${version === '' ? '' : `?version=${version}`}`)
 
         // Une réponse arrivée après une nouvelle navigation est ignorée
-        if ($path !== chemin || ($query.version ?? '') !== version)
+        if ($path !== adresse)
             return
 
         // Un type inconnu fait recharger les types de l API, et reste introuvable s il en est
         // toujours absent
         const type = reponse.code === 200 ? await $obtenir_type_anicroche(reponse.data?.type) : null
-        if ($path !== chemin || ($query.version ?? '') !== version)
+        if ($path !== adresse)
             return
 
         if (!type)
@@ -127,8 +122,14 @@
 
         $anicroche         = reponse.data
         $libelle_anicroche = type.libelle
-        $sources_anicroche = $lister_sources_anicroche(type, sources)
+        const listees      = $lister_sources_anicroche(type, sources)
             .filter(source => String(source.contenu ?? '').trim() !== '')
+
+        // Une version parue avant la source de titre de son type prend le titre donné par l API
+        const role_titre   = type.sources.find(source => source.format === 'titre')?.role
+        $sources_anicroche = role_titre && !apercu && !listees.some(source => source.role === role_titre)
+            ? [ { role: role_titre, format: 'titre', contenu: reponse.data.titre }, ...listees ]
+            : listees
         preparer_avis(reponse.data, chemin)
         preparer_historique(reponse.data, chemin)
 
@@ -136,10 +137,11 @@
         // est annoncée
         $etat_anicroche = reponse.data.version === null && !apercu ? 'non_publiee' : 'trouvee'
     }
-]
 
-@if [$path != $chemin_anicroche_charge | ($query.version & $query.version != $version_anicroche_charge) | (! $query.version & $version_anicroche_charge)]
-    <div hidden @mount="$charger_anicroche()">
+    // La page n est affichée qu une fois l anicroche chargée : le routeur montre d ici là son
+    // modèle d attente
+    await charger_anicroche()
+]
 
 @if [$etat_anicroche = introuvable]
     page-404
@@ -155,10 +157,7 @@
                     "$libelle_anicroche"
 
         onglet
-            @if [$etat_anicroche = chargement]
-                section-chargement
-
-            @else-if [$etat_anicroche = non_publiee]
+            @if [$etat_anicroche = non_publiee]
                 section [anicroche-non-publiee, centree]
                     titre [centre]
                         "Cette page n'est pas encore publiée"

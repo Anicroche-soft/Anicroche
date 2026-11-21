@@ -1,14 +1,22 @@
 @script [
-    $profils_suppression       = null
     $choix_profils_suppression = []
     $profils_a_supprimer       = []
     $ids_suppression           = []
+    $date_clef_suppression     = null
     $mot_de_passe_suppression  = null
     $date_suppression          = ''
 
     $erreur_mot_de_passe_suppression = false
     $erreur_clef_suppression         = false
     $succes_clef_suppression         = false
+
+    // Profils proposés à la suppression, chargés avant l affichage de la page : le routeur
+    // montre d ici là son modèle d attente
+    const reponse_profils = await $search('desinscription')
+    $choix_profils_suppression = (reponse_profils.error ? [] : reponse_profils.data.profils).map(profil => ({
+        nom       : profil.id,
+        etiquette : `@${profil.identifiant}`
+    }))
 ]
 
 page [:(, $authentification : requise_sans_profil]

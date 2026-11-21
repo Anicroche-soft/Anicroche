@@ -10,7 +10,8 @@
 
     // Identifiants des clefs envoyées, par type et adresse de destination : une clef n est
     // renvoyée que si l une ou l autre change
-    $clefs_edition = {}
+    $clefs_edition       = {}
+    $dates_clefs_edition = {}
 
     $erreur_etape_edition = false
     $erreur_clef_edition  = false

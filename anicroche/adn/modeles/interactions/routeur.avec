@@ -11,12 +11,13 @@
             return chemin.replaceAll('-', '')
         return null
     }
+
+    // La page n est choisie qu une fois le démarrage terminé : le modèle d attente de l appel
+    // (corps) reste affiché jusqu à la page demandée, données comprises
+    await $demarrage
 ]
 
-@if [$phase = chargement]
-    page-chargement
-
-@else-if [$path ~= '/']
+@if [$path ~= '/']
     -page-accueil
 
 @else-if [$path ~= '/gadgets']
@@ -54,11 +55,15 @@
     -page-chargement
 
 # Anicroches : identifiant lisible en minuscules, ou majuscules et chiffres par groupes de trois
+# Une même page pour une autre anicroche ou une autre version est reconstruite (@key), avec
+# la transition d un changement de page
 @else-if [$path ~= '/<$chemin_anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->/edition']
-    -page-edition-anicroche
+    @key [$path]
+        -page-edition-anicroche
 
-@else-if [$path ~= '/<$chemin_anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->']
-    -page-anicroche
+@else-if [$path ~{ ['/<$chemin_anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->', '/<$chemin_anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->/<$version_anicroche :+ 0123456789>']]
+    @key [$path]
+        -page-anicroche
 
 @else
     -page-404

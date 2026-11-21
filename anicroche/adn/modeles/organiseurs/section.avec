@@ -1,6 +1,7 @@
 @style [
     .section {
         flex: 0;
+        gap: 0.5rem;
         scroll-margin-top: calc(var(--h-navigation) + 1rem);
     }
 

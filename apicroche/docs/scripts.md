@@ -21,7 +21,8 @@ Le bloc `@script` d'un modèle contient du JavaScript. Les fonctions déclarées
 - Seules les déclarations de la forme `$nom = (…) =>` sont exportées ; une fonction déclarée autrement reste utilisable à l'intérieur du script mais ne peut pas être appelée par une route ou un hook.
 - Le script est évalué à chaque requête : les variables (`$body`, `$request`, `$context`…) et fonctions ci-dessous désignent toujours celles de la requête en cours.
 - Les fonctions des fichiers génériques (sans `@name`) sont accessibles depuis les scripts de tous les modèles, mais une route ou un hook d'une table ne peut appeler que les fonctions du `@script` de son propre fichier : pour utiliser une fonction générique, l'appeler depuis une fonction du modèle.
-- Au démarrage, sans.js signale chaque route ou hook dont l'action est mal formée ou désigne une fonction absente du `@script` de son fichier (en précisant, le cas échéant, le fichier où elle est définie).
+- À l'inverse, les fonctions du `@script` d'une table ne sont pas accessibles depuis les fichiers génériques : les tâches périodiques, `prior_run` et les requêtes adressées à d'autres tables ne compilent pas ce script. Une fonction utile hors de sa table se place donc dans un fichier générique.
+- Au démarrage, sans.js signale chaque route ou hook dont l'action est mal formée ou désigne une fonction absente du `@script` de son fichier (en précisant, le cas échéant, le fichier où elle est définie). Il signale aussi chaque appel, dans un fichier générique, d'une fonction définie seulement dans le `@script` d'une table.
 
 ---
 
@@ -218,6 +219,6 @@ Un fichier `.sans` sans `@name` (comme `index.sans`) ne crée pas de table. Il p
 | `when` | Expression augure optionnelle : l'action n'est exécutée que si elle est vraie. Pour `prior_respond` / `post_respond`, elle a accès à `$request` ; pour une tâche périodique, à `$now` |
 | `prior_run` | Fonction exécutée une fois au démarrage, après la construction de la base et avant que le serveur écoute. Les actions `prior_run` s'exécutent l'une après l'autre, dans l'ordre de déclaration. Une erreur est journalisée sans empêcher le démarrage. Arguments reconnus : ceux des tâches périodiques. Typiquement : créer les entrées indispensables si elles n'existent pas encore |
 | `periodically` | Fonction exécutée périodiquement. Arguments reconnus : `$now`, `$body`, `$request`, `$context` (vides) |
-| `period` | Période d'une tâche périodique : `<n>m` (minutes), `<n>h` (heures) ou `<n>d` (jours) |
+| `period` | Période d'une tâche périodique : `<n>m` (minutes), `<n>h` (heures) ou `<n>d` (jours). La première exécution a lieu au début de la minute, de l'heure ou du jour (minuit, heure locale) qui suit le démarrage, puis toutes les `<n>` unités. Une exécution retardée (processus bloqué, machine en veille) a lieu dès que possible, une seule fois même si plusieurs échéances sont passées ; une échéance atteinte pendant que la tâche tourne encore attend la fin de celle-ci |
 
 Les tâches périodiques sont vérifiées chaque minute (`m`), au début de chaque heure (`h`) ou chaque jour à minuit (`d`), et exécutées dès que la période est écoulée depuis la dernière exécution. La première exécution a lieu à la première échéance après le démarrage. Leurs fonctions, comme celles de `prior_run`, ont accès au magasin, à `$send_email` et à `$q`.

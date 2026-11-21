@@ -80,7 +80,7 @@
         if ($values.id !== $context.session?.id)
             return
 
-        // $detecter_connexion (index.sans) répond alors est_connecte : false
+        // $detecter_connexion (authentification.sans) répond alors est_connecte : false
         $context.compte = null
         $set_cookie('jeton', '', { lifetime: 0 })
     }

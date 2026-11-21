@@ -1,16 +1,12 @@
 Tâches :
-- ajouter un bouton de création de nouveau profil
-- réorganiser les modèles de tables de l'API dans divers dossiers
-- gérer la transition entre deux mêmes pages qui contiennent une valeur (id) différente
 - vérifier les valeurs par défaut des types d'anicroches
 - vérifier que l'accès a des données de tables liées à celle pour laquelle on fait la requête utilise bien le système de projection (si ce n'est pas le cas, l'ajouter dans la marche à suivre de Claude)
-- revoir l'organisation des pages d'Anicroches
+- revoir l'organisation des pages d'anicroches
 - relire et compléter les premières versions des pages légales (juridique/conditions-generales-d-utilisation.md, juridique/politique-de-confidentialite.md, juridique/mentions-legales.md : passages « À compléter », adresse d'Infomaniak à vérifier), les publier avant le lancement, et ajouter des liens vers ces pages dans le site
 - finir le préavis des pages légales (voir juridique/RGPD.md § 11, l'essentiel est fait) :
-    - tester avec un compte maître : programmation (date minimale de 30 jours plus le temps d'envoi), envoi horaire des annonces (preavis.sans), annonce à l'inscription, acceptation à la restauration (page /compte et lien du courriel)
-    - régler courriels_annonces_par_jour (app.adn, 100 par défaut) selon l'offre Service Mail (200 ou 500 courriels par 24 heures)
+    - vérifier email_limit (.env du serveur, 200 par défaut) selon l'offre Service Mail (200 ou 500 courriels par 24 heures)
     - zone de publication propre aux pages soumises au préavis, avec un bouton « Enregistrer en tant que correction » et un bouton « Enregistrer en tant que mise à jour »
-    - plus tard : avis des versions à venir dans tout le site (avec la boîte de notifications), et une source de titre pour les pages, qui remplacera les titres écrits dans preavis.sans
+    - plus tard : avis des versions à venir dans tout le site (avec la boîte de notifications)
 - compléter juridique/RGPD.md :
     - adresse de contact RGPD (§ 1)
     - référence et date du contrat de sous-traitance (DPA) d'Infomaniak, couvrant serveur, base et courriels (§ 3)

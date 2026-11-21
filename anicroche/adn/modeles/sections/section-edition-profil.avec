@@ -25,21 +25,14 @@
         bases.unshift(base_actuelle)
     $options_edition = bases.map(base => ({ etiquette: base, nom: base }))
 
-    const charger_derives = async () =>
+    // $nombre_derives_edition est chargé par la page avant son affichage
+    if (base_actuelle)
+        $choix_type_edition = racines_gerees.length < LIMITE_RACINES
+    else
     {
-        if (base_actuelle)
-        {
-            $choix_type_edition = racines_gerees.length < LIMITE_RACINES
-            return
-        }
-
-        const reponse = await $search(`profil/${encodeURIComponent(id_profil_edite)}/derives`)
-        const nombre  = reponse.error ? 0 : reponse.data?.nombre ?? 0
-
-        $choix_type_edition    = nombre === 0 && $options_edition.length > 0
-        $a_des_derives_edition = nombre > 0
+        $choix_type_edition    = $nombre_derives_edition === 0 && $options_edition.length > 0
+        $a_des_derives_edition = $nombre_derives_edition > 0
     }
-    charger_derives()
 
     // Le type est lu dans le formulaire : l'événement input précède le change qui met à jour $type_edition
     const lire_identifiant = (data) =>

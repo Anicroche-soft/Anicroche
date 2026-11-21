@@ -7,13 +7,18 @@
 # - administration : rôles de profil qui ont tous les droits sur les anicroches du type ;
 # - sources        : rôles des sources, chacun avec son libellé, son format (voir FORMATS) et
 #                    son nombre de sources (0-1, 1-1, 1-N…), rangées par position ; les sources
-#                    obligatoires sont créées vides avec l anicroche ;
-# - legalite       : identifiants des anicroches légales, créées au démarrage (le type doit
-#                    avoir un identifiant libre), dont une version parue ou programmée est
-#                    toujours publique ;
-# - preavis        : identifiants des anicroches qui paraissent immédiatement (correction
-#                    mineure) ou au moins 30 jours plus tard (modification de fond), et dont la
-#                    parution programmée ne peut être ni annulée ni déplacée.
+#                    obligatoires sont créées vides avec l anicroche ; une source de format
+#                    titre (une seule par type) donne le titre de chaque version ;
+# - exceptions     : anicroches créées au démarrage (le type doit avoir un identifiant libre),
+#                    chacune avec son identifiant, le contenu de ses sources obligatoires à
+#                    leur création ({ <rôle> : <contenu> }) et ses spécificités :
+#     - legalite    : une version parue ou programmée est toujours publique ;
+#     - preavis     : l anicroche paraît immédiatement (correction mineure) ou au moins 30
+#                     jours plus tard (modification de fond), et sa parution programmée ne peut
+#                     être ni annulée ni déplacée ;
+#     - acceptation : avec preavis, sa version en vigueur s accepte par une case à cocher à la
+#                     restauration d un compte ; les autres versions inconnues du compte y
+#                     sont seulement présentées.
 
 @actions [
     {
@@ -38,7 +43,9 @@
     const LONGUEUR_MAXIMALE = 48
 
     // Formats de source : ils décident du champ d édition et de l affichage dans le site
-    const FORMATS = [ 'texte', 'texte-long' ]
+    const FORMATS = [ 'titre', 'texte' ]
+
+    const SPECIFICITES = [ 'legalite', 'preavis', 'acceptation' ]
 
     $type_anicroche = (type) =>
         Object.prototype.hasOwnProperty.call($app.types_anicroches ?? {}, type)
@@ -69,8 +76,10 @@
         identifiant    : config?.identifiant,
         auteurs        : config?.auteurs === true,
         administration : config?.administration ?? [],
-        legalite       : config?.legalite ?? [],
-        preavis        : config?.preavis ?? [],
+        exceptions     : (config?.exceptions ?? []).map(exception => ({
+            identifiant  : exception?.identifiant,
+            specificites : exception?.specificites ?? []
+        })),
         sources        : Object.entries(config?.sources ?? {}).map(([role, source]) =>
         {
             const nombre = $lire_nombre(source?.nombre)
@@ -93,11 +102,53 @@
         return $indicate(200, 'Types récupérés', types)
     }
 
-    $est_legale = (anicroche) =>
-        ($type_anicroche(anicroche.type)?.legalite ?? []).includes(anicroche.id)
+    // ─── Exceptions ──────────────────────────────────────────────────────────
 
-    $soumise_au_preavis = (anicroche) =>
-        ($type_anicroche(anicroche.type)?.preavis ?? []).includes(anicroche.id)
+    $exceptions_type = (type) =>
+        ($type_anicroche(type)?.exceptions ?? []).filter(exception => exception && typeof exception === 'object')
+
+    $exception_anicroche = (anicroche) =>
+        $exceptions_type(anicroche?.type).find(exception => exception.identifiant === anicroche?.id) ?? null
+
+    $a_specificite = (anicroche, specificite) =>
+        ($exception_anicroche(anicroche)?.specificites ?? []).includes(specificite)
+
+    // Identifiants des anicroches de tous les types qui ont la spécificité
+    $ids_specificite = (specificite) =>
+        Object.keys($app.types_anicroches ?? {}).flatMap(type => $exceptions_type(type)
+            .filter(exception => (exception.specificites ?? []).includes(specificite))
+            .map(exception => exception.identifiant))
+
+    $est_legale = (anicroche) => $a_specificite(anicroche, 'legalite')
+
+    $soumise_au_preavis = (anicroche) => $a_specificite(anicroche, 'preavis')
+
+    // ─── Titres ──────────────────────────────────────────────────────────────
+
+    $role_titre = (type) =>
+        Object.entries($type_anicroche(type)?.sources ?? {}).find(([, source]) => source?.format === 'titre')?.[0] ?? null
+
+    // Titre des sources résolues d une version (voir $resoudre_sources) : sa source de titre,
+    // sinon celle de l exception à sa création, sinon l identifiant
+    $titre_sources = (anicroche, sources) =>
+    {
+        const role    = $role_titre(anicroche.type)
+        const valeur  = role ? sources?.[role] : null
+        const source  = Array.isArray(valeur) ? valeur[0] : valeur
+        const contenu = String(source?.contenu ?? '').trim()
+
+        return contenu || (role && $exception_anicroche(anicroche)?.sources?.[role]) || anicroche.id
+    }
+
+    $titre_version = async (id_anicroche, numero) =>
+    {
+        const anicroche = await $search_one('anicroche', `#id = $id`, { $id: id_anicroche })
+        if (!anicroche)
+            return id_anicroche
+
+        const lignes = await $search_all('sources', `#id_anicroche = $id`, { $id: id_anicroche })
+        return $titre_sources(anicroche, $resoudre_sources(anicroche.type, lignes, numero))
+    }
 
     // ─── Droits ──────────────────────────────────────────────────────────────
 
@@ -210,7 +261,8 @@
         return derniere?.position ?? 0
     }
 
-    // Sources obligatoires créées vides dans le dernier brouillon, jusqu au nombre minimum
+    // Sources obligatoires créées dans le dernier brouillon, jusqu au nombre minimum : vides,
+    // ou avec le contenu donné par l exception de l anicroche
     $creer_sources_obligatoires = async (anicroche) =>
     {
         const brouillon = await $search_one('version',
@@ -225,6 +277,7 @@
             return
 
         const { langue, region } = $langue_preferee()
+        const contenus           = $exception_anicroche(anicroche)?.sources ?? {}
 
         for (const source of $sources_type(anicroche.type))
         {
@@ -236,7 +289,7 @@
                     version      : brouillon.numero,
                     langue,
                     region,
-                    contenu      : ''
+                    contenu      : typeof contenus[source.role] === 'string' ? contenus[source.role] : ''
                 })
         }
     }
@@ -297,14 +350,39 @@
             if (!Array.isArray(config?.administration))
                 avertir(`administration doit être une liste de rôles`)
 
-            for (const clef of [ 'legalite', 'preavis' ])
+            if (config?.exceptions !== undefined && !Array.isArray(config.exceptions))
+                avertir(`exceptions doit être une liste`)
+
+            if (config?.exceptions?.length && identifiant !== 'libre')
+                avertir(`exceptions demande un identifiant libre`)
+
+            for (const exception of Array.isArray(config?.exceptions) ? config.exceptions : [])
             {
-                if (config?.[clef] !== undefined && !(Array.isArray(config[clef]) && config[clef].every(id => typeof id === 'string')))
-                    avertir(`${clef} doit être une liste d'identifiants`)
+                const id = exception?.identifiant
+
+                if (typeof id !== 'string' || !MOTIF_LISIBLE.test(id) || id.length > LONGUEUR_MAXIMALE)
+                {
+                    avertir(`exception : identifiant invalide (${id})`)
+                    continue
+                }
+
+                const specificites = exception.specificites ?? []
+                if (!Array.isArray(specificites) || specificites.some(specificite => !SPECIFICITES.includes(specificite)))
+                    avertir(`exception ${id} : specificites doit être une liste parmi ${SPECIFICITES.join(', ')}`)
+                else if (specificites.includes('acceptation') && !specificites.includes('preavis'))
+                    avertir(`exception ${id} : acceptation demande preavis`)
+
+                for (const [role, contenu] of Object.entries(exception.sources ?? {}))
+                {
+                    if (!Object.prototype.hasOwnProperty.call(config?.sources ?? {}, role))
+                        avertir(`exception ${id} : rôle de source inconnu (${role})`)
+                    else if (typeof contenu !== 'string')
+                        avertir(`exception ${id} : la source ${role} doit être un texte`)
+                }
             }
 
-            if (config?.legalite?.length && identifiant !== 'libre')
-                avertir(`legalite demande un identifiant libre`)
+            if (Object.values(config?.sources ?? {}).filter(source => source?.format === 'titre').length > 1)
+                avertir(`une seule source peut avoir le format titre`)
 
             if (typeof config?.libelle !== 'string')
                 avertir(`libelle manquant`)

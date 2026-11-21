@@ -1,5 +1,3 @@
-import cron from 'node-cron'
-
 import { creer_fonctions_magasin } from './magasin.js'
 import { creer_fonctions_mailer } from './mailer.js'
 import { evaluer } from './augure.js'
@@ -48,6 +46,12 @@ const citer_condition = (valeur) =>
     return json === undefined ? 'null' : json
 }
 
+const UNITES = {
+    m : (date, n) => date.setMinutes(date.getMinutes() + n, 0, 0),
+    h : (date, n) => date.setHours(date.getHours() + n, 0, 0, 0),
+    d : (date, n) => date.setDate(date.getDate() + n)
+}
+
 const convertir_periode = (periode) =>
 {
     if (typeof periode !== 'string')
@@ -58,36 +62,27 @@ const convertir_periode = (periode) =>
         return null
 
     const valeur = Number(match[1])
-    const unite  = match[2].toLowerCase()
-
     if (!Number.isInteger(valeur) || valeur <= 0)
         return null
 
-    if (unite === 'm')
-    {
-        return {
-            expression_cron: '* * * * *',
-            interval_ms: valeur * 60 * 1000
-        }
-    }
+    return { valeur, unite: match[2] }
+}
 
-    if (unite === 'h')
-    {
-        return {
-            expression_cron: '0 * * * *',
-            interval_ms: valeur * 60 * 60 * 1000
-        }
-    }
-
+// Début de la minute, de l heure ou du jour (heure locale) qui suit la date
+const borne_suivante = (date, unite) =>
+{
+    const borne = new Date(date)
     if (unite === 'd')
-    {
-        return {
-            expression_cron: '0 0 * * *',
-            interval_ms: valeur * 24 * 60 * 60 * 1000
-        }
-    }
+        borne.setHours(0, 0, 0, 0)
+    UNITES[unite](borne, 1)
+    return borne
+}
 
-    return null
+const avancer = (date, { valeur, unite }) =>
+{
+    const suivante = new Date(date)
+    UNITES[unite](suivante, valeur)
+    return suivante
 }
 
 const creer_contexte_base = (schemas) => ({
@@ -184,23 +179,19 @@ export const demarrer_taches_periodiques = (schemas) =>
             continue
         }
 
-        const { expression_cron, interval_ms } = periode
-        let derniere_execution = 0
+        // Les échéances sont comparées à l horloge à chaque réveil : un réveil en retard (processus
+        // bloqué, machine en veille) exécute la tâche dès qu il a lieu, une seule fois même si
+        // plusieurs échéances sont passées
+        let echeance           = borne_suivante(new Date(), periode.unite)
         let execution_en_cours = false
+        let minuteur           = null
 
-        const task = cron.schedule(expression_cron, async () =>
+        const executer = async () =>
         {
-            const maintenant = Date.now()
-            if (execution_en_cours)
-                return
-
-            // La dernière exécution est datée de son début, avec une marge pour
-            // absorber le léger décalage des déclenchements cron.
-            if (derniere_execution > 0 && (maintenant - derniere_execution) < interval_ms - 5000)
-                return
-
             execution_en_cours = true
-            derniere_execution = maintenant
+            const maintenant   = new Date()
+            while (echeance <= maintenant)
+                echeance = avancer(echeance, periode)
             try
             {
                 await executer_action_hors_requete(schemas, index.script ?? '', bloc, 'periodically')
@@ -209,10 +200,27 @@ export const demarrer_taches_periodiques = (schemas) =>
             {
                 execution_en_cours = false
             }
-        })
+        }
 
-        taches.push(task)
-        console.log(`  CRON   ${expression_cron.padEnd(13)} → ${bloc.periodically} (période ${bloc.period})`)
+        // Réveil au plus tard toutes les minutes : la durée d un minuteur ne compte pas le temps
+        // passé en veille. Une échéance passée pendant une exécution attend la fin de celle-ci
+        const planifier = () =>
+        {
+            const attente = echeance - new Date()
+            minuteur = setTimeout(reveiller, attente > 0 ? Math.min(attente + 50, 60 * 1000) : 1000)
+        }
+
+        const reveiller = () =>
+        {
+            if (!execution_en_cours && echeance <= new Date())
+                executer()
+            planifier()
+        }
+
+        planifier()
+
+        taches.push({ arreter: () => clearTimeout(minuteur) })
+        console.log(`  TÂCHE  ${bloc.period.trim().padEnd(5)} → ${bloc.periodically} (prochaine : ${echeance.toLocaleString('fr-FR')})`)
     }
 
     return taches

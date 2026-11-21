@@ -401,6 +401,10 @@ export const executer_script = (script, evenement, noeud, scope = null, args = n
     }
 }
 
+const FonctionAsynchrone = (async () => {}).constructor
+
+// Active le script d un modèle. Renvoie null, ou une promesse si le script attend (await au
+// premier niveau) : le modèle ne doit être construit qu une fois celle-ci résolue
 export const activer_script = (modele, js, scope = null, args = {}) =>
 {
     initialiser_sculpteur()
@@ -410,53 +414,69 @@ export const activer_script = (modele, js, scope = null, args = {}) =>
 
     if (scripts_actifs.has(clef_script))
     {
-        scripts_actifs.get(clef_script).compte++
+        const entree = scripts_actifs.get(clef_script)
+        entree.compte++
+        return entree.attente
     }
-    else
-    {
-        commencer_collecte_nettoyages()
-        scope_effectif._avec_contexte_script = scope_effectif._avec_contexte_script || Object.create(null)
-        const runtime = creer_runtime_contexte(scope_effectif, args)
-        const fonction = new Function(
-            `runtime`,
-            `
-            with (runtime) {
-                ${js}
-            }
-            `
-        )
 
+    commencer_collecte_nettoyages()
+    scope_effectif._avec_contexte_script = scope_effectif._avec_contexte_script || Object.create(null)
+    const runtime = creer_runtime_contexte(scope_effectif, args)
+
+    // Un script qui contient await est compilé en fonction asynchrone. Il n attend vraiment que
+    // s il n atteint pas sa dernière ligne d un seul tenant : un await dans une fonction qu il
+    // définit seulement ne retarde rien
+    const asynchrone = /\bawait\b/.test(js)
+    let termine      = false
+    const terminer   = () => { termine = true }
+    const fonction   = asynchrone
+        ? new FonctionAsynchrone(`runtime`, `__avec_terminer`, `with (runtime) {\n${js}\n}\n__avec_terminer()`)
+        : new Function(`runtime`, `with (runtime) {\n${js}\n}`)
+
+    const contexte_script = scope_effectif._avec_contexte_script
+    let resultat
+    try
+    {
+        empiler_contexte_script(contexte_script)
         try
         {
-            const contexte_script = scope_effectif._avec_contexte_script
-            empiler_contexte_script(scope_effectif._avec_contexte_script)
-            try
-            {
-                fonction(runtime)
-            }
-            finally
-            {
-                depiler_contexte_script(contexte_script)
-            }
-            const nettoyages = recuperer_nettoyages_script()
-
-            scripts_actifs.set(clef_script, {
-                code: js,
-                compte: 1,
-                nettoyages
-            })
+            resultat = fonction(runtime, terminer)
         }
-        catch (erreur)
+        finally
         {
-            const nettoyages = recuperer_nettoyages_script()
-            for (const nettoyage of nettoyages)
-            {
-                try { nettoyage() }
-                catch (nettoyage_erreur) { console.error(`Erreur nettoyage script AVEC :`, nettoyage_erreur) }
-            }
-            console.error(`Erreur script AVEC :`, erreur)
+            depiler_contexte_script(contexte_script)
         }
     }
+    catch (erreur)
+    {
+        for (const nettoyage of recuperer_nettoyages_script())
+        {
+            try { nettoyage() }
+            catch (nettoyage_erreur) { console.error(`Erreur nettoyage script AVEC :`, nettoyage_erreur) }
+        }
+        console.error(`Erreur script AVEC :`, erreur)
+        return null
+    }
+
+    // Les nettoyages enregistrés après un await ($add_action…) ne sont pas recueillis
+    const entree = {
+        code: js,
+        compte: 1,
+        nettoyages: recuperer_nettoyages_script(),
+        attente: null
+    }
+    scripts_actifs.set(clef_script, entree)
+
+    if (!asynchrone)
+        return null
+
+    // Une erreur après un await rejette l attente : le modèle de repli remplace le modèle
+    resultat.catch(erreur => console.error(`Erreur script AVEC :`, erreur))
+    if (termine)
+        return null
+
+    entree.attente = resultat.then(() => { entree.attente = null })
+    return entree.attente
 }
 
 export const desactiver_script = (modele, scope = null) =>

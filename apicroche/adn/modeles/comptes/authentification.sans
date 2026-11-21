@@ -1,0 +1,323 @@
+@actions [
+    {
+        periodically : $nettoyer_sessions()
+        period : 1d
+    }
+
+    {
+        periodically : $nettoyer_clefs()
+        period : 1d
+    }
+
+    {
+        prior_respond : $rafraichir_jeton()
+    }
+
+    {
+        post_respond : $detecter_connexion()
+    }
+]
+
+@script [
+    $nettoyer_sessions = async () =>
+    {
+        console.log('=================\nNETTOYER SESSIONS\n=================')
+        await $delete_all('sessions',
+            `
+            #date_revocation != null
+          | #date_validite   < now
+            `
+        )
+    }
+
+    $nettoyer_clefs = async () =>
+    {
+        console.log('==============\nNETTOYER CLEFS\n==============')
+        await $delete_all('clefs',
+            `
+            #date_validite < now
+            `
+        )
+    }
+
+    // Une clef ne sert qu à l usage de son type : une clef de connexion ne confirme pas un effacement
+    $verifier_clef = async (type = 'authentification') =>
+    {
+        // Décrémenter avant de vérifier : des essais simultanés ne peuvent pas dépasser le quota
+        await $update_all('clefs',
+            `
+            #id                 -{ $body.ids
+          & #hachage_coordonnee  = $body.coordonnee
+          & #type                = $type
+          & #nombre_tentatives  >= 0
+            `,
+            {
+                nombre_tentatives : 'nombre_tentatives - 1'
+            },
+            { $type: type }
+        )
+
+        return await $search_one('clef',
+            `
+            #id                 -{ $body.ids
+          & #hachage_coordonnee  = $body.coordonnee
+          & #type                = $type
+          & #clef                = $body.clef
+          & #nombre_tentatives  >= 0
+          & #date_validite       > now
+            `,
+            { $type: type }
+        )
+    }
+
+    // Session valide et son compte (le jeton de la session, haché, ne peut être vérifié qu à sa lecture)
+    const lire_session = async (condition, valeurs) =>
+    {
+        const session = await $search_one('session',
+            `
+            ${condition}
+          & #date_validite   > now
+          & #date_revocation = null
+            `,
+            valeurs,
+            { select: 'id ; date_emission ; date_validite ; nom_appareil ; is_session_of_compte' }
+        )
+
+        const compte = session?.is_session_of_compte
+        if (!compte)
+            return null
+
+        delete session.is_session_of_compte
+        return { session, compte }
+    }
+
+    const authentifier = async ({ session, compte }) =>
+    {
+        $context.compte  = compte
+        $context.session = session
+        await $noter_activite()
+        await $resoudre_profil()
+    }
+
+    $rafraichir_jeton = async () =>
+    {
+        const en_tete = $request.headers?.authorization ?? null
+        const jeton_acces = en_tete?.startsWith('Bearer ')
+            ? en_tete.slice(7).trim()
+            : null
+
+        if (jeton_acces)
+        {
+            const payload = await $verify_token(jeton_acces)
+
+            // Les liens des courriels sont aussi des jetons signés : seul un jeton d accès authentifie,
+            // et seulement tant que sa session n est ni expirée ni révoquée
+            if (payload?.type === 'acces' && payload.id_session)
+            {
+                // Une seule requête : le compte, joint à sa session
+                const compte = await $search_one('compte',
+                    `
+                    #sessions.id              = $id_session
+                  & #sessions.date_validite   > now
+                  & #sessions.date_revocation = null
+                    `,
+                    { $id_session: payload.id_session }
+                )
+
+                if (compte)
+                    return await authentifier({ session: { id: payload.id_session }, compte })
+            }
+        }
+
+        const cookie_session = $request.cookies?.jeton ?? null
+
+        if (!cookie_session)
+            return
+
+        const separateur = cookie_session.indexOf('.')
+        if (separateur <= 0 || separateur >= cookie_session.length - 1)
+            return
+
+        const lecture = await lire_session(
+            `
+            #id            = $id_session
+          & #hachage_jeton = $jeton_session
+            `,
+            {
+                $id_session    : cookie_session.slice(0, separateur),
+                $jeton_session : cookie_session.slice(separateur + 1)
+            }
+        )
+
+        if (!lecture)
+            return
+
+        const session        = lecture.session
+        const maintenant     = new Date()
+        const duree_totale   = new Date(session.date_validite) - new Date(session.date_emission)
+        const duree_restante = new Date(session.date_validite) - maintenant
+
+        if (duree_restante < duree_totale / 2)
+        {
+            await $update_one('session',
+                `#id = $session.id`,
+                { date_revocation: 'now' },
+                { $session: session }
+            )
+
+            const nouvelle_session = await $create_one('session', {
+                id_compte         : lecture.compte.id,
+                adresse_ip        : $request.ip,
+                agent_utilisateur : $request.user_agent,
+                nom_appareil      : session.nom_appareil
+            })
+
+            const cookie_rotation = `${nouvelle_session.id}.${nouvelle_session.jeton}`
+            $set_cookie('jeton', cookie_rotation, { lifetime: '30d' })
+
+            const nouveau_jeton_acces = await $sign_token({ type: 'acces', id_compte: lecture.compte.id, id_session: nouvelle_session.id })
+            $add_to_data('jeton_acces', nouveau_jeton_acces)
+
+            lecture.session = {
+                id            : nouvelle_session.id,
+                date_emission : nouvelle_session.date_emission,
+                date_validite : nouvelle_session.date_validite,
+                nom_appareil  : session.nom_appareil
+            }
+        }
+
+        await authentifier(lecture)
+    }
+
+    // Date de dernière activité, pour la suppression des comptes inactifs (voir effacement.sans) :
+    // écrite au plus une fois par jour
+    $noter_activite = async () =>
+    {
+        const compte = $context.compte
+        if (!compte || new Date(compte.date_derniere_activite) > new Date(Date.now() - 24 * 60 * 60 * 1000))
+            return
+
+        await $update_one('compte',
+            `#id = $id`,
+            {
+                date_derniere_activite     : 'now',
+                nombre_avertissements      : 0,
+                date_premier_avertissement : null
+            },
+            { $id: compte.id }
+        )
+    }
+
+    // Le profil sélectionné sur le site arrive dans l en-tête X-Profil : seul celui-ci compte
+    // pour les droits, et seulement si le compte en est gérant
+    $resoudre_profil = async () =>
+    {
+        const id_profil = String($request.headers?.['x-profil'] ?? '').trim()
+
+        if (!$context.compte || !id_profil)
+            return
+
+        const profil = await $search_one('profil',
+            `
+            #id         = $id_profil
+          & #gerants.id = $id_compte
+            `,
+            { $id_profil: id_profil, $id_compte: $context.compte.id }
+        )
+
+        if (profil)
+            $context.profil = profil
+    }
+
+    $detecter_connexion = async () =>
+    {
+        $add_to_respond('est_connecte', !!$context.compte)
+    }
+
+    // Un compte dont l effacement est demandé est gelé : seules les routes qui le permettent
+    // explicitement (consultation, déconnexion, annulation) lui restent ouvertes
+    $exiger_compte = (options = {}) =>
+    {
+        if (!$context.compte)
+            return $indicate(401, 'Non authentifié')
+
+        if ($context.compte.date_demande_effacement && !options.effacement_demande)
+            return $indicate(403, "Effacement du compte en cours")
+    }
+
+    // Vérifie une clef du type donné, envoyée à l adresse principale du compte connecté (corps :
+    // { clef, ids }), et renvoie cette adresse. $verifier_clef lit l adresse dans le corps : c est
+    // celle du compte qui compte
+    $verifier_clef_principale = async (type) =>
+    {
+        if (
+            !$body.clef
+         || !Array.isArray($body.ids)
+         || !$body.ids.length
+        )
+            return $indicate(400, "Corps incomplet")
+
+        const principale = await $search_one('coordonnee',
+            `
+            #id_compte = $id_compte
+          & #est_principale
+            `,
+            { $id_compte: $context.compte.id }
+        )
+
+        if (!principale)
+            return $indicate(403, "Accès refusé")
+
+        $body.coordonnee = principale.coordonnee
+
+        if (!await $verifier_clef(type))
+            return $indicate(403, "Accès refusé")
+
+        return principale
+    }
+
+    // Supprime les clefs d un type pour une adresse, une fois l une d elles utilisée
+    $consommer_clefs = (coordonnee, type) =>
+        $delete_all('clefs',
+            `
+            #hachage_coordonnee = $coordonnee
+          & #type               = $type
+            `,
+            { $coordonnee: coordonnee, $type: type }
+        )
+
+    // Navigateurs et systèmes reconnus, dans l ordre de test : un agent utilisateur en cite
+    // souvent plusieurs (Edge se dit aussi Chrome et Safari)
+    const NAVIGATEURS = [
+        [ /SamsungBrowser/,             'Samsung Internet' ],
+        [ /\bEdg(e|A|iOS)?\b/,          'Edge'             ],
+        [ /\bOPR\b|Opera/,              'Opera'            ],
+        [ /Firefox|FxiOS/,              'Firefox'          ],
+        [ /Chrome|Chromium|CriOS/,      'Chrome'           ],
+        [ /Safari/,                     'Safari'           ]
+    ]
+
+    const SYSTEMES = [
+        [ /Android/,                    'Android'          ],
+        [ /iPhone|iPod/,                'iPhone'           ],
+        [ /iPad/,                       'iPad'             ],
+        [ /CrOS/,                       'ChromeOS'         ],
+        [ /Windows/,                    'Windows'          ],
+        [ /Mac OS X|Macintosh/,         'macOS'            ],
+        [ /Linux/,                      'Linux'            ]
+    ]
+
+    const reconnaitre = (liste, agent) => liste.find(([ motif ]) => motif.test(agent))?.[1] ?? null
+
+    // Nom lisible de l appareil (« Firefox sur Linux »), ou null s il n est pas reconnu
+    $nommer_appareil = (agent_utilisateur) =>
+    {
+        const agent      = String(agent_utilisateur ?? '')
+        const navigateur = reconnaitre(NAVIGATEURS, agent)
+        const systeme    = reconnaitre(SYSTEMES, agent)
+
+        if (navigateur && systeme)
+            return `${navigateur} sur ${systeme}`
+        return navigateur ?? systeme
+    }
+]

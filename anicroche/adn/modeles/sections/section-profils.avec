@@ -32,3 +32,4 @@ section [profils]
                     $action : [$p.id != $profil.id] ? $selectionner_profil($p.id) : :(
                     $alt : "Basculer sur le profil $p.identifiant"
                 ]
+            carte-nouveau-profil

@@ -54,6 +54,28 @@ Les commentaires JavaScript `// …` et `/* … */` y sont permis, ainsi que les
 
 > **Note :** `@script` est exécuté une seule fois **par instance de modèle** (c'est-à-dire par scope). Les variables déclarées dans `@script` sont accessibles à cette instance et à tous ses enfants. Pour du code lié à un nœud DOM spécifique, utiliser les événements `@mount` / `@unmount`.
 
+#### Attendre des données avant l'affichage — `await`
+
+Un `@script` peut utiliser `await` à son premier niveau : le modèle n'est alors construit qu'**à la fin du script**. D'ici là, le [modèle d'attente](#types-de-chargement) (`?nom`) déclaré dans le bloc qui l'appelle est affiché ; si le script échoue (exception après un `await`), le modèle de repli (`!nom`) le remplace. Sans modèle d'attente dans le bloc, rien n'est affiché jusqu'à la fin du script.
+
+```
+@script [
+    $article = null
+
+    const reponse = await $search(`article/${$id}`)
+    $article = reponse.data
+]
+
+<h1>
+    "$article.titre"
+```
+
+- Pour un modèle différé (`-nom`), le modèle d'attente affiché pendant le chargement du fichier reste en place jusqu'à la fin du script : une page appelée par un routeur ne s'affiche qu'avec ses données.
+- Un modèle d'attente n'est jamais remplacé par lui-même : quand le contenu qui le remplace commence par un modèle qui attend à son tour avec le **même** modèle d'attente (même nom, mêmes arguments), celui-ci reste affiché, sans transition, jusqu'à la fin de cette seconde attente. Un routeur dont le script attend le démarrage de l'application (`await $demarrage`) affiche ainsi un seul écran de chargement jusqu'à la page demandée, données comprises. Seul le premier modèle construit dans ce contenu peut le reprendre : rien de visible ne doit le précéder.
+- Seul un `await` du premier niveau retarde le modèle : un `await` placé dans une fonction que le script définit (`$envoyer = async () => { await … }`) ne change rien.
+- Un modèle retiré pendant que son script attend (navigation…) n'est pas construit.
+- Les actions ajoutées par `$add_action` après le premier `await` ne sont pas retirées avec le modèle : les ajouter avant.
+
 ### Affectations des variables `$`
 
 Les variables dont le nom commence par `$` sont des variables d'instance liées au scope du modèle. Par défaut, affecter une variable `$nom` essaie de modifier la variable existante la plus proche dans la chaîne de scopes (comportement historique).
@@ -224,6 +246,18 @@ Les variables de clé/indice sont automatiquement exposées comme **variables CS
     <div>
         # --var-idx contient l'indice en CSS
 ```
+
+### `@key`
+
+Reconstruit son contenu chaque fois que la **valeur** de son expression change. Une conditionnelle ne reconstruit une branche que si une autre branche est choisie : sans `@key`, une même page pour une autre adresse reste en place, et seul son contenu réactif change. Avec `@key`, l'ancien contenu est démonté (les `@unmount` sont attendus, ce qui laisse jouer une animation de sortie), puis le nouveau est construit et monté : ses scripts sont exécutés de nouveau et ses variables repartent de leur valeur initiale.
+
+```
+@else-if [$path ~{ ['/article/<$id :+ 0123456789>', '/article/<$id :+ 0123456789>/<$page :+ 0123456789>']]
+    @key [$path]
+        page-article
+```
+
+La valeur peut être une liste ou un dictionnaire (`@key [[$id, $page]]`) : deux valeurs de même contenu sont égales. Un changement survenu pendant une reconstruction en déclenche une seule autre, à la fin de celle-ci. Comme les conditionnelles, `@key` n'est pas réactif sous `@static`.
 
 ### `@static`
 
@@ -464,10 +498,10 @@ Quand le modèle destinataire appelle `$fonction()` depuis un gestionnaire d'év
 |---|---|---|
 | `nom` | Modèle standard | Chargé de façon synchrone au moment du parsing du modèle parent |
 | `-nom` | Modèle différé | Chargé de façon asynchrone après le rendu initial |
-| `?nom` | Modèle d'attente | Affiché pendant le chargement d'un modèle différé |
-| `!nom` | Modèle de repli | Affiché si le chargement d'un modèle différé échoue |
+| `?nom` | Modèle d'attente | Affiché pendant le chargement d'un modèle différé, et tant que le script d'un modèle attend (`await`) |
+| `!nom` | Modèle de repli | Affiché si le chargement d'un modèle différé échoue, ou si le script d'un modèle échoue après un `await` |
 
-`?nom` et `!nom` déclarent des comportements pour les modèles différés (`-nom`) présents dans le **même bloc parent**. Ils ne s'affichent pas directement.
+`?nom` et `!nom` déclarent des comportements pour les modèles différés (`-nom`) et les modèles dont le script attend, présents dans le **même bloc parent** ou plus bas. Ils ne s'affichent pas directement.
 
 ```
 -contenu-lourd [$section]

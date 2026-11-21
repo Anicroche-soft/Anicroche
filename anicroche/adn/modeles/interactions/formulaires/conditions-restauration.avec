@@ -1,0 +1,34 @@
+@script [
+    // Versions inconnues du compte, telles que les renvoie l API à la restauration d un compte :
+    // { id_anicroche, titre, numero, date_parution, a_venir, a_accepter }. Une version a_accepter
+    // a sa case obligatoire, les autres sont seulement présentées. Toutes se lisent avec
+    // FormData.getAll('conditions_acceptees'), que l API compare à la liste des versions
+    const decrire = (condition) => ({
+        valeur     : `${condition.id_anicroche}:${condition.numero}`,
+        lien       : condition.a_venir ? `/${condition.id_anicroche}/${condition.numero}` : `/${condition.id_anicroche}`,
+        titre      : condition.titre,
+        a_accepter : condition.a_accepter === true,
+        date       : $formater_date(condition.date_parution),
+        verbe      : condition.a_venir ? 'entrera' : 'est entrée'
+    })
+
+    $cases_conditions         = ($conditions ?? []).map(decrire).filter(condition => condition.a_accepter)
+    $presentations_conditions = ($conditions ?? []).map(decrire).filter(condition => !condition.a_accepter)
+]
+
+@args [$conditions]
+
+<div .conditions-restauration>
+    @for-each [$case] of [$cases_conditions]
+        case-a-cocher [$nom : conditions_acceptees, $valeur : $case.valeur, $requis : :)]
+            "J'ai lu et j'accepte la nouvelle version de la page « "
+            lien-ancre [$case.lien, $nouvel_onglet : :)]
+                "$case.titre"
+            " », entrée en vigueur le $case.date."
+    @for-each [$presentation] of [$presentations_conditions]
+        <input type="hidden" name="conditions_acceptees" value="$presentation.valeur">
+        <p>
+            "Une nouvelle version de la page « "
+            lien-ancre [$presentation.lien, $nouvel_onglet : :)]
+                "$presentation.titre"
+            " » $presentation.verbe en vigueur le $presentation.date."
