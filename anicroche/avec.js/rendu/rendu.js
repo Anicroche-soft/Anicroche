@@ -54,7 +54,7 @@ const prendre_ouvrier = () =>
     return ouvrier
 }
 
-const executer_rendu = (adresse, ip) => new Promise((resoudre) =>
+const executer_rendu = (adresse, ip, modele) => new Promise((resoudre) =>
 {
     const ouvrier = prendre_ouvrier()
 
@@ -105,6 +105,7 @@ const executer_rendu = (adresse, ip) => new Promise((resoudre) =>
         adresse,
         ip,
         delai_max: DELAI_RENDU,
+        modele,
         journal: process.env.render_logs === `true`
     })
 })
@@ -128,14 +129,15 @@ const liberer_place = () =>
     }
 }
 
-// Renvoie le résultat du worker ({stable, adresse, classes, styles, corps}), ou null en cas d'échec.
-// `ip` est l'adresse du visiteur, transmise à l'API pour que ses limites de requêtes s'appliquent
-export const rendre_page = (adresse, ip = null) => new Promise((resoudre) =>
+// Renvoie le résultat du worker ({stable, adresse, classes, styles, corps, lignes…}), ou null en cas
+// d'échec. `ip` est l'adresse du visiteur, transmise à l'API pour que ses limites de requêtes
+// s'appliquent ; `modele` est le modèle de départ (index, ou celui d'une page spéciale)
+export const rendre_page = (adresse, ip = null, modele = `index`) => new Promise((resoudre) =>
 {
     const lancer = () =>
     {
         rendus_en_cours++
-        executer_rendu(adresse, ip).then((resultat) =>
+        executer_rendu(adresse, ip, modele).then((resultat) =>
         {
             liberer_place()
             resoudre(resultat)

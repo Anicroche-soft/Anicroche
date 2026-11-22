@@ -1,0 +1,42 @@
+@script [
+    // Anicroches visibles par tous et déjà parues, à leur adresse principale (sans numéro de
+    // version), avec la date de leur dernière parution
+    $entrees_sitemap = []
+
+    const base = $app_url || location.origin
+
+    // Inverse de $lire_identifiant_anicroche (routeur.avec) : un identifiant en majuscules et
+    // chiffres est découpé en groupes de trois
+    const chemin_anicroche = (id) =>
+        id !== id.toUpperCase()
+            ? `/${id}`
+            : `/${Array.from({ length: Math.ceil(id.length / 3) }, (_, i) => id.slice(i * 3, i * 3 + 3)).join('-')}`
+
+    const reponse    = await $search('anicroches', { projection: 'id;versions' })
+    const maintenant = new Date()
+    const anicroches = reponse.code === 200 ? reponse.data : []
+
+    const entrees = [ { loc: `${base}/`, lastmod: null } ]
+    for (const anicroche of anicroches)
+    {
+        const parutions = (anicroche.versions ?? [])
+            .map(version => version.date_parution ? new Date(version.date_parution) : null)
+            .filter(date => date && date <= maintenant)
+        if (!parutions.length)
+            continue
+
+        const derniere = new Date(Math.max(...parutions))
+        entrees.push({ loc: `${base}${chemin_anicroche(anicroche.id)}`, lastmod: derniere.toISOString() })
+    }
+
+    $entrees_sitemap = entrees
+]
+
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    @for-each [$entree] of [$entrees_sitemap]
+        <url>
+            <loc>
+                "$entree.loc"
+            @if [$entree.lastmod]
+                <lastmod>
+                    "$entree.lastmod"

@@ -22,7 +22,8 @@ const BALISES_SVG = new Set([
     'mask', 'symbol', 'radialGradient'
 ])
 
-export const initialiser_batisseur = async () =>
+// `nom` : modèle de départ, index sauf pour une page spéciale d'app.adn (sitemap…)
+export const initialiser_batisseur = async (nom = `index`) =>
 {
     const corps = document.querySelector(`#avec`)
 
@@ -36,7 +37,7 @@ export const initialiser_batisseur = async () =>
 
     initialiser_sculpteur()
 
-    const index = await charger_modele(`index`)
+    const index = await charger_modele(nom)
     if (index)
     {
         const donnees = {

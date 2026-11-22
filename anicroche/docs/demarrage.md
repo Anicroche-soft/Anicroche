@@ -8,7 +8,7 @@ Un projet avec.js suit la structure suivante :
 adn/
 ├── app.adn            ← configuration de l'application
 ├── app.webmanifest    ← manifeste de l'application web (installation, icônes)
-├── robots.txt         ← consignes pour les robots d'indexation
+├── robots.txt         ← consignes pour les robots d'indexation (facultatif, voir les pages spéciales)
 ├── fontes/            ← polices de caractères
 ├── images/            ← images statiques
 └── modeles/           ← fichiers .avec (organisables librement en sous-dossiers)
@@ -22,7 +22,7 @@ Les modèles peuvent être rangés dans des sous-dossiers à la convenance de l'
 
 ## Le fichier `app.adn`
 
-`app.adn` contient la configuration de l'application au format ADN : paires `clef : valeur`, dictionnaires entre `{ }` et listes entre `[ ]`, dont les éléments sont séparés par une virgule ou un retour à la ligne (`[ a, b ]`, `{ a : 1, b : 2 }`) ; une valeur qui contient une virgule s'écrit entre guillemets, nombres, et booléens `:)` (vrai) et `:(` (faux). Une valeur entre guillemets reste un texte (`":)"`).
+`app.adn` contient la configuration de l'application au format ADN : paires `clef : valeur` (une clef contient des lettres, des chiffres et `_ - . /`, ou tout caractère entre guillemets), dictionnaires entre `{ }` et listes entre `[ ]`, dont les éléments sont séparés par une virgule ou un retour à la ligne (`[ a, b ]`, `{ a : 1, b : 2 }`) ; une valeur qui contient une virgule s'écrit entre guillemets, nombres, et booléens `:)` (vrai) et `:(` (faux). Une valeur entre guillemets reste un texte (`":)"`).
 
 ```
 port   : 4030
@@ -41,6 +41,7 @@ config : {
 |---|---|---|---|
 | `port` | nombre | `PORT` ou `4030` | Port d'écoute du serveur. S'il est absent, la variable d'environnement `PORT` est utilisée, puis `4030` |
 | `config` | dictionnaire | — | Éléments de l'en-tête de chaque page servie (voir ci-dessous) |
+| `pages` | dictionnaire | — | [Pages spéciales](#pages-spéciales) : fichiers XML ou texte construits par un modèle (`/sitemap.xml`, `/robots.txt`…) |
 
 Clefs de `config`, toutes facultatives : une clef absente ne produit aucune balise.
 
@@ -51,7 +52,7 @@ Clefs de `config`, toutes facultatives : une clef absente ne produit aucune bali
 | `description` | texte | `<meta name="description">` |
 | `theme_color` | texte ou dictionnaire | `<meta name="theme-color">` : une couleur pour tous les thèmes, ou une par thème (`light`, `dark`), avec la requête média `prefers-color-scheme` correspondante |
 
-L'adresse canonique (`<link rel="canonical">`) n'est pas configurée : elle est calculée pour chaque page, sur le domaine `app_url`. Le serveur lit `app.adn` au démarrage : une modification de `port` ou de `config` demande de le relancer.
+L'adresse canonique (`<link rel="canonical">`) n'est pas configurée : elle est calculée pour chaque page, sur le domaine `app_url`. Le serveur lit `app.adn` au démarrage : une modification de `port`, de `config` ou de `pages` demande de le relancer.
 
 Toutes les clefs de `app.adn` sont aussi envoyées au navigateur et deviennent des [variables de scope racine](expressions.md#variables-de-scope) :
 
@@ -73,7 +74,7 @@ Les variables sont fournies par l'environnement (typiquement un fichier `.env` t
 |---|---|---|
 | `PORT` | `4030` | Port d'écoute HTTP (si `port` est absent de `app.adn`) |
 | `api_url` | `http://localhost:5030` | Adresse de l'API utilisée par les [fonctions de requête](api.md). Elle est ajoutée à la configuration envoyée au navigateur (`$api_url`) |
-| `app_url` | adresse de la requête | Adresse publique du site, utilisée pour l'adresse canonique des pages (`<link rel="canonical">`) |
+| `app_url` | adresse de la requête | Adresse publique du site, utilisée pour l'adresse canonique des pages (`<link rel="canonical">`). Elle est ajoutée à la configuration envoyée au navigateur (`$app_url`), pour écrire des adresses absolues (sitemap…) |
 | `internal_api_url` | — | Adresse à laquelle le serveur joint l'API pendant le [rendu côté serveur](#rendu-côté-serveur), si `api_url` n'est pas joignable depuis le serveur (par exemple `http://apicroche:5030` dans un réseau Docker) |
 | `trusted_proxies` | `127.0.0.1,::1` | Adresses des mandataires inverses dont l'en-tête `X-Forwarded-For` est cru pour connaître l'adresse du visiteur pendant le [rendu côté serveur](#rendu-côté-serveur), séparées par des virgules (même règle que l'API sans.js) |
 | `render_logs` | `false` | `true` affiche les journaux (`console.log`) des scripts pendant le rendu côté serveur ; les erreurs sont toujours affichées |
@@ -88,8 +89,9 @@ Le serveur sert une page unique : toute adresse qui ne correspond pas à un fich
 
 | Route | Contenu |
 |---|---|
-| `/robots.txt` | `adn/robots.txt` |
-| `/systeme/app.adn` | Configuration (`app.adn` converti en JSON, avec `api_url`) |
+| adresse d'une [page spéciale](#pages-spéciales) | le modèle de la page, construit par le serveur |
+| `/robots.txt` | `adn/robots.txt`, sauf si une page spéciale occupe cette adresse |
+| `/systeme/app.adn` | Configuration (`app.adn` converti en JSON, avec `api_url` et `app_url`) |
 | `/systeme/app.webmanifest` | `adn/app.webmanifest` |
 | `/systeme/modeles/<nom>.avec` | Modèle compilé en JSON (cherché par son nom dans tous les sous-dossiers) |
 | `/systeme/images/<chemin>` | `adn/images/` (recherche récursive) |
@@ -132,6 +134,43 @@ Dans le navigateur, si JavaScript est actif, le contenu construit par le serveur
 Le même script pose la classe `avec-js` sur `<html>` : `html:not(.avec-js)` désigne donc, en CSS, une page affichée sans JavaScript (par exemple pour limiter sa largeur à celle d'un téléphone, la page ayant été construite pour une fenêtre de 390 pixels).
 
 > **Note :** dans un script de modèle, un objet du navigateur absent de cet environnement provoque une erreur pendant le rendu côté serveur. L'erreur est affichée dans le journal du serveur et le reste de la page est tout de même construit.
+
+## Pages spéciales
+
+La clef `pages` d'`app.adn` associe une adresse à un modèle construit par le serveur, dans l'environnement du [rendu côté serveur](#rendu-côté-serveur), à la place d'`index.avec`. Le résultat est un fichier XML ou texte, pas une page de l'application.
+
+```
+pages : {
+    /sitemap.xml : { model : sitemap, type : xml,  cache : 10m }
+    /robots.txt  : { model : robots,  type : text, cache : 1h }
+}
+```
+
+| Clef | Description |
+|---|---|
+| `model` | Nom du modèle construit (cherché comme tout modèle, par son nom) |
+| `type` | `xml` : le contenu construit, précédé de `<?xml version="1.0" encoding="UTF-8"?>`, envoyé en `application/xml` ; `text` : chaque texte du modèle forme une ligne (`""` donne une ligne vide), envoyé en `text/plain` |
+| `cache` | Facultatif : durée pendant laquelle le résultat est gardé (`30s`, `10m`, `1h`, `1d`) ; sans cette clef, le modèle est construit à chaque requête |
+
+- Le modèle s'écrit comme les autres : son `@script` peut attendre des données (`await $search(…)`), et ses balises deviennent les éléments XML (`<urlset>`, `<url>`, `<loc>`…). Les balises interdites des modèles (`title`, `link`, `meta`…) le restent : un flux RSS ou Atom n'est pas encore possible.
+- Le code HTTP est celui de `$status` (200 par défaut). Seule une réponse 200 complète est mise en cache ; le cache ne tient compte que du chemin, pas des paramètres de l'adresse. Si la construction échoue, la version en cache est servie, même périmée, sinon une erreur 503.
+- Une page mal décrite (adresse sans `/` initiale, `model` manquant, `type` ou `cache` invalide) est ignorée et signalée au démarrage.
+
+Exemple de sitemap :
+
+```
+@script [
+    $entrees = []
+    const reponse = await $search('articles')
+    $entrees = (reponse.data ?? []).map(article => ({ loc: `${$app_url}/article/${article.id}` }))
+]
+
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    @for-each [$entree] of [$entrees]
+        <url>
+            <loc>
+                "$entree.loc"
+```
 
 ## Service worker
 

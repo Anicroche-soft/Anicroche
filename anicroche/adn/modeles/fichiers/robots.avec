@@ -1,0 +1,8 @@
+@script [
+    $base_robots = $app_url || location.origin
+]
+
+"User-agent: *"
+"Allow: /"
+""
+"Sitemap: $base_robots/sitemap.xml"

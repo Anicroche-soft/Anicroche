@@ -15,7 +15,7 @@ const composants = {
         composant: true,
         script: analyser_adn,
         ext: ".json",
-        env_supp: ['api_url']
+        env_supp: ['api_url', 'app_url']
     },
     "/systeme/scripts": {
         chemin: "avec.js/scripts",

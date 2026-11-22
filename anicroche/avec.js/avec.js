@@ -176,8 +176,108 @@ const servir_page = async (req, rep) =>
     rep.end(html)
 }
 
+// ─── Pages spéciales ──────────────────────────────────────────────────────────
+// La clef `pages` d'app.adn associe une adresse (/sitemap.xml…) à un modèle construit par le
+// serveur à la place d'index, envoyé en XML ou en texte, et gardé en cache `cache` (10m…)
+
+const TYPES_PAGES = {
+    xml  : `application/xml; charset=utf-8`,
+    text : `text/plain; charset=utf-8`
+}
+
+const DUREES = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }
+
+const lire_duree = (texte) =>
+{
+    const morceaux = /^([0-9]+)([smhd])$/.exec(String(texte))
+    return morceaux ? Number(morceaux[1]) * DUREES[morceaux[2]] : null
+}
+
+const lire_pages_speciales = (pages) =>
+{
+    const lues = new Map()
+    if (pages === undefined)
+        return lues
+    if (!pages || typeof pages !== `object` || Array.isArray(pages))
+    {
+        console.log(`/!\\ app.adn : pages doit être un dictionnaire { /adresse : { model, type, cache } }`)
+        return lues
+    }
+
+    for (const [chemin, page] of Object.entries(pages))
+    {
+        const cache = page?.cache === undefined ? 0 : lire_duree(page.cache)
+        if (!chemin.startsWith(`/`))
+            console.log(`/!\\ app.adn : page ${chemin} ignorée (l'adresse doit commencer par /)`)
+        else if (typeof page?.model !== `string` || !page.model)
+            console.log(`/!\\ app.adn : page ${chemin} ignorée (model manquant)`)
+        else if (!Object.hasOwn(TYPES_PAGES, page.type))
+            console.log(`/!\\ app.adn : page ${chemin} ignorée (type ${page.type} : xml ou text attendu)`)
+        else if (cache === null)
+            console.log(`/!\\ app.adn : page ${chemin} ignorée (cache ${page.cache} : durée attendue, comme 10m)`)
+        else
+            lues.set(chemin, { modele: page.model, type: page.type, cache })
+    }
+    return lues
+}
+
+const pages_speciales = lire_pages_speciales(adn.pages)
+const cache_pages     = new Map()
+
+const envoyer_page_speciale = (rep, page, { statut, contenu }) =>
+{
+    rep.writeHead(statut, { "Content-Type": TYPES_PAGES[page.type] })
+    rep.end(contenu)
+}
+
+// Le cache est indexé par le seul chemin : les paramètres d'adresse ne multiplient pas les rendus
+const servir_page_speciale = async (req, rep, adresse, page) =>
+{
+    const en_cache = cache_pages.get(adresse.pathname)
+    if (en_cache && en_cache.expiration > Date.now())
+        return envoyer_page_speciale(rep, page, en_cache)
+
+    const rendu = await rendre_page(adresse.href, lire_ip(req), page.modele)
+    if (!rendu)
+    {
+        // Un rendu échoué laisse servir l'ancienne version, s'il y en a une
+        if (en_cache)
+            return envoyer_page_speciale(rep, page, en_cache)
+        return envoyer_page_speciale(rep, page, { statut: 503, contenu: `Service indisponible\n` })
+    }
+
+    const reponse = {
+        statut  : statut_rendu(rendu),
+        contenu : page.type === `xml`
+            ? `<?xml version="1.0" encoding="UTF-8"?>\n${rendu.corps}\n`
+            : `${rendu.lignes.join(`\n`)}\n`
+    }
+
+    if (page.cache > 0 && rendu.stable && reponse.statut === 200)
+        cache_pages.set(adresse.pathname, { ...reponse, expiration: Date.now() + page.cache })
+
+    envoyer_page_speciale(rep, page, reponse)
+}
+
 const serveur = http.createServer(async (req, rep) =>
     {
+        const adresse_page = new URL(req.url, `http://${req.headers.host ?? `localhost`}`)
+        const page_speciale = pages_speciales.get(adresse_page.pathname)
+        if (page_speciale)
+        {
+            try
+            {
+                await servir_page_speciale(req, rep, adresse_page, page_speciale)
+            }
+            catch (erreur)
+            {
+                console.error(erreur)
+                if (!rep.headersSent)
+                    envoyer_page_speciale(rep, page_speciale, { statut: 500, contenu: `Erreur serveur\n` })
+            }
+            return
+        }
+
         let reponse
         try
         {

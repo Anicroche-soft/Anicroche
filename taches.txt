@@ -15,13 +15,14 @@ Tâches :
 - permettre de remplacer une adresse principale perdue (changement différé, avec opposition possible depuis l'adresse actuelle)
 - mettre en place la configuration de compte et de profils (dont la case à cocher des fonctionnalités liées à l'âge, voir juridique/RGPD.md § 2.4, la teinte, le fuseau horaire, les langues)
 - ajout des comptes sous contrôle parental
-- référencement : sitemap.xml des anicroches publiques parues (adresse principale seulement, sans les versions), avec <lastmod>, et adresse absolue dans robots.txt
 
 Tâches dépendantes :
 - quand des anicroches d'utilisateurs seront publiées (types avec auteurs) :
     - masquer les profils des comptes dont l'effacement est en cours et afficher les profils anonymisés sans nom
     - ouvrir la relation auteurs des anicroches à la projection (can_search, avec un restrict_search sur les profils), et en tenir compte dans $charger_anicroche (base.avec), qui ne considère pour l'instant comme gérants que les profils qui administrent le type (l'API, elle, compte déjà les auteurs)
 - quand la création d'anicroches existera : choisir la langue et la région d'origine de l'anicroche (champs langue et region d'anicroches.sans, fr et FR par défaut pour l'instant), et peut-être permettre de les modifier ; les sources ajoutées dans l'édition prennent déjà cette langue
+- quand les tables auront beaucoup d'entrées : réfléchir à une pagination presque obligatoire des routes GET automatiques de sans.js (paramètres limit et offset, ou curseur ; limite par défaut et maximale, par table dans @rules), aujourd'hui sans aucune limite
+- quand les anicroches publiées approcheront 50 000 (limite d'adresses d'un sitemap) : découper sitemap.xml en plusieurs fichiers réunis par un index de sitemaps (sitemapindex), annoncé dans robots.txt (nécessite la pagination de GET /anicroches)
 - quand des échanges entre profils existeront (réponses, conversations), n'exporter que les contributions des profils de l'utilisateur, et pas celles des autres profils (au plus une référence), voir RGPD art. 15 § 4 et 20 § 4
 - quand un profil pourra être cédé à un autre compte :
     - prévenir avant la cession que les publications du profil quitteront l'export des données, et proposer l'export à ce moment-là

@@ -7,3 +7,8 @@ config : {
         dark  : "#000000"
     }
 }
+
+pages : {
+    /sitemap.xml : { model : sitemap, type : xml,  cache : 10m }
+    /robots.txt  : { model : robots,  type : text, cache : 1h }
+}

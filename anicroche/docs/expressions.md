@@ -46,7 +46,7 @@ Si une variable n'existe dans aucun parent, l'affectation crée la variable dans
 | `$description` | texte ou `:o` | Description de la page (`<meta name="description">`) ; `:o` : `description` de la clef `config` d'`app.adn` |
 | `$status` | nombre ou `:o` | Code HTTP de la page construite par le serveur (`:o` : 200) ; sans effet dans le navigateur |
 | `$app` | dictionnaire | Configuration de `app.adn` (voir [Démarrage](demarrage.md#le-fichier-appadn)) |
-| `$<clef>` | selon la clef | Chaque clef de `app.adn` (ex. `$config`), ainsi que `$api_url` |
+| `$<clef>` | selon la clef | Chaque clef de `app.adn` (ex. `$config`), ainsi que `$api_url` et `$app_url` |
 | `$create`, `$search`, `$update`, `$delete` | fonctions | Requêtes vers l'API (voir [Requêtes vers l'API](api.md)) |
 | `$add_action` | fonction | Actions exécutées autour des requêtes vers l'API (voir [Requêtes vers l'API](api.md#actions-autour-des-requêtes--add_action)) |
 

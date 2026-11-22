@@ -29,8 +29,8 @@ Toute évolution d'un cadriciel visible par son utilisateur (nouvelle instructio
 
 ### anicroche (avec.js)
 
-- `adn/app.adn`, `adn/app.webmanifest`, `adn/robots.txt`
-- `adn/modeles/**/*.avec` : modèles rangés par rôle (`pages`, `sections`, `structures`, `organiseurs`, `interactions`, `contenus`, `identites`, `icones`, `logos`, `animations`). Le point d'entrée est `index.avec`.
+- `adn/app.adn` (dont les pages spéciales `/sitemap.xml` et `/robots.txt`, construites par les modèles de `fichiers/`), `adn/app.webmanifest`
+- `adn/modeles/**/*.avec` : modèles rangés par rôle (`pages`, `sections`, `structures`, `organiseurs`, `interactions`, `contenus`, `identites`, `icones`, `logos`, `animations`, `fichiers`). Le point d'entrée est `index.avec`.
 - Les modèles sont appelés par leur seul nom, quel que soit leur dossier : **deux modèles ne doivent jamais porter le même nom**.
 - `avec.js/scripts/` : moteur client (`batisseur`, `augure`, `sculpteur`, `navigateur`, `heraut`, `scribe`, `architecte`, `decorateur`, `service-worker`)
 - `avec.js/avec.js` : serveur HTTP ; `avec.js/composants.js` : résolution des fichiers servis (`/systeme/…`) ; `avec.js/rendu/` : rendu côté serveur (sans le cookie `avec-js` posé par le JavaScript, ou avec `?sans-js`) — mini-DOM maison (`dom.js`), environnement de navigateur simulé (`environnement.js`), un worker par rendu (`ouvrier.js`, `rendu.js`)

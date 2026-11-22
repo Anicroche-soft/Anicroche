@@ -18,7 +18,11 @@ const modules = Promise.all([
     import("../scripts/sculpteur.js")
 ])
 
-const rendre = async ({adresse, ip, delai_max, journal}) =>
+// Textes de la page dans l'ordre, un par ligne (page spéciale de type text)
+const lire_lignes = (noeud) => noeud.childNodes.flatMap((enfant) =>
+    enfant.nodeType === 3 ? [enfant.data] : enfant.nodeType === 1 ? lire_lignes(enfant) : [])
+
+const rendre = async ({adresse, ip, delai_max, journal, modele = `index`}) =>
 {
     const console_erreur = console.error
     if (!journal)
@@ -40,7 +44,7 @@ const rendre = async ({adresse, ip, delai_max, journal}) =>
 
         initialiser_navigateur()
         await initialiser_heraut()
-        await initialiser_batisseur()
+        await initialiser_batisseur(modele)
 
         const stable = await attendre_stabilite(delai_max)
 
@@ -57,7 +61,8 @@ const rendre = async ({adresse, ip, delai_max, journal}) =>
             description: lire_variable_racine(`$description`) ?? null,
             statut: lire_variable_racine(`$status`) ?? null,
             styles,
-            corps: serialiser_enfants(document.body, {commentaires: false})
+            corps: serialiser_enfants(document.body, {commentaires: false}),
+            lignes: lire_lignes(document.body)
         })
     }
     catch (erreur)

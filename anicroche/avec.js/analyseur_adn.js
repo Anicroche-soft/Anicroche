@@ -1,5 +1,7 @@
 import fs   from "fs"
 
+// Une clef sans guillemets peut contenir des lettres, des chiffres et _ - . / (adresse comme
+// /sitemap.xml) ; entre guillemets, tout caractère
 const analyser_clef_adn = (str) =>
 {
     let clef = ""
@@ -11,7 +13,7 @@ const analyser_clef_adn = (str) =>
             bloc = ''
         else if (/^["'`]$/.test(str[pos]) && bloc == '')
             bloc = str[pos]
-        else if (/^[a-zA-Z0-9_-]$/.test(str[pos]))
+        else if (bloc != '' || /^[a-zA-Z0-9_./-]$/.test(str[pos]))
             clef += str[pos]
         else
             return ("invalide")
