@@ -52,6 +52,11 @@ export const initialiser_batisseur = async () =>
     }
 }
 
+// :), :(, :x et :o sont des littéraux, pas des séparateurs « : » (:o suivi d'une lettre n'en est pas un)
+const est_smiley = (str, pos) =>
+    str[pos] === ':'
+ && (/^[)(x]$/.test(str[pos + 1]) || (str[pos + 1] === 'o' && !/^\w$/.test(str[pos + 2] ?? '')))
+
 const decapsuler = (str) =>
 {
     const ouvrants = { '(':')', '[':']', '{':'}', '"':'"', "'":"'", '`':'`' }
@@ -62,7 +67,7 @@ const decapsuler = (str) =>
     while (pos < str.length)
     {
         const c = str[pos]
-        if (c === ':' && /^[)(x]$/.test(str[pos + 1]) && !/^["'`]$/.test(blocs.slice(-1)))
+        if (est_smiley(str, pos) && !/^["'`]$/.test(blocs.slice(-1)))
         {
             texte += str.slice(pos, pos + 2)
             pos += 2
@@ -151,7 +156,7 @@ const est_entoure_par_bloc = (str) =>
     for (let pos = 0; pos < texte.length; pos++)
     {
         const c = texte[pos]
-        if (c === ':' && /^[)(x]$/.test(texte[pos + 1]) && !/^["'`]$/.test(blocs.slice(-1)))
+        if (est_smiley(texte, pos) && !/^["'`]$/.test(blocs.slice(-1)))
         {
             pos++
             continue
@@ -218,7 +223,7 @@ const decouper_haut_niveau = (str, separateurs) =>
     {
         const c = brut[pos]
 
-        if (c === ':' && /^[)(x]$/.test(brut[pos + 1]) && !/^["'`]$/.test(blocs.slice(-1)))
+        if (est_smiley(brut, pos) && !/^["'`]$/.test(blocs.slice(-1)))
         {
             pos++
             continue
@@ -260,7 +265,7 @@ const extraire_declaration_arg = (str) =>
     for (let pos = 0; pos < str.length; pos++)
     {
         const c = str[pos]
-        if (c === ':' && /^[)(x]$/.test(str[pos + 1]) && !/^["'`]$/.test(blocs.slice(-1)))
+        if (est_smiley(str, pos) && !/^["'`]$/.test(blocs.slice(-1)))
         {
             pos++
             continue
@@ -322,7 +327,7 @@ const extraire_ternaire = (str) =>
     for (let pos = 0; pos < brut.length; pos++)
     {
         const c = brut[pos]
-        if (c === ':' && /^[)(x]$/.test(brut[pos + 1]) && !/^["'`]$/.test(blocs.slice(-1)))
+        if (est_smiley(brut, pos) && !/^["'`]$/.test(blocs.slice(-1)))
         { pos++; continue }
 
         if (c === blocs.slice(-1))        blocs = blocs.slice(0, -1)
@@ -343,8 +348,6 @@ const extraire_ternaire = (str) =>
     const apres_point = apres.slice(1).trim()
     const parties = decouper_haut_niveau(apres_point, new Set([':']))
 
-    // Attention : ':(' ':x' ')' sont des smileys/tokens, pas des séparateurs —
-    // decouper_haut_niveau les ignore déjà grâce à la gestion ':' + /^[)(x]/
     if (parties.length < 1) return null
 
     const branche_vrai = parties[0].trim()
@@ -356,7 +359,7 @@ const extraire_ternaire = (str) =>
 const extraire_argument_modele = (str) =>
 {
     const valeur = str.trim()
-    if (/^:[)(x]$/.test(valeur))
+    if (/^:[)(xo]$/.test(valeur))
         return { nom: null, valeur }
 
     const ouvrants = { '(':')', '[':']', '{':'}', '"':'"', "'":"'", '`':'`' }
@@ -365,7 +368,7 @@ const extraire_argument_modele = (str) =>
     for (let pos = 0; pos < str.length; pos++)
     {
         const c = str[pos]
-        if (c === ':' && /^[)(x]$/.test(str[pos + 1]) && !/^["'`]$/.test(blocs.slice(-1)))
+        if (est_smiley(str, pos) && !/^["'`]$/.test(blocs.slice(-1)))
         {
             pos++
             continue
@@ -474,7 +477,7 @@ const extraire_attribut_conditionnel = (str) =>
     for (let pos = 0; pos < brut.length; pos++)
     {
         const c = brut[pos]
-        if (c === ':' && /^[)(x]$/.test(brut[pos + 1]) && !/^["'`]$/.test(blocs.slice(-1)))
+        if (est_smiley(brut, pos) && !/^["'`]$/.test(blocs.slice(-1)))
         {
             pos++
             continue
