@@ -30,18 +30,18 @@
         left: calc(0rem - var(--l-tete));
 
         height: 100dvh;
-        width: 100dvw;
+        width: var(--l-fenetre);
 
         background: var(--f-fond);
         backdrop-filter: blur(var(--l-blur));
 
         clip-path: polygon(
-            0             0,
-            100dvw        0,
-            100dvw        var(--h-navigation),
-            var(--l-tete) var(--h-navigation),
-            var(--l-tete) 100dvh,
-            0             100dvh
+            0                 0,
+            var(--l-fenetre)  0,
+            var(--l-fenetre)  var(--h-navigation),
+            var(--l-tete)     var(--h-navigation),
+            var(--l-tete)     100dvh,
+            0                 100dvh
         );
         pointer-events: none;
 
@@ -51,14 +51,14 @@
 
     .petit.portrait .navigation::before {
         clip-path: polygon(
-            0      0,
-            100dvw 0,
-            100dvw var(--h-navigation),
-            0      var(--h-navigation),
-            0      calc(100dvh - var(--h-tete)),
-            100dvw calc(100dvh - var(--h-tete)),
-            100dvw 100dvh,
-            0      100dvh
+            0                0,
+            var(--l-fenetre) 0,
+            var(--l-fenetre) var(--h-navigation),
+            0                var(--h-navigation),
+            0                calc(100dvh - var(--h-tete)),
+            var(--l-fenetre) calc(100dvh - var(--h-tete)),
+            var(--l-fenetre) 100dvh,
+            0                100dvh
         );
     }
 

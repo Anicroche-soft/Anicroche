@@ -15,9 +15,10 @@ const DELAI_MAX_MINUTERIE_SUIVIE = 1000
 // Une requête vers l'extérieur (l'API) sans réponse dans ce délai est abandonnée
 const DELAI_REQUETE = 2500
 
-// Taille de fenêtre supposée : format « grand »
-const LARGEUR_FENETRE = 1280
-const HAUTEUR_FENETRE = 800
+// Taille de fenêtre supposée : un téléphone tenu verticalement, comme pour l'indexation mobile
+// des moteurs de recherche
+const LARGEUR_FENETRE = 390
+const HAUTEUR_FENETRE = 844
 
 class Stockage
 {

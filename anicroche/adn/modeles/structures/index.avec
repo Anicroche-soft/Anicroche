@@ -138,6 +138,7 @@
         --p-bouton: monospace;
         --p-champ:  monospace;
 
+        --l-fenetre: 100dvw;
         --l-fonte: 1rem;
         --l-ligne: 1;
         --l-ecart: 1rem;
@@ -247,10 +248,22 @@
     }
 
     body {
-        width: 100dvw;
+        width: var(--l-fenetre);
         height: 100dvh;
 
         gap: 0;
+    }
+
+    /* Sans JavaScript (page construite par le serveur, au format petit portrait), le site garde
+       la largeur d'un téléphone ; le transform rattache au body les éléments fixes */
+    html:not(.avec-js) {
+        --l-fenetre: min(100dvw, 32rem);
+        background: var(--c-analogue);
+    }
+
+    html:not(.avec-js) body {
+        margin-inline: auto;
+        transform: translateZ(0);
     }
 ]
 

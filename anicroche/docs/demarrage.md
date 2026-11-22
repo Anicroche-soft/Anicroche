@@ -117,7 +117,7 @@ Le serveur exécute le moteur du cadriciel dans un environnement de navigateur s
 
 - les modèles et `app.adn` sont lus directement sur le disque ;
 - les requêtes vers l'API sont réelles, faites sans session (visiteur non connecté) et abandonnées sans réponse au bout de 2,5 s. L'adresse IP du visiteur est transmise dans `X-Forwarded-For`, pour que l'API lui applique ses propres limites de requêtes ; elle n'en tient compte que si le serveur d'avec.js fait partie de ses mandataires de confiance (`trusted_proxies` de sans.js, qui accepte par défaut une connexion locale) ;
-- `localStorage` est vide, `matchMedia` ne correspond jamais à rien, la fenêtre mesure 1280 × 800 et toutes les mesures des éléments (`clientWidth`, `getBoundingClientRect()`…) valent 0 ;
+- `localStorage` est vide, `matchMedia` ne correspond jamais à rien, la fenêtre mesure 390 × 844 (un téléphone tenu verticalement, comme pour l'indexation mobile des moteurs de recherche) et toutes les mesures des éléments (`clientWidth`, `getBoundingClientRect()`…) valent 0 ;
 - les événements ne sont jamais émis : seuls comptent les scripts des modèles et les actions `@mount` ;
 - `requestAnimationFrame` et les minuteries de 1 s au plus sont exécutées et attendues ; les plus longues (horloges, comptes à rebours) ne le sont pas.
 
@@ -128,6 +128,8 @@ Au plus 4 pages sont construites en même temps ; les suivantes attendent leur t
 Si l'adresse change pendant la construction (`$navigate_to`, barre oblique finale retirée…), le serveur répond par une redirection (302) vers la nouvelle adresse (avec `?sans-js` si la requête le portait).
 
 Dans le navigateur, si JavaScript est actif, le contenu construit par le serveur (marqué `data-pre-rendu`) est masqué avant tout affichage, puis retiré par le cadriciel, qui construit la page comme d'habitude.
+
+Le même script pose la classe `avec-js` sur `<html>` : `html:not(.avec-js)` désigne donc, en CSS, une page affichée sans JavaScript (par exemple pour limiter sa largeur à celle d'un téléphone, la page ayant été construite pour une fenêtre de 390 pixels).
 
 > **Note :** dans un script de modèle, un objet du navigateur absent de cet environnement provoque une erreur pendant le rendu côté serveur. L'erreur est affichée dans le journal du serveur et le reste de la page est tout de même construit.
 
