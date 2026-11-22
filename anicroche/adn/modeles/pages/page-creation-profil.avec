@@ -1,3 +1,5 @@
+$titre = "Création de profil"
+
 page [$authentification : requise_sans_profil]
     navigation
         <div .gauche>

@@ -1,3 +1,5 @@
+$titre = [$path = '/compte'] ? "Compte" : "Profil"
+
 page [$authentification : requise, $page_compte : :)]
     navigation
         <div .centre>

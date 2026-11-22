@@ -1,3 +1,6 @@
+$titre  = "Page introuvable"
+$status = 404
+
 page
     navigation
         <div .gauche>

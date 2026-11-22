@@ -20,6 +20,8 @@
         $etat_restauration = 'invalide'
 ]
 
+$titre = "Restauration du compte"
+
 page [$authentification : ouverte]
     navigation
         <div .gauche>

@@ -20,6 +20,8 @@
     $versions_a_venir_inscription = []
 ]
 
+$titre = "Connexion"
+
 page [:(, $authentification : interdite]
     navigation
         <div .gauche>

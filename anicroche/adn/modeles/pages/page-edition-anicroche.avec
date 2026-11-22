@@ -317,6 +317,8 @@
     await $charger_edition()
 ]
 
+$titre = [$type_edition] ? "Édition : $type_edition.libelle" : "Édition"
+
 page [$authentification : requise_sans_profil]
     navigation
         <div .gauche>

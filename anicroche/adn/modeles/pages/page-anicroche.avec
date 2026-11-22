@@ -4,6 +4,7 @@
     $anicroche                = null
     $sources_anicroche        = []
     $libelle_anicroche        = ''
+    $description_anicroche    = null
 
     // Avis au-dessus du contenu : texte, puis lien vers l autre version
     $avis_anicroche       = ''
@@ -84,6 +85,16 @@
         $historique_anicroche = entrees
     }
 
+    // Début du premier contenu qui n est pas un titre, repris par les moteurs de recherche
+    const resumer = (sources) =>
+    {
+        const contenu = sources.find(source => source.format !== 'titre')?.contenu ?? ''
+        const texte   = String(contenu).replace(/\s+/g, ' ').trim()
+        if (texte.length <= 160)
+            return texte || null
+        return `${texte.slice(0, 160).replace(/\s+\S*$/, '')}…`
+    }
+
     // Le routeur reconstruit la page à chaque adresse (@key) : /<id> ou /<id>/<numero>
     const charger_anicroche = async () =>
     {
@@ -128,6 +139,7 @@
         $sources_anicroche = role_titre && !apercu && !listees.some(source => source.role === role_titre)
             ? [ { role: role_titre, format: 'titre', contenu: reponse.data.titre }, ...listees ]
             : listees
+        $description_anicroche = resumer(listees)
         preparer_avis(reponse.data, chemin)
         preparer_historique(reponse.data, chemin)
 
@@ -145,6 +157,9 @@
     page-404
 
 @else
+    $titre       = $anicroche.titre
+    $description = $description_anicroche
+
     page
         navigation
             <div .gauche>

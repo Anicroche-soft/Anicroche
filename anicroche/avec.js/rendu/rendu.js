@@ -154,12 +154,31 @@ export const rendre_page = (adresse, ip = null) => new Promise((resoudre) =>
     file.push({adresse, arrivee: Date.now(), lancer, resoudre})
 })
 
+// $status de la page, s'il s'agit d'un code HTTP valide, sinon 200
+export const statut_rendu = (rendu) =>
+    Number.isInteger(rendu?.statut) && rendu.statut >= 100 && rendu.statut <= 599 ? rendu.statut : 200
+
 // Insère le rendu dans la page de base de l'application (avec.js/index.html complété par app.adn).
 // Les styles et le contenu sont marqués `data-pre-rendu` : le client les retire au démarrage.
 export const assembler_page = (rendu, html) =>
 {
     if (rendu.classes)
         html = html.replace(/<html\b/, `<html class="${echapper_attribut(rendu.classes)}"`)
+
+    if (rendu.titre !== null && rendu.titre !== undefined)
+        html = html.replace(/<title>[^<]*<\/title>/, `<title>${echapper_attribut(String(rendu.titre))}</title>`)
+
+    if (rendu.description !== null && rendu.description !== undefined)
+    {
+        const balise = `<meta name="description" content="${echapper_attribut(String(rendu.description))}">`
+        html = /<meta name="description"[^>]*>/.test(html)
+            ? html.replace(/<meta name="description"[^>]*>/, balise)
+            : html.replace(`</head>`, `${balise}\n</head>`)
+    }
+
+    // Une page d'erreur n'est pas à indexer, même par un robot qui ne regarde pas le code
+    if (statut_rendu(rendu) >= 400)
+        html = html.replace(`</head>`, `<meta name="robots" content="noindex">\n</head>`)
 
     const styles = rendu.styles
         .map(({modele, css}) =>

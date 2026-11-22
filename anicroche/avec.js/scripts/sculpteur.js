@@ -291,6 +291,23 @@ export const definir_variable_racine = (propriete, valeur) =>
     return ecrire_variable(etat_sculpteur.racine, null, propriete, valeur)
 }
 
+export const lire_variable_racine = (propriete) =>
+{
+    initialiser_sculpteur()
+    return etat_sculpteur.racine.variables[propriete]
+}
+
+export const observer_variable_racine = (propriete, fn) =>
+{
+    initialiser_sculpteur()
+    const clef = clef_dependance(etat_sculpteur.racine, propriete)
+    return observer_sculpteur((modifiee, valeur) =>
+    {
+        if (modifiee === clef)
+            fn(valeur)
+    })
+}
+
 export const initialiser_sculpteur = () =>
 {
     if (etat_sculpteur.instance) return

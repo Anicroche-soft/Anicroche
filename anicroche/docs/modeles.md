@@ -99,6 +99,23 @@ Exemples :
 
 Si vous souhaitez explicitement écrire dans le scope parent, l'API du runtime permet de le faire via les fonctions de scope (interne) — mais cela doit être utilisé avec précaution.
 
+### Affectations dans le modèle
+
+Une ligne `$variable = valeur` du modèle (hors `@script`) lie la variable à une [expression](expressions.md) : tant que la ligne est construite, la variable suit l'expression, recalculée dès qu'une variable lue change. La valeur peut prendre la forme d'un ternaire, avec la condition entre crochets comme pour les [attributs conditionnels](#attributs-conditionnels) ; sans branche fausse, la valeur est `:o`.
+
+```
+$title = [$titre] ? "$titre – $app.config.name" : :o
+
+@if [$introuvable]
+    $status = 404
+```
+
+- Les espaces autour de `=` sont obligatoires, et la ligne n'a pas d'enfant.
+- La variable est écrite selon la règle des affectations de `@script` : la variable existante la plus proche dans la chaîne de scopes, sinon une variable du modèle courant. Pour qu'une page modifie une variable de son parent, celui-ci doit donc la déclarer (`$titre = null` dans son `@script`).
+- Une affectation placée dans une branche fausse d'une conditionnelle ne se fait pas.
+- Quand la ligne est retirée (branche devenue fausse, modèle retiré, navigation…), la variable revient à `:o`, sauf si une autre affectation l'a écrite depuis : celle-ci garde sa valeur. Si plusieurs affectations actives visent la même variable, la dernière à avoir écrit l'emporte, et la précédente reprend sa valeur quand elle est retirée ; mieux vaut l'éviter.
+- Une affectation qui lit sa propre variable (`$n = $n + 1`) ne se relance pas elle-même.
+
 ### `@args`
 
 Déclare les paramètres acceptés par le modèle. Les valeurs sont passées lors de l'appel du modèle entre crochets, en positionnel et/ou en nommé.

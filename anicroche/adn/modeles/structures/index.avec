@@ -5,6 +5,9 @@
     $theme       = `clair`
     $defilement  = `sommet`
 
+    // Titre propre à la page, affecté par chaque page (voir $title plus bas)
+    $titre = null
+
     const actualiser_format = () =>
     {
         const w = window.innerWidth
@@ -266,6 +269,8 @@
         transform: translateZ(0);
     }
 ]
+
+$title = [$titre] ? "$titre – $app.config.name" : :o
 
 -base
 

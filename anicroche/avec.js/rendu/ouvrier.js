@@ -14,7 +14,8 @@ import {serialiser_enfants} from "./dom.js"
 const modules = Promise.all([
     import("../scripts/navigateur.js"),
     import("../scripts/heraut.js"),
-    import("../scripts/batisseur.js")
+    import("../scripts/batisseur.js"),
+    import("../scripts/sculpteur.js")
 ])
 
 const rendre = async ({adresse, ip, delai_max, journal}) =>
@@ -35,7 +36,7 @@ const rendre = async ({adresse, ip, delai_max, journal}) =>
 
     try
     {
-        const [{initialiser_navigateur}, {initialiser_heraut}, {initialiser_batisseur}] = await modules
+        const [{initialiser_navigateur}, {initialiser_heraut}, {initialiser_batisseur}, {lire_variable_racine}] = await modules
 
         initialiser_navigateur()
         await initialiser_heraut()
@@ -52,6 +53,9 @@ const rendre = async ({adresse, ip, delai_max, journal}) =>
             taches: stable ? [] : decrire_taches(),
             adresse: location.href,
             classes: document.documentElement.className,
+            titre: lire_variable_racine(`$title`) ?? null,
+            description: lire_variable_racine(`$description`) ?? null,
+            statut: lire_variable_racine(`$status`) ?? null,
             styles,
             corps: serialiser_enfants(document.body, {commentaires: false})
         })

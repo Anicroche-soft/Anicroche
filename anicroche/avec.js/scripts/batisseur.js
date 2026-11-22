@@ -6,7 +6,7 @@ import {
     initialiser_sculpteur, executer_script, executer_script_async,
     activer_script, desactiver_script,
     observer_sculpteur,
-    creer_scope, obtenir_scope_racine, lire_variable,
+    creer_scope, obtenir_scope_racine, lire_variable, ecrire_variable,
     definir_noeud_courant, effacer_noeud_courant,
     lire_dependance_par_clef
 } from './sculpteur.js'
@@ -612,6 +612,8 @@ const construire_bloc = (bloc, donnees) =>
         return construire_balise(bloc, donnees)
     case `texte`:
         return construire_texte(bloc, donnees)
+    case `affectation`:
+        return construire_affectation(bloc, donnees)
     case `modele`:
         return construire_modele(bloc, donnees)
     default:
@@ -1304,6 +1306,90 @@ const construire_texte = (bloc, donnees) =>
     }
 
     return [noeud]
+}
+
+// Affectations actives par variable (clef de dépendance), de la plus ancienne écriture à la
+// plus récente : quand celle qui a écrit en dernier est retirée, la précédente encore active
+// reprend sa valeur, sinon la variable revient à :o
+const affectations_actives = new Map()
+
+const evaluer_affectation = (expression, donnees) =>
+{
+    const ternaire = extraire_ternaire(expression)
+    if (!ternaire)
+        return evaluer_valeur(decapsuler_si_parentheses(expression), donnees)
+
+    const branche = evaluer(decapsuler(ternaire.condition), donnees) ? ternaire.vrai : ternaire.faux
+    return branche ? evaluer_valeur(decapsuler_si_parentheses(branche), donnees) : null
+}
+
+const construire_affectation = (bloc, donnees) =>
+{
+    const [variable, expression] = bloc.args
+    const ancre       = document.createComment(`affectation ${variable}`)
+    const affectation = { valeur: null, clef: null }
+    let en_cours      = false
+
+    const ecrire = () =>
+    {
+        // Une affectation qui lit sa propre variable ne se relance pas elle-même
+        if (en_cours)
+            return
+        en_cours = true
+        try
+        {
+            definir_noeud_courant(ancre)
+            affectation.valeur = evaluer_affectation(expression, donnees)
+            effacer_noeud_courant()
+
+            ecrire_variable(donnees.scope, donnees.args || {}, variable, affectation.valeur)
+            affectation.clef ??= lire_variable(donnees.scope, donnees.args || {}, variable, false).clef
+
+            const actives = affectations_actives.get(affectation.clef) ?? []
+            const index   = actives.indexOf(affectation)
+            if (index !== -1)
+                actives.splice(index, 1)
+            actives.push(affectation)
+            affectations_actives.set(affectation.clef, actives)
+        }
+        finally
+        {
+            effacer_noeud_courant()
+            en_cours = false
+        }
+    }
+
+    ecrire()
+
+    const desabonner = ancre._avec_deps?.size > 0
+        ? observer_sculpteur((propriete) =>
+        {
+            if (!ancre._avec_deps.has(propriete) || en_retrait(ancre))
+                return
+            ecrire()
+        })
+        : () => {}
+
+    ancre._avec_affectation = () =>
+    {
+        desabonner()
+        const actives = affectations_actives.get(affectation.clef)
+        if (!actives)
+            return
+
+        const index    = actives.indexOf(affectation)
+        const derniere = index === actives.length - 1
+        if (index !== -1)
+            actives.splice(index, 1)
+        if (!actives.length)
+            affectations_actives.delete(affectation.clef)
+        if (index === -1 || !derniere)
+            return
+
+        ecrire_variable(donnees.scope, donnees.args || {}, variable, actives.at(-1)?.valeur ?? null)
+    }
+
+    return [ancre]
 }
 
 const construire_balise = (bloc, donnees) =>
@@ -2078,6 +2164,12 @@ const demonter_noeud = async (noeud) =>
 
 const nettoyer_noeud = (noeud) =>
 {
+    if (noeud._avec_affectation)
+    {
+        noeud._avec_affectation()
+        noeud._avec_affectation = null
+    }
+
     for (const { nom, scope } of noeud._avec_modeles ?? [])
     {
         desactiver_style(nom)

@@ -9,6 +9,8 @@
     }
 ]
 
+$titre = "Édition de profil"
+
 page [$authentification : requise]
     navigation
         <div .gauche>

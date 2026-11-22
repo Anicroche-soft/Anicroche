@@ -18,6 +18,8 @@
     $succes_clef_edition  = false
 ]
 
+$titre = "Édition de compte"
+
 page [:(, $authentification : requise_sans_profil]
     navigation
         <div .gauche>

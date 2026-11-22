@@ -121,7 +121,7 @@ Le serveur exécute le moteur du cadriciel dans un environnement de navigateur s
 - les événements ne sont jamais émis : seuls comptent les scripts des modèles et les actions `@mount` ;
 - `requestAnimationFrame` et les minuteries de 1 s au plus sont exécutées et attendues ; les plus longues (horloges, comptes à rebours) ne le sont pas.
 
-La page est envoyée dès que plus aucune requête ni minuterie attendue n'est en cours, ou au bout de 3 s ; dans ce dernier cas, le journal du serveur indique les tâches encore en cours. Elle contient les styles des modèles affichés et les classes de `<html>`. En cas d'échec, la page vide habituelle est envoyée.
+La page est envoyée dès que plus aucune requête ni minuterie attendue n'est en cours, ou au bout de 3 s ; dans ce dernier cas, le journal du serveur indique les tâches encore en cours. Elle contient les styles des modèles affichés et les classes de `<html>`. Son `<title>` et sa `<meta name="description">` sont ceux de [`$title` et `$description`](expressions.md#variables-de-scope) quand ils ne sont pas nuls, et le code HTTP de la réponse celui de `$status` (200 par défaut) ; à partir de 400, la page porte aussi `<meta name="robots" content="noindex">`. En cas d'échec, la page vide habituelle est envoyée.
 
 Au plus 4 pages sont construites en même temps ; les suivantes attendent leur tour, dans la limite de 32 et de 5 s d'attente. Au-delà, la page vide habituelle est envoyée et le journal du serveur l'indique. Chaque rendu a son propre worker, préparé à l'avance (moteur déjà chargé) et arrêté ensuite.
 

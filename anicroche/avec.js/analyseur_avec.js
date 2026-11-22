@@ -260,6 +260,14 @@ const valider_bloc_avec = (bloc, str, pos, fichier) =>
         if (balises_sans_enfant.includes(balise) && bloc.enfants.length > 0)
             erreur(`<${balise}> ne peut pas avoir d'enfants`, fichier, str, pos)
     }
+    else if (bloc.type == 'affectation')
+    {
+        if (!/^\$[a-zA-Z_]\w*$/.test(bloc.args[0]) || bloc.args[1] != '=' || bloc.args.length < 3)
+            erreur(`une affectation doit utiliser la syntaxe : $variable = valeur`, fichier, str, pos)
+        if (bloc.enfants.length > 0)
+            erreur(`une affectation ne peut pas avoir d'enfants`, fichier, str, pos)
+        bloc.args = [bloc.args[0], bloc.args.slice(2).join(' ')]
+    }
     else if (bloc.type == 'texte')
     {
         if (bloc.args.length != 1)
@@ -341,6 +349,10 @@ const analyser_bloc_avec = (str, deb, fin, fichier, json) =>
 
     if (!bloc.args[0])
         return null
+    else if (bloc.args[0][0] == '$')
+    {
+        bloc.type = 'affectation'
+    }
     else if (bloc.args[0][0] == '@')
     {
         bloc.type = 'instruction'

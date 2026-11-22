@@ -19,6 +19,8 @@
     }))
 ]
 
+$titre = "Suppression de compte"
+
 page [:(, $authentification : requise_sans_profil]
     navigation
         <div .gauche>

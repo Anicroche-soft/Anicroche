@@ -5,7 +5,7 @@ import fs   from "fs"
 
 import {generer_adn} from "./analyseur_adn.js"
 import {resoudre_composant} from "./composants.js"
-import {rendre_page, assembler_page} from "./rendu/rendu.js"
+import {rendre_page, assembler_page, statut_rendu} from "./rendu/rendu.js"
 
 console.log(`\
 ╔══════╗
@@ -172,7 +172,7 @@ const servir_page = async (req, rep) =>
     }
 
     const html = fixer_adresse_canonique(assembler_page(rendu, lire_index()), adresse)
-    rep.writeHead(200, entetes_page(entetes))
+    rep.writeHead(statut_rendu(rendu), entetes_page(entetes))
     rep.end(html)
 }
 

@@ -42,10 +42,15 @@ Si une variable n'existe dans aucun parent, l'affectation crée la variable dans
 | `$navigate_prev` | fonction | Reproduit la flèche "retour" du navigateur (`$navigate_prev()`) |
 | `$navigate_post` | fonction | Reproduit la flèche "suivant" du navigateur (`$navigate_post()`) |
 | `$history` | fonction | Retourne une entrée de l'historique interne (`$history()`, `$history(1)`, `$history(2)`) |
+| `$title` | texte ou `:o` | Titre de la page (`<title>`) ; `:o` : `name` de la clef `config` d'`app.adn` |
+| `$description` | texte ou `:o` | Description de la page (`<meta name="description">`) ; `:o` : `description` de la clef `config` d'`app.adn` |
+| `$status` | nombre ou `:o` | Code HTTP de la page construite par le serveur (`:o` : 200) ; sans effet dans le navigateur |
 | `$app` | dictionnaire | Configuration de `app.adn` (voir [Démarrage](demarrage.md#le-fichier-appadn)) |
 | `$<clef>` | selon la clef | Chaque clef de `app.adn` (ex. `$config`), ainsi que `$api_url` |
 | `$create`, `$search`, `$update`, `$delete` | fonctions | Requêtes vers l'API (voir [Requêtes vers l'API](api.md)) |
 | `$add_action` | fonction | Actions exécutées autour des requêtes vers l'API (voir [Requêtes vers l'API](api.md#actions-autour-des-requêtes--add_action)) |
+
+`$title`, `$description` et `$status` valent `:o` au démarrage. Le cadriciel ne les remet pas à zéro à la navigation : une page les fixe par une [affectation dans le modèle](modeles.md#affectations-dans-le-modèle), qui les remet à `:o` quand la page est retirée.
 
 `$path`, `$query` et `$hash` sont mis à jour à chaque navigation sans rechargement de page. Une barre oblique finale est retirée de l'adresse (`/profil/` devient `/profil`), qui est réécrite dans l'historique sans nouvelle entrée.
 

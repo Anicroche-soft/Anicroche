@@ -1,3 +1,5 @@
+$titre = "Gadgets"
+
 page
     navigation
         <div .centre>

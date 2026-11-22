@@ -1,4 +1,4 @@
-import { definir_variable_racine, initialiser_sculpteur, enregistrer_nettoyage } from './sculpteur.js'
+import { definir_variable_racine, initialiser_sculpteur, enregistrer_nettoyage, observer_variable_racine } from './sculpteur.js'
 
 const charger_adn_app = async () =>
 {
@@ -28,6 +28,35 @@ const charger_adn_app = async () =>
         definir_variable_racine(`$app`, {})
         return null
     }
+}
+
+// $title et $description remplacent, tant qu'ils ne sont pas nuls, le name et la description
+// d'app.adn ; $status ne sert qu'à la page construite par le serveur
+const initialiser_entete = (config) =>
+{
+    definir_variable_racine(`$title`,       null)
+    definir_variable_racine(`$description`, null)
+    definir_variable_racine(`$status`,      null)
+
+    const titre_defaut       = config?.name ?? document.title
+    const description_defaut = config?.description ?? ``
+
+    observer_variable_racine(`$title`, (titre) =>
+    {
+        document.title = titre ?? titre_defaut
+    })
+
+    observer_variable_racine(`$description`, (description) =>
+    {
+        let balise = document.head.querySelector(`meta[name="description"]`)
+        if (!balise)
+        {
+            balise = document.createElement(`meta`)
+            balise.setAttribute(`name`, `description`)
+            document.head.append(balise)
+        }
+        balise.setAttribute(`content`, description ?? description_defaut)
+    })
 }
 
 const _actions = {
@@ -77,6 +106,7 @@ export const initialiser_heraut = async () =>
     })
 
     const adn = await charger_adn_app()
+    initialiser_entete(adn?.config)
     const api_url = adn?.api_url || `http://localhost:5030`
 
     const construire_url_api = (resource, params) =>
