@@ -82,6 +82,12 @@ En production, chaque partie tourne directement avec Node (`npm start` dans `ani
 - Alignement vertical des `=`, `:` et des imports lorsque plusieurs lignes se suivent.
 - Modules ES (`import` / `export`), Node 24 (sans.js utilise `crypto.argon2`, disponible depuis Node 24.7).
 
+### Données des tables liées (API)
+
+- Les données des tables liées se récupèrent par la projection (`?projection=` sur les routes automatiques, `select` dans les scripts) : une route `GET` automatique ne renvoie par défaut que les champs de sa table.
+- Ne pas compléter les résultats d'une route automatique (`post_search`, `$add_to_data`…) avec des données d'autres tables : l'accès aux relations s'ouvre par leur `can_search` / `restrict_search` (et ceux de `@rules` du modèle lié), qui s'appliquent à chaque niveau de la projection.
+- Un résultat qui ne se réduit pas à une projection (calcul, choix parmi plusieurs lignes, données de plusieurs tables assemblées) passe par une route déclarée dans `@routes`, qui documente ce qu'elle renvoie.
+
 ## Documents juridiques
 
 `juridique/` : registre et procédures RGPD (`RGPD.md`) et brouillons des pages légales publiées sur le site (`conditions-generales-d-utilisation.md`, `politique-de-confidentialite.md`, `mentions-legales.md`). Une évolution qui touche aux données personnelles se reporte dans `RGPD.md` puis, si elle concerne les utilisateurs, dans les pages légales.

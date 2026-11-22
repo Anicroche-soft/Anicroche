@@ -12,6 +12,7 @@
         type         : char
         size         : 1-48
         can_create   : ':)'
+        can_search   : ':)'
         prior_create : $verifier_source($values)
     }
 
@@ -20,6 +21,7 @@
         type       : char
         size       : 1-32
         can_create : ':)'
+        can_search : ':)'
     }
 
     # Rang de la source parmi celles de son rôle, commun à toutes ses versions et langues.
@@ -31,30 +33,43 @@
         type         : order
         variants     : [ version, langue, region ]
         can_create   : ':)'
+        can_search   : ':)'
         can_update   : ':)'
         prior_update : $verifier_deplacement_source($request)
     }
 
+    # Une source vaut pour les versions suivantes tant qu elle n y est pas remplacée : la
+    # version demandée est cherchée, puis les précédentes
     {
         name       : version
         type       : int
+        fallback   : decreasing
         can_create : ':)'
+        can_search : ':)'
+    }
+
+    # Langue (ISO 639) et région (ISO 3166-1 alpha-2 ou UN M.49) : les préférences demandées,
+    # puis celles d origine de l anicroche, puis une source sans langue ni région
+    {
+        name             : langue
+        type             : char
+        size             : 0-3
+        rule             : "$langue ~= /^([a-z]{2,3})?$/"
+        fallback         : list
+        fallback_default : [ '#is_source_of_anicroche.langue', '' ]
+        can_create       : ':)'
+        can_search       : ':)'
     }
 
     {
-        name       : langue
-        type       : char
-        size       : 0-3
-        rule       : "$langue ~= /^([a-z]{2,3})?$/"
-        can_create : ':)'
-    }
-
-    {
-        name       : region
-        type       : char
-        size       : 0-2
-        rule       : "$region ~= /^([A-Z]{2})?$/"
-        can_create : ':)'
+        name             : region
+        type             : char
+        size             : 0-3
+        rule             : "$region ~= /^([A-Z]{2}|[0-9]{3})?$/"
+        fallback         : list
+        fallback_default : [ '#is_source_of_anicroche.region', '' ]
+        can_create       : ':)'
+        can_search       : ':)'
     }
 
     # PATCH /source/... { contenu } corrige une source, tant que sa version est un brouillon
@@ -63,12 +78,24 @@
         name         : contenu
         type         : text
         can_create   : ':)'
+        can_search   : ':)'
         can_update   : ':)'
         prior_update : $verifier_modification_source($request)
     }
 ]
 
+# Une source est visible quand la version demandée l est (voir versions.sans) : c est la
+# version que l on lit, la source pouvant venir d une version précédente. Sans version
+# demandée, seuls les gérants de l anicroche voient ses sources
 @rules [
+    restrict_search : "
+        #is_source_of_anicroche.type -{ $context.types_administres
+      | #is_source_of_anicroche.auteurs.id = $context.profil.id
+      | ( #is_source_of_anicroche.versions.numero = $fallback.version
+        & #is_source_of_anicroche.versions.date_parution != null
+        & ( #is_source_of_anicroche.versions.acces = public
+          | ( #is_source_of_anicroche.versions.acces = partage & ( $request.params.id != '' | $request.params.id_anicroche != '' ) ) ) )
+    "
     post_create : $retourner_position($values)
 ]
 
@@ -80,7 +107,7 @@
         const derniere = await $search_one('version',
             `#id_anicroche = $id`,
             { $id: id_anicroche },
-            { order: 'numero', dir: 'desc' }
+            { order: [[ 'numero', 'decreasing' ]] }
         )
 
         if (!derniere || derniere.numero !== Number(numero) || $est_parue(derniere))

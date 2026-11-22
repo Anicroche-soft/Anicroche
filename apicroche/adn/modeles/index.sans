@@ -42,7 +42,7 @@
         const name = typeof $body.name === 'string' ? $body.name.trim() : ''
         const projection  = $body.projection
         const restriction = ($body.restriction === undefined || $body.restriction === null)
-            ? true
+            ? ':)'
             : (typeof $body.restriction === 'string' ? $body.restriction.trim() : '')
 
         if (!name)
@@ -60,9 +60,10 @@
         let resultats
         try
         {
-            resultats = (projection === undefined || projection === null)
-                ? await $search_all(name, restriction)
-                : await $search_all(name, restriction, {}, { select: projection })
+            resultats = await $search_all(name, restriction, {}, {
+                ...(projection === undefined || projection === null ? {} : { select: projection }),
+                ...($body.fallback ? { fallback: $body.fallback } : {})
+            })
         }
         catch (err)
         {
@@ -77,6 +78,4 @@
             resultats: resultats
         })
     }
-
-    $langue_preferee = () => ({ langue: 'fr', region: 'FR' })
 ]

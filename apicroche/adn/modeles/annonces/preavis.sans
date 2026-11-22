@@ -34,7 +34,7 @@
             const derniere = await $search_one('version',
                 `#id_anicroche = $id`,
                 { $id: id },
-                { order: 'numero', dir: 'desc' }
+                { order: [[ 'numero', 'decreasing' ]] }
             )
             if (derniere?.date_parution && !$est_parue(derniere))
                 programmees.push(derniere)
@@ -109,7 +109,7 @@
         await $search_all('comptes',
             `#date_demande_effacement = null`,
             {},
-            { select: 'id ; date_acceptation_conditions', order: 'id' }
+            { select: 'id ; date_acceptation_conditions', order: [[ 'id', 'increasing' ]] }
         )
 
     // Jours d envoi nécessaires pour prévenir tous les comptes au rythme des lots horaires

@@ -105,6 +105,7 @@ Déclare la liste des champs de la table. Chaque champ est un dictionnaire `{ }`
 | `length` | Longueur générée par `default : auto` |
 | `rule` | [Règle de validation](#rule) de la valeur |
 | `alt` | [Nom alternatif](#alt) du champ dans les corps de requête et les résultats de création |
+| `fallback`, `fallback_default` | [Repli](#fallback--replis) d'un champ de la clef primaire dans les recherches |
 | `ref`, `entry` | Table cible et nom d'entrée d'une [relation](#relations) |
 | `key`, `fields` | Colonne visée et colonnes supplémentaires de la table de jonction d'une relation `N-N` (voir [Tables de jonction](#tables-de-jonction-relation-n-n)) |
 | `can_create`, `prior_create`, `post_create` | Route automatique `POST` (voir [Routes](routes.md#post-entrée--création)) |
@@ -176,6 +177,52 @@ Ici, les positions des sources sont comptées pour chaque anicroche et chaque r�
 Une position refusée donne le code `ORDER_VIOLATION` (réponse `422`). Une colonne `order` ajoutée à une table existante place toutes ses entrées en position 1.
 
 La route automatique [`GET /<table>/<$clef sans order>`](routes.md#get-table-get-entréeclef-et-get-tableclef-sans-order--recherche) renvoie toutes les positions d'un groupe dans l'ordre (`GET /sources/<$id_anicroche>/<$role>/<$version>/<$langue>/<$region>`).
+
+### `fallback` — Replis
+
+Un champ de la clef primaire peut déclarer un **repli** : dans une recherche qui demande une valeur de ce champ, l'entrée qui a cette valeur est renvoyée, ou à défaut celle qui s'en approche le plus. Les entrées mises en concurrence sont celles qui partagent **le reste de la clef primaire** : une seule est gardée pour chacune de ces combinaisons.
+
+| `fallback` | Valeur demandée | Entrée gardée |
+|---|---|---|
+| `decreasing` | une valeur | la plus grande valeur inférieure ou égale à celle demandée (4, sinon 3, 2, 1…) |
+| `increasing` | une valeur | la plus petite valeur supérieure ou égale à celle demandée |
+| `list` | une liste ordonnée de préférences | la première valeur de la liste présente, puis celles de `fallback_default`, puis n'importe quelle autre (la plus petite) |
+
+```
+@primary [ id_anicroche, role, position, version, langue, region ]
+
+@fields [
+    {
+        name     : version
+        type     : int
+        fallback : decreasing
+    }
+
+    {
+        name             : langue
+        type             : char
+        size             : 0-3
+        fallback         : list
+        fallback_default : [ '#is_source_of_anicroche.langue', '' ]
+    }
+
+    {
+        name             : region
+        type             : char
+        size             : 0-3
+        fallback         : list
+        fallback_default : [ '#is_source_of_anicroche.region', '' ]
+    }
+]
+```
+
+Ici, demander la version 4 en `en` donne, pour chaque anicroche, rôle et position, la source de la version 4 ou de la plus récente avant elle ; parmi ses langues, `en`, sinon la langue d'origine de l'anicroche, sinon la source sans langue.
+
+- **Priorité** : quand plusieurs champs ont un repli, celui qui vient le premier dans `@primary` l'emporte. Ci-dessus, la version est choisie d'abord, puis la langue dans cette version, puis la région dans cette langue.
+- **`fallback_default`** (`list` uniquement) : valeurs essayées après les préférences demandées, dans l'ordre. Une valeur `'#relation.champ'` (entre guillemets, `#` ouvrant un commentaire) est lue pour chaque entrée à travers une relation, comme dans une [condition](magasin.md#termes).
+- **Champ non demandé** : un champ `decreasing` ou `increasing` sans valeur demandée n'est pas résolu (toutes ses valeurs sont gardées). Un champ `list` l'est toujours, avec `fallback_default` seul, sauf si la valeur demandée est `'*'`.
+- Les valeurs réelles de l'entrée gardée sont renvoyées : demander la version 4 peut donner une entrée `version : 3`.
+- Les replis ne s'appliquent qu'aux recherches qui les demandent : les [routes `GET` automatiques](routes.md#replis), et les fonctions du magasin avec l'option [`fallback`](magasin.md#fallback--replis). Ils ne concernent ni les modifications ni les suppressions, qui visent des clefs exactes.
 
 ### `size`
 

@@ -46,19 +46,16 @@
             return
         }
 
-        const reponse = await $search(`anicroche/${encodeURIComponent(id)}`)
+        // Un type inconnu fait recharger les types de l API, et reste introuvable s il en est
+        // toujours absent
+        const reponse = await $charger_anicroche(id)
+        const type    = reponse.type
 
         // Une réponse arrivée après une nouvelle navigation est ignorée
         if ($path !== chemin)
             return
 
-        // Un type inconnu fait recharger les types de l API, et reste introuvable s il en est
-        // toujours absent
-        const type = reponse.code === 200 ? await $obtenir_type_anicroche(reponse.data?.type) : null
-        if ($path !== chemin)
-            return
-
-        if (!type)
+        if (reponse.code !== 200)
         {
             $etat_edition = 'introuvable'
             return
@@ -277,7 +274,7 @@
     }
 
     // Les sources affichées sont enregistrées, puis une source vide est ajoutée à la suite de
-    // son rôle, dans la langue préférée
+    // son rôle, dans la langue d origine de l anicroche
     $ajouter_source = async (role) =>
     {
         const champs = lire_champs()
@@ -290,8 +287,8 @@
             id_anicroche : $anicroche_edition.id,
             role,
             version      : $anicroche_edition.brouillon.numero,
-            langue       : 'fr',
-            region       : 'FR',
+            langue       : $anicroche_edition.langue,
+            region       : $anicroche_edition.region,
             contenu      : ''
         })
         await $charger_edition()

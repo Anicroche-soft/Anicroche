@@ -1,6 +1,8 @@
 import fs   from "fs"
 import path from "path"
 
+import { lire_tri } from "./scripts/tri.js"
+
 // ─── Analyseur syntaxique ─────────────────────────────────────────────────────
 
 const echouer = (pos, message) =>
@@ -423,6 +425,15 @@ const transformer_champ = (champ_brut, champs_dans_unique) =>
             ? champ_brut.variants
             : (typeof champ_brut.variants === 'string' ? [champ_brut.variants] : [])
     }
+    if (champ_brut.fallback !== undefined)
+    {
+        champ.fallback         = champ_brut.fallback
+        champ.fallback_default = champ_brut.fallback_default === undefined
+            ? []
+            : (Array.isArray(champ_brut.fallback_default) ? champ_brut.fallback_default : [champ_brut.fallback_default])
+    }
+    else if (champ_brut.fallback_default !== undefined)
+        champ.fallback_default = 'sans fallback'
     return champ
 }
 
@@ -460,7 +471,8 @@ const transformer_modele = (annotations) =>
             can_delete      : lire_chaine_optionnelle(rules_brutes, 'can_delete'),
             restrict_delete : lire_chaine_optionnelle(rules_brutes, 'restrict_delete'),
             prior_delete    : lire_chaine_optionnelle(rules_brutes, 'prior_delete'),
-            post_delete     : lire_chaine_optionnelle(rules_brutes, 'post_delete')
+            post_delete     : lire_chaine_optionnelle(rules_brutes, 'post_delete'),
+            order           : rules_brutes.order ?? null
         }
         : null
 
@@ -514,6 +526,24 @@ const transformer_modele = (annotations) =>
             if (variante === champ.name || !primary.includes(variante))
                 throw new Error(`@fields : variants de \`${champ.name}\` : \`${variante}\` doit être un autre champ de @primary`)
         champ.group = primary.filter(nom => nom !== champ.name && !champ.variants.includes(nom))
+    }
+
+    if (rules?.order !== null && rules?.order !== undefined)
+        lire_tri(champs, rules.order, '@rules order')
+
+    // Les replis choisissent une entrée parmi celles qui partagent le reste de la clef primaire
+    for (const champ of champs)
+    {
+        if (champ.fallback_default === 'sans fallback')
+            throw new Error(`@fields : fallback_default de \`${champ.name}\` demande un fallback`)
+        if (champ.fallback === undefined)
+            continue
+        if (!['decreasing', 'increasing', 'list'].includes(champ.fallback))
+            throw new Error(`@fields : fallback de \`${champ.name}\` : « ${champ.fallback} » (decreasing, increasing ou list attendu)`)
+        if (!primary.includes(champ.name))
+            throw new Error(`@fields : le champ \`${champ.name}\` avec fallback doit faire partie de @primary`)
+        if (champ.fallback !== 'list' && champ.fallback_default.length)
+            throw new Error(`@fields : fallback_default de \`${champ.name}\` n'est accepté qu'avec fallback : list`)
     }
 
     const modele = {

@@ -8,6 +8,7 @@ import { lire_ip, regrouper_ip, analyser_quota, consommer } from './limiteur.js'
 import { lister_fonctions_script } from '../analyseur_sans.js'
 import { compiler_chemin } from './chemins.js'
 import { lire_app } from './app.js'
+import { lire_tri, analyser_tri_url } from './tri.js'
 
 if (!globalThis.crypto)
     globalThis.crypto = webcrypto
@@ -560,6 +561,23 @@ const normaliser_projection_recherche = (table, projection) =>
 const construire_condition_pk = (table) =>
     table.primary.map(clef => `#${clef} = $params.${clef}`).join(' & ')
 
+// Valeur demandée à un repli : une liste séparée par des virgules pour un champ list ('*' les
+// garde toutes), - désignant la valeur vide
+const lire_valeur_repli = (champ, brute) =>
+{
+    if (champ.fallback !== 'list' || brute === '*')
+        return brute === '-' ? '' : brute
+    return String(brute).split(',').map(valeur => valeur.trim()).map(valeur => valeur === '-' ? '' : valeur)
+}
+
+// Les champs de l'adresse qui ont un repli en deviennent les valeurs demandées, au lieu de
+// désigner une valeur exacte
+const condition_sans_replis = (table, clefs) =>
+    clefs
+        .filter(clef => !table.fields.find(champ => champ.name === clef)?.fallback)
+        .map(clef => `#${clef} = $params.${clef}`)
+        .join(' & ') || ':)'
+
 // Clef primaire sans ses champs order : elle désigne toutes les positions d'un même groupe
 // et de mêmes variantes
 const clef_sans_ordre = (table) =>
@@ -1058,6 +1076,14 @@ export const construire_routes = (schemas, index = null, options = {}) =>
 
     // ─── Routes automatiques ──────────────────────────────────────────────────
 
+    // Paramètres d'URL des replis : un par nom de champ, valable pour la table interrogée et
+    // pour les tables de ses relations projetées
+    const champs_replis = new Map()
+    for (const table of schemas.tables)
+        for (const champ of table.fields)
+            if (champ.fallback && !champs_replis.has(champ.name))
+                champs_replis.set(champ.name, champ)
+
     for (const table of schemas.tables)
     {
         const nom_entree   = table.entry_name ?? table.name
@@ -1144,9 +1170,9 @@ export const construire_routes = (schemas, index = null, options = {}) =>
 
         // ─── GET /<table> et GET /<entrée>/<$pk> (champs can_search) ──────────
 
-        const routes_recherche = [{ is_one: false, chemin: `/${table.name}`, action: 'search_all' }]
+        const routes_recherche = [{ is_one: false, chemin: `/${table.name}`, action: 'search_all', adresse: [] }]
         if (a_une_pk)
-            routes_recherche.push({ is_one: true, chemin: chemin_pk, action: 'search_one' })
+            routes_recherche.push({ is_one: true, chemin: chemin_pk, action: 'search_one', adresse: table.primary, condition: condition_sans_replis(table, table.primary) })
 
         // GET /<table>/<$pk sans order> : toutes les positions, rangées dans l'ordre
         const champ_ordre = table.fields.find(champ => champ.order && table.primary.includes(champ.name))
@@ -1156,8 +1182,9 @@ export const construire_routes = (schemas, index = null, options = {}) =>
                 is_one   : false,
                 chemin   : `/${table.name}/${clef_groupe.map(clef => `<$${clef}>`).join('/')}`,
                 action   : `search_all par ${champ_ordre.name}`,
-                condition: clef_groupe.map(clef => `#${clef} = $params.${clef}`).join(' & '),
-                order    : champ_ordre.name
+                adresse  : clef_groupe,
+                condition: condition_sans_replis(table, clef_groupe),
+                order    : [ [ champ_ordre.name, 'increasing' ] ]
             })
 
         for (const route_recherche of routes_recherche)
@@ -1172,7 +1199,19 @@ export const construire_routes = (schemas, index = null, options = {}) =>
                     return
                 }
 
-                const projection = new URL(req.url, 'http://localhost').searchParams.get('projection')
+                const parametres_url = new URL(req.url, 'http://localhost').searchParams
+                const projection     = parametres_url.get('projection')
+
+                const fallback = {}
+                for (const [nom, champ] of champs_replis)
+                    if (parametres_url.has(nom))
+                        fallback[nom] = lire_valeur_repli(champ, parametres_url.get(nom))
+                for (const nom of route_recherche.adresse)
+                {
+                    const champ = table.fields.find(f => f.name === nom)
+                    if (champ?.fallback)
+                        fallback[nom] = lire_valeur_repli(champ, $params[nom])
+                }
                 const { physiques: projection_physique, select: projection_select } = normaliser_projection_recherche(table, projection)
 
                 const champs_retenus = []
@@ -1194,6 +1233,32 @@ export const construire_routes = (schemas, index = null, options = {}) =>
                     return
                 }
 
+                // ?order=champ,sens;champ,sens : seulement sur des champs renvoyés à toutes les
+                // lignes, l'ordre trahissant sinon les valeurs d'un champ caché
+                let order = route_recherche.order ?? null
+                if (parametres_url.has('order'))
+                {
+                    order = analyser_tri_url(parametres_url.get('order'))
+                    for (const [nom] of order)
+                    {
+                        const champ = table.fields.find(f => f.name === nom)
+                        if (champ && (!champ.can_search?.trim() || champ.restrict_search?.trim() || !evaluer(champ.can_search, contexte_regles)))
+                        {
+                            $indicate(400, `Tri impossible sur le champ « ${nom} »`)
+                            return
+                        }
+                    }
+                    try
+                    {
+                        lire_tri(table.fields, order, 'Paramètre order')
+                    }
+                    catch (err)
+                    {
+                        $indicate(400, `${err.message} (format attendu : ?order=champ,increasing;champ,decreasing)`)
+                        return
+                    }
+                }
+
                 // Select final : champs physiques retenus + reste de la projection (relations, imbriqués)
                 const reste_projection = projection_select
                     ? projection_select.split(';').map(t => t.trim()).filter(t => t && !projection_physique.includes(t.split('.')[0].split(',').pop().trim()))
@@ -1202,12 +1267,13 @@ export const construire_routes = (schemas, index = null, options = {}) =>
                     select        : [champs_retenus.join(';'), ...reste_projection].filter(Boolean).join(';'),
                     aux_conditions,
                     enforce_rules : true,
-                    ...(route_recherche.order ? { order: route_recherche.order } : {})
+                    fallback,
+                    ...(order ? { order } : {})
                 }
 
                 const condition_base = table.rules?.restrict_search ?? ':)'
                 const condition = route_recherche.is_one
-                    ? restreindre(condition_pk, table.rules?.restrict_search)
+                    ? restreindre(route_recherche.condition, table.rules?.restrict_search)
                     : route_recherche.condition
                         ? restreindre(route_recherche.condition, table.rules?.restrict_search)
                         : condition_base
@@ -1230,7 +1296,7 @@ export const construire_routes = (schemas, index = null, options = {}) =>
                 let resultats
                 try
                 {
-                    const contexte_recherche = { $params, $context, $request }
+                    const contexte_recherche = { $params, $context, $request, $fallback: fallback }
                     resultats = route_recherche.is_one
                         ? await magasin.$search_one(nom_entree, condition, contexte_recherche, options_recherche)
                         : await magasin.$search_all(table.name, condition, contexte_recherche, options_recherche)

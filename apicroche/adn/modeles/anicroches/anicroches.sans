@@ -23,14 +23,39 @@
         can_search : ':)'
     }
 
+    # Langue et région d origine : celles des sources quand aucune préférence n est trouvée
     {
-        name  : versions
-        count : 0-N
+        name       : langue
+        type       : char
+        size       : 2-3
+        rule       : "$langue ~= /^[a-z]{2,3}$/"
+        default    : fr
+        can_create : ':)'
+        can_search : ':)'
     }
 
     {
-        name  : sources
-        count : 0-N
+        name       : region
+        type       : char
+        size       : 0-3
+        rule       : "$region ~= /^([A-Z]{2}|[0-9]{3})?$/"
+        default    : FR
+        can_create : ':)'
+        can_search : ':)'
+    }
+
+    # Une relation projetée ne montre que les entrées visibles (voir le restrict_search de
+    # versions.sans et de sources.sans)
+    {
+        name       : versions
+        count      : 0-N
+        can_search : ':)'
+    }
+
+    {
+        name       : sources
+        count      : 0-N
+        can_search : ':)'
     }
 
     {
@@ -48,10 +73,18 @@
     }
 ]
 
-# Chaque anicroche trouvée est complétée par une version et ses sources (voir
-# $completer_anicroches). Une anicroche supprimée n est jamais visible
+# Une anicroche supprimée n est jamais visible. Les autres le sont pour leurs gérants (les
+# profils qui administrent son type, et ses auteurs), et pour tous dès qu une de leurs versions datées (parue ou programmée) est
+# publique, ou partagée quand l anicroche est demandée seule
 @rules [
-    post_search : "$completer_anicroches($results, $request)"
+    restrict_search : "
+        ( !(#type -{ $context.types_avec_auteurs) | #auteurs.id != null )
+      & ( #type -{ $context.types_administres
+        | #auteurs.id = $context.profil.id
+        | ( #versions.date_parution != null
+          & ( #versions.acces = public
+            | ( #versions.acces = partage & $request.params.id != '' ) ) ) )
+    "
 ]
 
 @script [
@@ -69,100 +102,5 @@
         await $initialiser_anicroche({ id: $values.id, type: $values.type })
         $add_to_data('id', $values.id)
         $add_to_data('brouillon', 1)
-    }
-
-    // Une version est visible selon son accès (voir versions.sans) : une version partagée ne
-    // l est que pour une anicroche demandée seule. Les gérants de l anicroche (voir
-    // $gere_anicroche) voient toutes les versions
-    const est_visible = (version, gere, seule) =>
-        !!version && (gere || version.acces === 'public' || (version.acces === 'partage' && seule))
-
-    const resumer = (version) =>
-        ({ numero: version.numero, date_parution: version.date_parution, acces: version.acces })
-
-    // GET /anicroche/<$id> donne la version en vigueur (la dernière parue), et
-    // GET /anicroche/<$id>?version=<numero> une version précise, parue ou non. Chaque anicroche
-    // reçoit en plus :
-    // - en_vigueur : numéro de la version en vigueur, si elle est visible ;
-    // - a_venir    : { numero, date_parution } de la version programmée, si elle est visible ;
-    // - versions   : pour une anicroche demandée seule, l historique de ses versions parues
-    //                visibles, de la plus récente à la plus ancienne ({ numero, date_parution }) ;
-    // - legale     : vrai si ses versions datées sont toujours publiques ;
-    // - titre      : pour une anicroche légale, son titre (voir preavis.sans), sinon null ;
-    // - preavis    : vrai si elle paraît immédiatement ou après un préavis de 30 jours, sa
-    //                parution programmée ne pouvant être ni annulée ni déplacée ;
-    // - brouillon  : pour les gérants de l anicroche, la dernière version si elle n est pas
-    //                parue ({ numero, date_parution, acces, sources }), ou null.
-    // Une anicroche n est renvoyée que si la version demandée ou la version à venir est visible
-    $completer_anicroches = async ($results, $request) =>
-    {
-        const seule    = $request.params.id !== undefined
-        const demandee = seule && $request.query.version !== undefined ? Number($request.query.version) : null
-
-        for (let i = $results.length - 1; i >= 0; i--)
-        {
-            const anicroche = $results[i]
-
-            if (await $est_anicroche_supprimee(anicroche))
-            {
-                $results.splice(i, 1)
-                continue
-            }
-
-            const gere     = await $gere_anicroche(anicroche)
-            const versions = await $search_all('versions',
-                `#id_anicroche = $id`,
-                { $id: anicroche.id },
-                { order: 'numero', dir: 'desc' }
-            )
-            const en_vigueur = versions.find(version => $est_parue(version)) ?? null
-            const derniere   = versions[0] ?? null
-            const programmee = derniere?.date_parution && !$est_parue(derniere) ? derniere : null
-            const affichee   = demandee === null
-                ? en_vigueur
-                : versions.find(version => version.numero === demandee) ?? null
-
-            const affichee_visible = est_visible(affichee, gere, seule)
-            const a_venir_visible  = est_visible(programmee, gere, seule)
-
-            // Une version demandée par son numéro doit être visible ; sinon, la version à venir
-            // suffit pour qu une page pas encore parue annonce sa parution
-            if (!affichee_visible && (demandee !== null || !a_venir_visible) && !gere)
-            {
-                $results.splice(i, 1)
-                continue
-            }
-
-            const lignes = await $search_all('sources', `#id_anicroche = $id`, { $id: anicroche.id })
-
-            anicroche.version       = affichee_visible ? affichee.numero : null
-            anicroche.date_parution = affichee_visible ? affichee.date_parution : null
-            anicroche.acces         = affichee_visible ? affichee.acces : null
-            anicroche.sources       = affichee_visible ? $resoudre_sources(anicroche.type, lignes, affichee.numero) : {}
-            anicroche.titre         = $titre_sources(anicroche, anicroche.sources)
-            anicroche.en_vigueur    = est_visible(en_vigueur, gere, seule) ? en_vigueur.numero : null
-            anicroche.a_venir       = a_venir_visible
-                ? {
-                    numero        : programmee.numero,
-                    date_parution : programmee.date_parution,
-                    titre         : $titre_sources(anicroche, $resoudre_sources(anicroche.type, lignes, programmee.numero))
-                }
-                : null
-            anicroche.legale        = $est_legale(anicroche)
-            anicroche.preavis       = $soumise_au_preavis(anicroche)
-
-            if (seule)
-                anicroche.versions = versions
-                    .filter(version => $est_parue(version) && est_visible(version, gere, seule))
-                    .map(version => ({ numero: version.numero, date_parution: version.date_parution }))
-
-            if (!gere)
-                continue
-
-            // Le brouillon montre les sources telles qu elles seront une fois parues
-            anicroche.brouillon = derniere && !$est_parue(derniere)
-                ? { ...resumer(derniere), sources: $resoudre_sources(anicroche.type, lignes, derniere.numero) }
-                : null
-        }
     }
 ]

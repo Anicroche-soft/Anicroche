@@ -225,8 +225,11 @@
             { $id_profil: id_profil, $id_compte: $context.compte.id }
         )
 
-        if (profil)
-            $context.profil = profil
+        if (!profil)
+            return
+
+        $context.profil            = profil
+        $context.types_administres = $types_administres(profil.role)
     }
 
     $detecter_connexion = async () =>

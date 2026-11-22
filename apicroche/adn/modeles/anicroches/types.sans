@@ -29,6 +29,12 @@
     {
         prior_run : $verifier_types_anicroches()
     }
+
+    # Les droits sur les anicroches s expriment dans les restrict_search : $context reçoit les
+    # types avec auteurs, et $resoudre_profil les types que le profil administre
+    {
+        prior_respond : $preparer_droits_anicroches()
+    }
 ]
 
 # GET /types donne la configuration de tous les types, la même pour tous : le site la garde en
@@ -121,11 +127,24 @@
 
     $a_des_auteurs = (type) => $type_anicroche(type)?.auteurs === true
 
-    // Le site reçoit les exceptions sans le contenu de leurs sources, et un maximum illimité (N)
-    // vaut null
+    $preparer_droits_anicroches = () =>
+    {
+        $context.types_avec_auteurs = [ ...types_completes.keys() ].filter(type => $a_des_auteurs(type))
+    }
+
+    $types_administres = (role) =>
+        [ ...types_completes ].filter(([, type]) => type.administration.includes(role)).map(([nom]) => nom)
+
+    // Le site reçoit les exceptions sans le contenu de leurs sources, sauf leur titre (celui des
+    // versions parues avant la source de titre du type), et un maximum illimité (N) vaut null
     const decrire_type = (type) => ({
         ...type,
-        exceptions : type.exceptions.map(({ identifiant, specificites }) => ({ identifiant, specificites })),
+        exceptions : type.exceptions.map(({ identifiant, specificites, sources }) =>
+        {
+            const role  = type.sources.find(source => source.format === 'titre')?.role
+            const titre = role && typeof sources[role] === 'string' ? sources[role] : null
+            return { identifiant, specificites, titre }
+        }),
         sources    : type.sources.map(source => ({ ...source, max: Number.isFinite(source.max) ? source.max : null }))
     })
 
@@ -163,7 +182,7 @@
     $role_titre = (type) =>
         $sources_type(type).find(source => source.format === 'titre')?.role ?? null
 
-    // Titre des sources résolues d une version (voir $resoudre_sources) : sa source de titre,
+    // Titre des sources d une version (voir $sources_version) : sa source de titre,
     // sinon celle de l exception à sa création, sinon l identifiant
     $titre_sources = (anicroche, sources) =>
     {
@@ -181,8 +200,7 @@
         if (!anicroche)
             return id_anicroche
 
-        const lignes = await $search_all('sources', `#id_anicroche = $id`, { $id: id_anicroche })
-        return $titre_sources(anicroche, $resoudre_sources(anicroche.type, lignes, numero))
+        return $titre_sources(anicroche, await $sources_version(anicroche, numero))
     }
 
     // ─── Droits ──────────────────────────────────────────────────────────────
@@ -197,24 +215,6 @@
 
         if (!$administre_type(type))
             return $indicate(403, 'Accès refusé')
-    }
-
-    // Les profils qui administrent le type d une anicroche et ses auteurs la gèrent : ils voient
-    // toutes ses versions, brouillons compris
-    $gere_anicroche = async (anicroche) =>
-    {
-        if ($administre_type(anicroche.type))
-            return true
-        if (!$context.profil || !$a_des_auteurs(anicroche.type))
-            return false
-
-        return !!await $search_one('auteur_anicroche',
-            `
-            #id_anicroche = $id
-          & #id_profil    = $id_profil
-            `,
-            { $id: anicroche.id, $id_profil: $context.profil.id }
-        )
     }
 
     // Renvoie l anicroche, après avoir vérifié que le profil administre son type
@@ -266,23 +266,6 @@
 
     // ─── Sources ─────────────────────────────────────────────────────────────
 
-    // Pour chaque position et chaque langue, la source la plus récente jusqu à la version donnée
-    const sources_en_place = (lignes, role, numero) =>
-    {
-        const par_variante = new Map()
-        for (const ligne of lignes)
-        {
-            if (ligne.role !== role || ligne.version > numero)
-                continue
-
-            const clef   = `${ligne.position}|${ligne.langue}|${ligne.region}`
-            const actuel = par_variante.get(clef)
-            if (!actuel || ligne.version > actuel.version)
-                par_variante.set(clef, ligne)
-        }
-        return [ ...par_variante.values() ]
-    }
-
     const compter_positions = async (id_anicroche, role) =>
     {
         const derniere = await $search_one('source',
@@ -291,7 +274,7 @@
           & #role         = $role
             `,
             { $id: id_anicroche, $role: role },
-            { order: 'position', dir: 'desc' }
+            { order: [[ 'position', 'decreasing' ]] }
         )
         return derniere?.position ?? 0
     }
@@ -306,12 +289,12 @@
           & #date_parution = null
             `,
             { $id: anicroche.id },
-            { order: 'numero', dir: 'desc' }
+            { order: [[ 'numero', 'decreasing' ]] }
         )
         if (!brouillon)
             return
 
-        const { langue, region } = $langue_preferee()
+        const { langue, region } = await $search_one('anicroche', `#id = $id`, { $id: anicroche.id })
         const contenus           = $exception_anicroche(anicroche)?.sources ?? {}
 
         for (const source of $sources_type(anicroche.type))
@@ -344,12 +327,14 @@
     // une source comptant dès qu elle est remplie dans une langue
     $verifier_sources_publiables = async (anicroche, numero) =>
     {
-        const lignes = await $search_all('sources', `#id_anicroche = $id`, { $id: anicroche.id })
+        // Dans chaque langue, la source la plus récente jusqu à la version
+        const lignes = await $search_all('sources', `#id_anicroche = $id`, { $id: anicroche.id },
+            { fallback: { version: numero, langue: '*', region: '*' } })
 
         for (const source of $sources_type(anicroche.type))
         {
-            const positions = new Set(sources_en_place(lignes, source.role, numero)
-                .filter(ligne => String(ligne.contenu ?? '').trim() !== '')
+            const positions = new Set(lignes
+                .filter(ligne => ligne.role === source.role && String(ligne.contenu ?? '').trim() !== '')
                 .map(ligne => ligne.position))
 
             if (positions.size < source.min)

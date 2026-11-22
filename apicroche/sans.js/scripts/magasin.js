@@ -4,6 +4,7 @@ import crypto from 'node:crypto'
 import { hacher_hmac, hacher_argon2, chiffrer_aes, dechiffrer_aes } from './crypto.js'
 import { evaluer, ERREUR as ERREUR_AUGURE } from './augure.js'
 import { trouver_table, resoudre_relation as resoudre_projection_relation, preparer_lecture, traduire_now_sql } from './traducteur.js'
+import { lire_tri, tri_par_defaut, tri_en_sql, clause_tri, comparable, comparer_lignes } from './tri.js'
 
 // Les requêtes contiennent des données personnelles : elles ne sont journalisées qu'en dev
 const mode_dev = (process.env.mode || 'prod') === 'dev'
@@ -128,14 +129,27 @@ const decrypter_ligne = (modele, ligne) =>
     return res
 }
 
+// Lignes liées, rangées selon l'ordre par défaut de leur modèle
 const lire_lignes_par_in = async (modele, champ, valeurs) =>
 {
     if (!Array.isArray(valeurs) || !valeurs.length)
         return []
 
+    const tri     = tri_par_defaut(modele)
+    const en_sql  = tri_en_sql(tri)
     const clauses = valeurs.map(() => '?').join(', ')
-    const [lignes] = await pool().query(`SELECT * FROM \`${modele.name}\` WHERE \`${champ}\` IN (${clauses})`, valeurs)
+    const [lignes] = await pool().query(
+        `SELECT * FROM \`${modele.name}\` WHERE \`${champ}\` IN (${clauses})${en_sql ? clause_tri(modele.name, tri) : ''}`,
+        valeurs
+    )
+    if (en_sql)
+        return lignes
+
+    const comparer = comparer_lignes(tri)
     return lignes
+        .map(brute => ({ brute, ligne: decrypter_ligne(modele, brute) }))
+        .sort((a, b) => comparer(a.ligne, b.ligne))
+        .map(({ brute }) => brute)
 }
 
 const normaliser_projection_select = (select) =>
@@ -295,7 +309,7 @@ const construire_noeud_projection = (schemas, modele, select) =>
     return noeud
 }
 
-const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_enforce = null) =>
+const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_enforce = null, fallback = null) =>
 {
     const noeud = construire_noeud_projection(schemas, modele, select)
     const resultats = lignes.map(() => ({}))
@@ -387,7 +401,23 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
                 spec.restrict_conditions = restrictions
         }
 
-        const projection_enfant = (rows) => rows.length ? projeter_lignes_select(schemas, modele_enfant, rows, spec.select, contexte_enforce) : []
+        const projection_enfant = (rows) => rows.length ? projeter_lignes_select(schemas, modele_enfant, rows, spec.select, contexte_enforce, fallback) : []
+
+        // Lignes liées : la condition passe par $search_all pour les restrictions et les replis
+        const lire_liees = async (modele_lu, colonne, valeurs) =>
+        {
+            if (!valeurs.length)
+                return []
+            const avec_replis = fallback !== null && modele_lu.fields.some(champ => champ.fallback)
+            if (!spec.restrict_conditions?.length && !avec_replis)
+                return lire_lignes_par_in(modele_lu, colonne, valeurs)
+            return creer_search_all(schemas)(
+                modele_lu.name,
+                [`#${colonne} -{ $__ids__`, ...(spec.restrict_conditions ?? [])].map(condition => `(${condition})`).join(' & '),
+                { $__ids__: valeurs, $context: contexte_enforce?.context ?? {}, $request: contexte_enforce?.request ?? {} },
+                { enforce_rules: contexte_enforce !== null, fallback }
+            )
+        }
 
         const pk_source = trouver_pk(table_source)
         const pk_cible = trouver_pk(table_cible)
@@ -410,7 +440,7 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
                 .map(morceau => normaliser_token_projection(morceau).filter(nom => !champs_sup.includes(nom)).join(', '))
                 .filter(Boolean)
             const projeter_enfant_sans_jonction = (rows) =>
-                rows.length ? projeter_lignes_select(schemas, modele_enfant, rows, select_enfant, contexte_enforce) : []
+                rows.length ? projeter_lignes_select(schemas, modele_enfant, rows, select_enfant, contexte_enforce, fallback) : []
             const ids_lignes  = [...new Set(lignes.map(ligne => ligne[cle_ligne]).filter(v => v !== undefined && v !== null))]
 
             if (!ids_lignes.length)
@@ -430,42 +460,21 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
             const liens_par_ligne = indexer_lignes_par_clef(jonctions, cle_lire)
             const ids_relatifs    = [...new Set(jonctions.map(ligne => ligne[cle_assoc]).filter(v => v !== undefined && v !== null))]
 
-            let lignes_relatives = []
-            if (ids_relatifs.length)
-            {
-                if (spec.restrict_conditions?.length)
-                {
-                    const condition = [`#${cle_enfant} -{ $__ids__`, ...spec.restrict_conditions].join(' & ')
-                    lignes_relatives = await creer_search_all(schemas)(
-                        modele_enfant.name,
-                        condition,
-                        { $__ids__: ids_relatifs, $context: contexte_enforce.context, $request: contexte_enforce.request },
-                        { enforce_rules: true }
-                    )
-                }
-                else
-                {
-                    lignes_relatives = await lire_lignes_par_in(modele_enfant, cle_enfant, ids_relatifs)
-                }
-            }
+            const lignes_relatives = await lire_liees(modele_enfant, cle_enfant, ids_relatifs)
             // Plusieurs lignes par clef quand la relation vise un groupe
-            const relatives_par_clef = indexer_lignes_par_clef(lignes_relatives.map(ligne_rel => decrypter_ligne(modele_enfant, ligne_rel)), cle_enfant)
+            const relatives = lignes_relatives.map(ligne_rel => decrypter_ligne(modele_enfant, ligne_rel))
 
+            // Les entrées liées gardent l'ordre de leur modèle, pas celui de la jonction
             for (let i = 0; i < lignes.length; i++)
             {
-                const liens = liens_par_ligne.get(lignes[i][cle_ligne]) ?? []
-                const vus   = new Set()
-                const entrees = []
+                const liens = new Map()
+                for (const lien of liens_par_ligne.get(lignes[i][cle_ligne]) ?? [])
+                    if (lien[cle_assoc] !== undefined && lien[cle_assoc] !== null && !liens.has(lien[cle_assoc]))
+                        liens.set(lien[cle_assoc], lien)
 
-                for (const lien of liens)
-                {
-                    const id = lien[cle_assoc]
-                    if (id === undefined || id === null || vus.has(id))
-                        continue
-                    vus.add(id)
-                    for (const ligne_rel of relatives_par_clef.get(id) ?? [])
-                        entrees.push({ ligne: ligne_rel, lien })
-                }
+                const entrees = relatives
+                    .filter(ligne_rel => liens.has(ligne_rel[cle_enfant]))
+                    .map(ligne_rel => ({ ligne: ligne_rel, lien: liens.get(ligne_rel[cle_enfant]) }))
 
                 const valeurs = spec.select
                     ? await projeter_enfant_sans_jonction(entrees.map(e => e.ligne))
@@ -498,21 +507,7 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
                     continue
                 }
 
-                let rows_directe
-                if (spec.restrict_conditions?.length)
-                {
-                    const condition = [`#${relation.cle_etrangere} -{ $__ids__`, ...spec.restrict_conditions].join(' & ')
-                    rows_directe = await creer_search_all(schemas)(
-                        table_cible.name,
-                        condition,
-                        { $__ids__: ids_lignes, $context: contexte_enforce.context, $request: contexte_enforce.request },
-                        { enforce_rules: true }
-                    )
-                }
-                else
-                {
-                    rows_directe = await lire_lignes_par_in(table_cible, relation.cle_etrangere, ids_lignes)
-                }
+                const rows_directe = await lire_liees(table_cible, relation.cle_etrangere, ids_lignes)
                 const index_rows = indexer_lignes_par_clef(rows_directe, relation.cle_etrangere)
 
                 for (let i = 0; i < lignes.length; i++)
@@ -535,21 +530,7 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
                 continue
             }
 
-            let rows_inverse
-            if (spec.restrict_conditions?.length)
-            {
-                const condition = [`#${pk_source.name} -{ $__ids__`, ...spec.restrict_conditions].join(' & ')
-                rows_inverse = await creer_search_all(schemas)(
-                    table_source.name,
-                    condition,
-                    { $__ids__: valeurs_fk, $context: contexte_enforce.context, $request: contexte_enforce.request },
-                    { enforce_rules: true }
-                )
-            }
-            else
-            {
-                rows_inverse = await lire_lignes_par_in(table_source, pk_source.name, valeurs_fk)
-            }
+            const rows_inverse = await lire_liees(table_source, pk_source.name, valeurs_fk)
             const map_rows = new Map(rows_inverse.map(ligne_rel => [ligne_rel[pk_source.name], decrypter_ligne(table_source, ligne_rel)]))
 
             for (let i = 0; i < lignes.length; i++)
@@ -574,24 +555,10 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
             const cle_locale = relation.cle_locale
             const pk_cible_nom = pk_cible?.name
 
-            const lire_lignes_liees = async (modele_lu, colonne, valeurs) =>
-            {
-                if (!valeurs.length)
-                    return []
-                if (spec.restrict_conditions?.length)
-                    return creer_search_all(schemas)(
-                        modele_lu.name,
-                        [`#${colonne} -{ $__ids__`, ...spec.restrict_conditions].join(' & '),
-                        { $__ids__: valeurs, $context: contexte_enforce.context, $request: contexte_enforce.request },
-                        { enforce_rules: true }
-                    )
-                return lire_lignes_par_in(modele_lu, colonne, valeurs)
-            }
-
             if (sens === 'direct')
             {
                 const valeurs_fk = [...new Set(lignes.map(ligne => ligne[cle_locale]).filter(v => v !== undefined && v !== null))]
-                const rows = await lire_lignes_liees(table_cible, pk_cible_nom, valeurs_fk)
+                const rows = await lire_liees(table_cible, pk_cible_nom, valeurs_fk)
                 const map_rows = new Map(rows.map(ligne_rel => [ligne_rel[pk_cible_nom], decrypter_ligne(table_cible, ligne_rel)]))
 
                 for (let i = 0; i < lignes.length; i++)
@@ -604,7 +571,7 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
 
             // Sens inverse : toutes les entrées source qui pointent vers chaque ligne
             const ids_lignes = [...new Set(lignes.map(ligne => ligne[pk_cible_nom]).filter(v => v !== undefined && v !== null))]
-            const rows = await lire_lignes_liees(table_source, cle_locale, ids_lignes)
+            const rows = await lire_liees(table_source, cle_locale, ids_lignes)
             const index_rows = indexer_lignes_par_clef(rows, cle_locale)
 
             for (let i = 0; i < lignes.length; i++)
@@ -620,12 +587,6 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
     }
 
     return resultats
-}
-
-const projeter_ligne_select = async (schemas, modele, ligne, select, contexte_enforce = null) =>
-{
-    const resultats = await projeter_lignes_select(schemas, modele, [ligne], select, contexte_enforce)
-    return resultats[0] ?? null
 }
 
 const normaliser_condition = (condition) =>
@@ -667,37 +628,22 @@ const normaliser_donnees_update = (donnees) =>
 const normaliser_options_liste = (modele, options) =>
 {
     if (options === null || options === undefined)
-        return {
-            order : null,
-            dir   : 'asc',
-            limit : null,
-            offset: 0,
-            select: null,
-            aux_conditions: {},
-            enforce_rules : false,
-        }
+        options = {}
 
     if (typeof options !== 'object' || Array.isArray(options))
-        throw new Error('Options invalides : utilisez un objet { order, dir, limit, offset, select, aux_conditions }')
+        throw new Error('Options invalides : utilisez un objet { order, limit, offset, select, aux_conditions, enforce_rules, fallback }')
 
     const champs_modele = new Set(modele.fields.map(f => f.name))
 
-    const order = options.order ?? null
-    if (order !== null)
-    {
-        if (typeof order !== 'string' || !champs_modele.has(order))
-            throw new Error(`Option order invalide : champ inconnu "${order}"`)
-    }
+    if (options.dir !== undefined)
+        throw new Error('Option dir supprimée : le sens se donne dans order, [[champ, increasing | decreasing], …]')
 
-    let dir = options.dir ?? 'asc'
-    if (typeof dir !== 'string')
-        throw new Error('Option dir invalide : utilisez "asc" ou "desc"')
-    dir = dir.toLowerCase()
-    if (dir !== 'asc' && dir !== 'desc')
-        throw new Error('Option dir invalide : utilisez "asc" ou "desc"')
+    const order = options.order === undefined || options.order === null
+        ? tri_par_defaut(modele)
+        : lire_tri(modele.fields, options.order, 'Option order')
 
     const limit = options.limit
-    if (limit !== undefined && (!Number.isInteger(limit) || limit < 0))
+    if (limit !== undefined && limit !== null && (!Number.isInteger(limit) || limit < 0))
         throw new Error('Option limit invalide : utilisez un entier >= 0')
 
     const offset = options.offset ?? 0
@@ -741,77 +687,19 @@ const normaliser_options_liste = (modele, options) =>
 
     const enforce_rules = options.enforce_rules === true
 
+    const fallback = options.fallback ?? null
+    if (fallback !== null && (typeof fallback !== 'object' || Array.isArray(fallback)))
+        throw new Error('Option fallback invalide : utilisez un objet { champ: valeur }')
+
     return {
         order,
-        dir,
         limit : limit ?? null,
         offset,
         select,
         aux_conditions: aux_conditions_norm,
-        enforce_rules
+        enforce_rules,
+        fallback
     }
-}
-
-const normaliser_valeur_tri = (valeur) =>
-{
-    if (valeur === null || valeur === undefined)
-        return null
-
-    if (valeur instanceof Date)
-    {
-        const temps = valeur.getTime()
-        return Number.isNaN(temps) ? null : temps
-    }
-
-    if (typeof valeur === 'number' || typeof valeur === 'bigint')
-        return Number(valeur)
-
-    if (typeof valeur === 'boolean')
-        return valeur ? 1 : 0
-
-    const temps = Date.parse(String(valeur))
-    if (!Number.isNaN(temps))
-        return temps
-
-    return String(valeur)
-}
-
-const comparer_pour_tri = (a, b, direction) =>
-{
-    const va = normaliser_valeur_tri(a)
-    const vb = normaliser_valeur_tri(b)
-
-    if (va === null && vb === null) return 0
-    if (va === null) return direction === 'asc' ? -1 : 1
-    if (vb === null) return direction === 'asc' ? 1 : -1
-
-    if (va < vb) return direction === 'asc' ? -1 : 1
-    if (va > vb) return direction === 'asc' ? 1 : -1
-    return 0
-}
-
-const appliquer_options_liste = (elements, options, lire_valeur) =>
-{
-    let travail = [...elements]
-
-    if (options.order)
-    {
-        travail.sort((a, b) =>
-            comparer_pour_tri(
-                lire_valeur(a, options.order),
-                lire_valeur(b, options.order),
-                options.dir
-            )
-        )
-    }
-
-    if (options.offset > 0)
-        travail = travail.slice(options.offset)
-
-    if (options.limit !== null)
-        travail = travail.slice(0, options.limit)
-
-    return travail
 }
 
 // ─── Journal SQL ──────────────────────────────────────────────────────────────
@@ -850,20 +738,65 @@ const rendre_requete_sql_debug = (requete, valeurs = []) =>
 // ─── Lecture des lignes respectant une condition ──────────────────────────────
 // Retourne les lignes brutes (non déchiffrées), une seule fois par entrée.
 
-const lire_lignes = async (schemas, modele, condition, contexte_condition, etiquette, colonnes_aux = {}) =>
+const lire_lignes = async (schemas, modele, condition, contexte_condition, etiquette, colonnes_aux = {}, colonnes_valeurs = {}, rangement = {}) =>
 {
     const lecture = preparer_lecture(
         schemas,
         modele,
         normaliser_condition(condition),
         normaliser_contexte_condition(contexte_condition),
-        colonnes_aux
+        colonnes_aux,
+        colonnes_valeurs,
+        rangement
     )
 
     if (mode_dev)
         console.log(`[${etiquette}] SQL:`, rendre_requete_sql_debug(lecture.sql, lecture.valeurs))
     const [lignes] = await pool().query(lecture.sql, lecture.valeurs)
-    return lecture.filtrer(lignes)
+    const retenues = await lecture.filtrer(lignes)
+    retenues.limite_appliquee = lecture.limite_appliquee
+    return retenues
+}
+
+// Entrées d'une recherche ({ brute, ligne } : ligne brute et ligne déchiffrée), résolues par
+// les replis, rangées et découpées. Le tri, la limite et le décalage sont faits en SQL, sauf
+// pour un tri sur un champ chiffré (comparable seulement une fois déchiffré) ; la limite et le
+// décalage le sont aussi en JS quand des lignes sont écartées après la lecture (condition
+// vérifiée ligne par ligne, replis)
+const lire_entrees = async (schemas, modele, condition, contexte_condition, etiquette, options_norm, colonnes_aux = {}) =>
+{
+    const replis = preparer_replis(modele, options_norm.fallback)
+    const en_sql = tri_en_sql(options_norm.order)
+
+    const lignes = await lire_lignes(schemas, modele, condition, contexte_condition, etiquette, colonnes_aux, replis?.colonnes_valeurs, {
+        tri    : en_sql ? options_norm.order : [],
+        limite : en_sql && !replis ? { limit: options_norm.limit, offset: options_norm.offset } : null
+    })
+
+    let entrees = lignes.map(brute => ({ brute, ligne: decrypter_ligne(modele, brute) }))
+
+    if (replis)
+    {
+        const par_ligne = new Map(entrees.map(entree => [entree.ligne, entree]))
+        entrees = appliquer_replis(modele, replis, entrees.map(entree => entree.ligne)).map(ligne => par_ligne.get(ligne))
+    }
+
+    // Les replis gardent la place de la première entrée de chaque groupe : l'ordre est refait
+    if (!en_sql || replis)
+    {
+        const comparer = comparer_lignes(options_norm.order)
+        entrees.sort((a, b) => comparer(a.ligne, b.ligne))
+    }
+
+    if (!lignes.limite_appliquee)
+    {
+        if (options_norm.offset > 0)
+            entrees = entrees.slice(options_norm.offset)
+        if (options_norm.limit !== null)
+            entrees = entrees.slice(0, options_norm.limit)
+    }
+
+    return entrees
 }
 
 // ─── Validation des valeurs ───────────────────────────────────────────────────
@@ -1266,6 +1199,109 @@ const verifier_mise_a_jour_groupes = async (schemas, modele, lignes, donnees) =>
     }
 }
 
+// ─── Replis (fallback) ───────────────────────────────────────────────────────
+// Parmi les entrées qui partagent le reste de la clef primaire, une seule est gardée : celle
+// qui répond le mieux aux valeurs demandées, les champs étant départagés dans l'ordre de
+// @primary. Une liste demandée '*' laisse toutes les valeurs de son champ.
+
+const preparer_replis = (modele, fallback) =>
+{
+    if (!fallback)
+        return null
+
+    const actifs           = []
+    const colonnes_valeurs = {}
+
+    for (const nom of modele.primary ?? [])
+    {
+        const champ   = trouver_champ(modele, nom)
+        const demande = fallback[nom]
+        if (!champ?.fallback || demande === '*')
+            continue
+
+        if (champ.fallback !== 'list')
+        {
+            if (demande !== undefined && demande !== null && demande !== '')
+                actifs.push({ champ, valeur: comparable(champ, demande) })
+            continue
+        }
+
+        const liste   = demande === undefined || demande === null ? [] : (Array.isArray(demande) ? demande : [demande])
+        const defauts = champ.fallback_default.map((defaut, j) =>
+        {
+            if (typeof defaut !== 'string' || !defaut.startsWith('#'))
+                return { valeur: comparable(champ, defaut ?? '') }
+            const colonne = `__repli_${actifs.length}_${j}`
+            colonnes_valeurs[colonne] = defaut.slice(1)
+            return { colonne }
+        })
+        actifs.push({ champ, liste: liste.map(valeur => comparable(champ, valeur)), defauts })
+    }
+
+    return actifs.length ? { actifs, colonnes_valeurs } : null
+}
+
+// Rang d'une ligne pour un champ : plus il est petit, meilleure est la ligne
+const rang_repli = (actif, ligne) =>
+{
+    const valeur = comparable(actif.champ, ligne[actif.champ.name])
+    if (actif.champ.fallback === 'decreasing')
+        return [ -valeur ]
+    if (actif.champ.fallback === 'increasing')
+        return [ valeur ]
+
+    const candidats = [ ...actif.liste, ...actif.defauts.map(defaut => 'colonne' in defaut
+        ? comparable(actif.champ, ligne[defaut.colonne])
+        : defaut.valeur) ]
+    const index = candidats.findIndex(candidat => candidat === valeur)
+    return index >= 0 ? [ index, '' ] : [ candidats.length, valeur ?? '' ]
+}
+
+const comparer_rangs = (a, b) =>
+{
+    for (let i = 0; i < a.length; i++)
+    {
+        if (a[i] < b[i]) return -1
+        if (a[i] > b[i]) return 1
+    }
+    return 0
+}
+
+const appliquer_replis = (modele, replis, lignes) =>
+{
+    if (!replis)
+        return lignes
+
+    const resolus = new Set(replis.actifs.map(actif => actif.champ.name))
+    const groupe  = modele.primary.filter(nom => !resolus.has(nom))
+    const accepte = (actif, ligne) =>
+    {
+        if (!('valeur' in actif))
+            return true
+        const valeur = comparable(actif.champ, ligne[actif.champ.name])
+        return actif.champ.fallback === 'decreasing' ? valeur <= actif.valeur : valeur >= actif.valeur
+    }
+
+    const retenues = new Map()
+    for (const ligne of lignes)
+    {
+        if (!replis.actifs.every(actif => accepte(actif, ligne)))
+            continue
+
+        const clef  = JSON.stringify(groupe.map(nom => ligne[nom] ?? null))
+        const rangs = replis.actifs.flatMap(actif => rang_repli(actif, ligne))
+        const deja  = retenues.get(clef)
+        if (!deja || comparer_rangs(rangs, deja.rangs) < 0)
+            retenues.set(clef, { ligne, rangs })
+    }
+
+    return [...retenues.values()].map(({ ligne }) => ligne)
+}
+
+// $fallback est toujours défini dans les conditions : les valeurs demandées, ou {}
+const contexte_recherche_de = (options_norm, contexte_condition) =>
+    ({ $fallback: options_norm.fallback ?? {}, ...normaliser_contexte_condition(contexte_condition) })
+
 const contexte_enforce_de = (options_norm, contexte_norm) =>
     options_norm.enforce_rules
         ? { context: contexte_norm?.$context ?? {}, request: contexte_norm?.$request ?? {} }
@@ -1279,12 +1315,12 @@ const creer_search_one = (schemas) => async (nom_modele, condition, contexte_con
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
     const options_norm = normaliser_options_liste(modele, options)
 
-    const lignes = await lire_lignes(schemas, modele, condition, contexte_condition, 'search_one', options_norm.aux_conditions)
-    const choisies = appliquer_options_liste(lignes.map(l => decrypter_ligne(modele, l)), { ...options_norm, limit: 1 }, (ligne, nom) => ligne[nom])
-    if (!choisies.length)
+    const entrees = await lire_entrees(schemas, modele, condition, contexte_recherche_de(options_norm, contexte_condition), 'search_one', { ...options_norm, limit: 1 }, options_norm.aux_conditions)
+    if (!entrees.length)
         return null
 
-    return await projeter_ligne_select(schemas, modele, choisies[0], options_norm.select, contexte_enforce_de(options_norm, contexte_condition))
+    const resultats = await projeter_lignes_select(schemas, modele, [entrees[0].ligne], options_norm.select, contexte_enforce_de(options_norm, contexte_condition), options_norm.fallback)
+    return resultats[0] ?? null
 }
 
 // ─── $search_all ─────────────────────────────────────────────────────────────
@@ -1295,10 +1331,9 @@ const creer_search_all = (schemas) => async (nom_modele, condition, contexte_con
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
     const options_norm = normaliser_options_liste(modele, options)
 
-    const lignes = await lire_lignes(schemas, modele, condition, contexte_condition, 'search_all', options_norm.aux_conditions)
-    const resultats = appliquer_options_liste(lignes.map(l => decrypter_ligne(modele, l)), options_norm, (ligne, nom) => ligne[nom])
+    const entrees = await lire_entrees(schemas, modele, condition, contexte_recherche_de(options_norm, contexte_condition), 'search_all', options_norm, options_norm.aux_conditions)
 
-    return await projeter_lignes_select(schemas, modele, resultats, options_norm.select, contexte_enforce_de(options_norm, contexte_condition))
+    return await projeter_lignes_select(schemas, modele, entrees.map(entree => entree.ligne), options_norm.select, contexte_enforce_de(options_norm, contexte_condition), options_norm.fallback)
 }
 
 // ─── $delete_one ─────────────────────────────────────────────────────────────
@@ -1326,9 +1361,7 @@ const creer_delete_all = (schemas) => async (nom_modele, condition, contexte_con
     if (!modele) throw new Error(`Modèle introuvable : ${nom_modele}`)
     const options_norm = normaliser_options_liste(modele, options)
 
-    const lignes = await lire_lignes(schemas, modele, condition, contexte_condition, 'delete_all')
-    const elements = lignes.map(brute => ({ brute, decryptee: decrypter_ligne(modele, brute) }))
-    const cibles = appliquer_options_liste(elements, { ...options_norm, select: null }, (element, nom) => element.decryptee[nom])
+    const cibles = await lire_entrees(schemas, modele, condition, contexte_condition, 'delete_all', options_norm)
 
     await verifier_groupes_restants(schemas, modele, cibles.map(element => element.brute))
     for (const element of cibles)

@@ -24,7 +24,7 @@ const session = await $search_one('session',
 const profils = await $search_all('profils',
     `#gerants.id = $id_compte`,
     { $id_compte: $context.compte.id },
-    { select: 'id ; identifiant ; pseudonyme', order: 'date_creation', dir: 'desc' }
+    { select: 'id ; identifiant ; pseudonyme', order: [['date_creation', 'decreasing']] }
 )
 ```
 
@@ -135,19 +135,37 @@ await $search_all('profils',
 | Option | Défaut | Description |
 |---|---|---|
 | `select` | tous les champs | [Projection](#select--projection) des champs et relations |
-| `order` | — | Champ de tri |
-| `dir` | `asc` | Sens du tri : `asc` ou `desc` |
+| `order` | celui du modèle | [Ordre](#order--tri) des résultats |
 | `limit` | — | Nombre maximum de résultats |
 | `offset` | `0` | Nombre de résultats ignorés (pagination) |
 | `enforce_rules` | `false` | Vérifier les règles d'accès des relations projetées |
+| `fallback` | — | Valeurs demandées aux [replis](#fallback--replis) |
 
 Pour `$search_one`, `order` choisit l'entrée renvoyée. Pour `$delete_all`, les options choisissent les entrées supprimées (ex. tout supprimer sauf la plus récente) :
 
 ```javascript
 await $delete_all('clefs', `#hachage_coordonnee = $coordonnee`, { $coordonnee },
-    { order: 'date_emission', dir: 'desc', offset: 1 }
+    { order: [['date_emission', 'decreasing']], offset: 1 }
 )
 ```
+
+### `order` — Tri
+
+`order` est une liste de clefs de tri `[champ, sens]`, la première l'emportant ; le sens, `increasing` (croissant) ou `decreasing` (décroissant), est obligatoire :
+
+```javascript
+{ order: [['date_parution', 'decreasing'], ['numero', 'increasing']] }
+```
+
+Sans `order`, les résultats suivent l'[ordre du modèle](routes.md#règles-du-modèle--rules) (`order` de `@rules`), ou à défaut sa clef primaire, dans l'ordre croissant : l'ordre ne dépend jamais de la base. Les relations projetées dans `select` sont rangées selon l'ordre de leur propre modèle.
+
+Le tri, `limit` et `offset` sont faits par la base (`ORDER BY`, `LIMIT`, `OFFSET`), sauf dans ces cas :
+
+- un tri sur un champ `crypt` est fait après déchiffrement, en JS, comme `limit` et `offset` ;
+- `limit` et `offset` sont appliqués en JS quand des lignes sont écartées après la lecture : condition vérifiée ligne par ligne (champs `crypt`, `hash` argon2, expressions rationnelles), conditions de champ (`restrict_search` d'un champ) ou [replis](#fallback--replis).
+
+Un champ `hash` ne peut pas servir au tri (sa valeur ne dit rien de la valeur d'origine). Une valeur nulle vient en premier dans l'ordre croissant.
+
 
 ### `select` — Projection
 
@@ -189,6 +207,22 @@ const profils = await $search_all('profils', ':)', { $context, $request },
     { select: 'id ; pseudonyme ; gerants', enforce_rules: true }
 )
 ```
+
+### `fallback` — Replis
+
+L'option `fallback` applique les [replis](modeles.md#fallback--replis) déclarés dans les modèles : un objet `{ champ: valeur }`, avec une liste (ou `'*'`) pour un champ `list`. Elle vaut aussi pour les relations projetées dans `select`. La résolution a lieu après la condition et avant `order`, `limit` et `offset`.
+
+```javascript
+// Sources de la version 4 (ou des précédentes), en anglais de préférence
+await $search_all('sources', `#id_anicroche = $id`, { $id },
+    { fallback: { version: 4, langue: ['en'] } })
+
+// Dans chaque langue, la source la plus récente jusqu'à la version 4
+await $search_all('sources', `#id_anicroche = $id`, { $id },
+    { fallback: { version: 4, langue: '*', region: '*' } })
+```
+
+Sans l'option, aucun repli n'est appliqué (même pour un champ `list`). Les valeurs demandées sont disponibles dans la condition sous le nom `$fallback` (`{}` sans l'option).
 
 ### Journal SQL
 

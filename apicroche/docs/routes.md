@@ -32,7 +32,7 @@ Les propriétés `can_*` sont des expressions [augure](magasin.md#expressions-au
 | `$params` | Les paramètres de l'URL |
 | `$<champ>` | Pour `can_create` et `can_update` uniquement : la valeur du champ dans le corps de la requête (`:x` si absente) |
 
-Les propriétés `restrict_*` sont des [conditions](magasin.md#conditions) qui restreignent les lignes concernées (elles peuvent porter sur les champs `#…` et utiliser `$context`, `$request` et `$params`).
+Les propriétés `restrict_*` sont des [conditions](magasin.md#conditions) qui restreignent les lignes concernées (elles peuvent porter sur les champs `#…` et utiliser `$context`, `$request` et `$params`, ainsi que `$fallback` pour `restrict_search`, voir [Replis](#replis)). Sur une relation projetée, `$params` n'est pas disponible : utiliser `$request.params`.
 
 ### Hooks
 
@@ -121,6 +121,35 @@ Arguments des hooks : `$body`, `$request`, `$context`, et `$results` (résultats
 
 Réponse : `200 OK` avec la liste des entrées (`GET /<table>`) ou l'entrée (`GET /<entrée>/<$clef>`), `404` si l'entrée est introuvable.
 
+### Tri
+
+Les entrées suivent l'ordre `order` de `@rules`, ou à défaut la clef primaire (dans l'ordre croissant) ; `GET /<table>/<$clef sans order>` les range par position. Le paramètre d'URL `order` donne un autre ordre, sous la forme `champ,sens`, les clefs étant séparées par des `;` et le sens (`increasing` ou `decreasing`) étant obligatoire :
+
+```
+GET /versions?order=date_parution,decreasing;numero,increasing
+```
+
+Seuls les champs renvoyés à toutes les lignes peuvent servir au tri : un champ sans `can_search`, dont l'expression est fausse, ou qui a un `restrict_search` donne une réponse `400` (l'ordre trahirait sinon ses valeurs). Un ordre mal écrit donne aussi `400`. Le paramètre ne vaut que pour la table interrogée : les relations projetées suivent l'ordre de leur modèle.
+
+### Replis
+
+Pour un champ avec [`fallback`](modeles.md#fallback--replis), la valeur demandée se donne par un paramètre d'URL portant le nom du champ. Il vaut pour la table interrogée et pour les tables des relations projetées qui ont un champ de ce nom avec `fallback` :
+
+```
+GET /anicroche/accueil?projection=id;sources&version=4&langue=en,fr&region=US,GB
+```
+
+- un champ `list` reçoit une liste séparée par des virgules (`-` désigne la valeur vide : `langue=fr,-`), ou `*` pour garder toutes ses valeurs ;
+- dans `GET /<entrée>/<$clef>` et `GET /<table>/<$clef sans order>`, un champ de l'adresse qui a un repli donne sa valeur demandée au lieu de désigner une valeur exacte : `GET /source/accueil/contenu/1/4/en/-` donne la source de la version 4 ou de la plus récente avant elle, en `en` ou à défaut selon `fallback_default`.
+
+Les valeurs demandées sont disponibles dans les conditions sous le nom `$fallback` (`$fallback.version`, `$fallback.langue`…), ce qui permet à un `restrict_search` de juger l'accès d'après la valeur demandée plutôt que d'après celle de chaque entrée :
+
+```
+restrict_search : "#is_source_of_anicroche.versions.numero = $fallback.version & #is_source_of_anicroche.versions.acces = public"
+```
+
+Sans valeur demandée, l'attribut est absent et la comparaison est fausse.
+
 Pour un modèle dont la clef primaire contient un champ `order`, `GET /<table>/<$clef sans order>` reprend la clef primaire sans ce champ et renvoie la liste des entrées correspondantes, rangées par position (une liste vide si aucune ne correspond). Les variantes faisant partie de la clef, la liste ne contient que celles qui sont demandées : `GET /sources/accueil/image/2/fr/FR` donne les images de la version 2 en `fr-FR`, quelle que soit leur position. Les propriétés (`can_search`, `restrict_search`, hooks…) sont les mêmes que pour `GET /<table>`.
 
 ### Accès aux relations
@@ -200,6 +229,7 @@ Récapitulatif des propriétés de `@rules` :
 | `can_delete` | `DELETE` | Expression d'autorisation (génère la route) |
 | `restrict_delete` | `DELETE` | Condition sur l'entrée supprimable |
 | `prior_delete`, `post_delete` | `DELETE` | Hooks |
+| `order` | toutes | Ordre par défaut des entrées : `[[champ, sens], …]` (voir [Tri](magasin.md#order--tri)) |
 
 ```
 @rules [
@@ -207,6 +237,7 @@ Récapitulatif des propriétés de `@rules` :
     restrict_search : "#gerants.id = $context.compte.id"
     can_delete      : "$context.compte"
     restrict_delete : "#gerants.id = $context.compte.id"
+    order           : [ [ date_creation, decreasing ], [ id, increasing ] ]
 ]
 ```
 

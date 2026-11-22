@@ -41,7 +41,7 @@
         (await $search_all('sessions',
             `#id_compte = $id`,
             { $id: id_compte },
-            { order: 'date_emission', dir: 'desc' }
+            { order: [[ 'date_emission', 'decreasing' ]] }
         )).map(session => ({
             appareil          : session.nom_appareil,
             agent_utilisateur : session.agent_utilisateur,
@@ -55,7 +55,7 @@
         (await $search_all('annonces',
             `#id_compte = $id`,
             { $id: id_compte },
-            { order: 'date_annonce' }
+            { order: [[ 'date_annonce', 'increasing' ]] }
         )).map(annonce => ({
             anicroche    : annonce.id_anicroche,
             version      : annonce.version,
@@ -76,12 +76,12 @@
             const versions = await $search_all('versions',
                 `#id_anicroche = $id`,
                 { $id: anicroche.id },
-                { order: 'numero' }
+                { order: [[ 'numero', 'increasing' ]] }
             )
             const sources = await $search_all('sources',
                 `#id_anicroche = $id`,
                 { $id: anicroche.id },
-                { order: 'version' }
+                { order: [[ 'version', 'increasing' ]] }
             )
 
             anicroches.push({
@@ -111,7 +111,7 @@
         const profils = await $search_all('profils',
             `#gerants.id = $id_compte`,
             { $id_compte: id_compte },
-            { select: 'id ; identifiant ; pseudonyme ; role ; date_creation ; sort ; gerants.id', order: 'date_creation' }
+            { select: 'id ; identifiant ; pseudonyme ; role ; date_creation ; sort ; gerants.id', order: [[ 'date_creation', 'increasing' ]] }
         )
 
         const resultat = []

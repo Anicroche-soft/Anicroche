@@ -98,19 +98,16 @@
             return
         }
 
-        const reponse = await $search(`anicroche/${encodeURIComponent(id)}${version === '' ? '' : `?version=${version}`}`)
+        // Un type inconnu fait recharger les types de l API, et reste introuvable s il en est
+        // toujours absent
+        const reponse = await $charger_anicroche(id, version === '' ? null : Number(version))
+        const type    = reponse.type
 
         // Une réponse arrivée après une nouvelle navigation est ignorée
         if ($path !== adresse)
             return
 
-        // Un type inconnu fait recharger les types de l API, et reste introuvable s il en est
-        // toujours absent
-        const type = reponse.code === 200 ? await $obtenir_type_anicroche(reponse.data?.type) : null
-        if ($path !== adresse)
-            return
-
-        if (!type)
+        if (reponse.code !== 200)
         {
             $etat_anicroche = 'introuvable'
             return
@@ -125,7 +122,8 @@
         const listees      = $lister_sources_anicroche(type, sources)
             .filter(source => String(source.contenu ?? '').trim() !== '')
 
-        // Une version parue avant la source de titre de son type prend le titre donné par l API
+        // Une version parue avant la source de titre de son type prend le titre de son exception
+        // (voir $titre_anicroche)
         const role_titre   = type.sources.find(source => source.format === 'titre')?.role
         $sources_anicroche = role_titre && !apercu && !listees.some(source => source.role === role_titre)
             ? [ { role: role_titre, format: 'titre', contenu: reponse.data.titre }, ...listees ]

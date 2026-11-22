@@ -12,13 +12,15 @@
         type         : char
         size         : 1-48
         can_create   : ':)'
+        can_search   : ':)'
         prior_create : $preparer_brouillon($values)
         post_create  : $completer_brouillon($values)
     }
 
     {
-        name : numero
-        type : int
+        name       : numero
+        type       : int
+        can_search : ':)'
     }
 
     # PATCH /version/<$id_anicroche>/<$numero> { date_parution } fait paraître le brouillon
@@ -29,11 +31,12 @@
         type         : datetime
         count        : 0-1
         can_update   : ':)'
+        can_search   : ':)'
         prior_update : "$verifier_parution($values, $request)"
     }
 
     # PATCH /version/<$id_anicroche>/<$numero> { acces }, parue ou non :
-    # - prive   : seuls les gérants de l anicroche la voient (voir $gere_anicroche) ;
+    # - prive   : seuls les gérants de l anicroche la voient (voir anicroches.sans) ;
     # - partage : visible de quiconque demande l anicroche, mais absente des listes ;
     # - public  : visible de tous, et listée.
     # Une version datée (parue ou programmée) d une anicroche légale est toujours publique :
@@ -43,11 +46,22 @@
         type       : prive/partage/public
         default    : prive
         can_update : ':)'
+        can_search : ':)'
     }
 ]
 
-# DELETE /version/<$id_anicroche>/<$numero> supprime un brouillon non programmé et ses sources
+# Les gérants de l anicroche (voir anicroches.sans) voient toutes ses versions, les autres ses
+# versions datées selon leur accès (une version partagée seulement pour une anicroche demandée
+# seule). DELETE /version/<$id_anicroche>/<$numero> supprime un brouillon non programmé et ses
+# sources
 @rules [
+    restrict_search : "
+        #is_version_of_anicroche.type -{ $context.types_administres
+      | #is_version_of_anicroche.auteurs.id = $context.profil.id
+      | ( #date_parution != null
+        & ( #acces = public
+          | ( #acces = partage & ( $request.params.id != '' | $request.params.id_anicroche != '' ) ) ) )
+    "
     prior_update    : "$verifier_modification_version($values, $request)"
     can_delete      : "$context.compte"
     restrict_delete : "#date_parution = null"
@@ -65,7 +79,7 @@
         const derniere = await $search_one('version',
             `#id_anicroche = $id`,
             { $id: $values.id_anicroche },
-            { order: 'numero', dir: 'desc' }
+            { order: [[ 'numero', 'decreasing' ]] }
         )
 
         if (derniere && !$est_parue(derniere))

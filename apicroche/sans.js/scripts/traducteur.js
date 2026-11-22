@@ -8,6 +8,7 @@
 //     expressions rationnelles).
 
 import { hacher_hmac, verifier_argon2, dechiffrer_aes } from './crypto.js'
+import { clause_tri } from './tri.js'
 
 // ─── Relations ────────────────────────────────────────────────────────────────
 
@@ -866,7 +867,12 @@ const clef_ligne = (modele, ligne) =>
 // Préparer la lecture des lignes d'un modèle respectant une condition.
 // `colonnes_aux` : { nom_colonne: condition } — colonnes booléennes ajoutées au résultat
 // (utilisées par restrict_search pour autoriser un champ ligne par ligne).
-export const preparer_lecture = (schemas, modele, condition, contexte = {}, colonnes_aux = {}) =>
+// `colonnes_valeurs` : { nom_colonne: 'relation.champ' } — valeurs d'un champ, lues à travers
+// les relations (utilisées par les replis, voir fallback_default).
+// `tri` : [{ champ, sens }] (voir tri.js) ; `limite` : { limit, offset }, appliquée en SQL
+// seulement si chaque ligne lue est une entrée retenue (condition entièrement traduite, sans
+// colonne supplémentaire qui dédoublerait les entrées jointes) : `limite_appliquee` le dit.
+export const preparer_lecture = (schemas, modele, condition, contexte = {}, colonnes_aux = {}, colonnes_valeurs = {}, { tri = [], limite = null } = {}) =>
 {
     const requete    = creer_requete(modele)
     const principale = compiler_condition(schemas, requete, condition, contexte)
@@ -874,6 +880,9 @@ export const preparer_lecture = (schemas, modele, condition, contexte = {}, colo
     const colonnes = []
     const valeurs_colonnes = []
     const noms_aux = []
+
+    for (const [nom, chemin] of Object.entries(colonnes_valeurs))
+        colonnes.push(`${resoudre_champ(schemas, requete, chemin).colonne} AS \`${nom}\``)
 
     for (const [nom, condition_aux] of Object.entries(colonnes_aux))
     {
@@ -914,6 +923,12 @@ export const preparer_lecture = (schemas, modele, condition, contexte = {}, colo
     const jointures = requete.sql_jointures.length ? ` ${requete.sql_jointures.join(' ')}` : ''
     const distinct = requete.sql_jointures.length ? 'DISTINCT ' : ''
 
+    const limite_appliquee = !!limite && (limite.limit !== null || limite.offset > 0)
+        && principale.exacte && !noms_aux.length && !Object.keys(colonnes_valeurs).length
+    const sql_limite = limite_appliquee
+        ? ` LIMIT ${limite.limit ?? '18446744073709551615'} OFFSET ${limite.offset}`
+        : ''
+
     const filtrer = async (lignes) =>
     {
         const retenues = new Map()
@@ -940,9 +955,10 @@ export const preparer_lecture = (schemas, modele, condition, contexte = {}, colo
     }
 
     return {
-        sql     : `SELECT ${distinct}${select} FROM \`${modele.name}\`${jointures}${where}`,
+        sql     : `SELECT ${distinct}${select} FROM \`${modele.name}\`${jointures}${where}${clause_tri(modele.name, tri)}${sql_limite}`,
         valeurs : [...valeurs_colonnes, ...valeurs_where],
         exacte  : principale.exacte,
+        limite_appliquee,
         filtrer
     }
 }

@@ -57,36 +57,21 @@
     // Le rôle est celui du profil sélectionné
     $administre_type = (nom) => !!$profil && ($type_anicroche(nom)?.administration ?? []).includes($profil.role)
 
-    // Exceptions : [{ identifiant, specificites }], specificites parmi legalite, preavis et acceptation
+    // Exceptions : [{ identifiant, specificites, titre }], specificites parmi legalite, preavis
+    // et acceptation
+    const exception_anicroche = (anicroche) =>
+        ($type_anicroche(anicroche?.type)?.exceptions ?? []).find(exception => exception.identifiant === anicroche?.id) ?? null
+
     $a_specificite = (anicroche, specificite) =>
-        ($type_anicroche(anicroche?.type)?.exceptions ?? [])
-            .some(exception => exception.identifiant === anicroche?.id && exception.specificites.includes(specificite))
+        exception_anicroche(anicroche)?.specificites.includes(specificite) ?? false
 
     $est_legale = (anicroche) => $a_specificite(anicroche, 'legalite')
 
     $soumise_au_preavis = (anicroche) => $a_specificite(anicroche, 'preavis')
 
-    // Versions programmées des anicroches soumises au préavis, d après les types :
-    // [{ id_anicroche, titre, numero, date_parution }]
-    $lire_versions_a_venir = async () =>
-    {
-        const ids = Object.values($types_anicroches).flatMap(type => (type.exceptions ?? [])
-            .filter(exception => exception.specificites.includes('preavis'))
-            .map(exception => exception.identifiant))
-        const versions = []
-
-        for (const id of ids)
-        {
-            const reponse = await $search(`anicroche/${encodeURIComponent(id)}`)
-            const a_venir = reponse.code === 200 ? reponse.data?.a_venir : null
-            if (a_venir)
-                versions.push({ id_anicroche: id, ...a_venir, titre: a_venir.titre ?? id })
-        }
-        return versions
-    }
-
-    // Sources d une version (telles que les renvoie l API : une source par rôle, ou une liste
-    // pour un rôle à plusieurs sources), dans l ordre des rôles du type puis des positions :
+    // Sources d une version (telles que les donne $charger_anicroche : une source par rôle, ou
+    // une liste pour un rôle à plusieurs sources), dans l ordre des rôles du type puis des
+    // positions :
     // [{ role, libelle, format, max, position, langue, region, version, contenu }]
     $lister_sources_anicroche = (type, sources) =>
         (type?.sources ?? []).flatMap(source =>
@@ -101,6 +86,127 @@
                 ...element
             }))
         })
+
+    // ─── Lecture des anicroches ──────────────────────────────────────────────
+
+    const est_parue = (version) => !!version?.date_parution && new Date(version.date_parution) <= new Date()
+
+    const role_titre = (type) => (type?.sources ?? []).find(source => source.format === 'titre')?.role ?? null
+
+    const adresse_anicroche = (id) => `anicroche/${encodeURIComponent(id)}`
+
+    // L API résout les sources d une version (la source la plus récente jusqu à elle, dans la
+    // langue d origine de l anicroche) et n en donne que si la version est visible
+    const lire_sources_version = async (id, type, numero) =>
+    {
+        const reponse   = await $search(adresse_anicroche(id), { projection: 'id;sources', version: numero })
+        const lignes    = reponse.code === 200 ? reponse.data?.sources ?? [] : []
+        const multiples = new Set((type?.sources ?? []).filter(source => source.max === null || source.max > 1).map(source => source.role))
+        const sources   = {}
+
+        for (const { role, id_anicroche, ...source } of [ ...lignes ].sort((a, b) => a.position - b.position))
+        {
+            if (multiples.has(role))
+                (sources[role] ??= []).push(source)
+            else
+                sources[role] ??= source
+        }
+        return sources
+    }
+
+    // Titre d une version : sa source de titre, sinon celui de l exception à sa création (pour
+    // une version parue avant la source de titre de son type), sinon l identifiant
+    $titre_anicroche = (anicroche, sources) =>
+    {
+        const role    = role_titre($type_anicroche(anicroche.type))
+        const valeur  = role ? sources?.[role] : null
+        const source  = Array.isArray(valeur) ? valeur[0] : valeur
+        const contenu = String(source?.contenu ?? '').trim()
+
+        return contenu || exception_anicroche(anicroche)?.titre || anicroche.id
+    }
+
+    // Une anicroche avec la version demandée (sinon celle en vigueur) et ses sources :
+    // { code, type, data } ; data reçoit en plus de id, type, langue et region :
+    // - version, date_parution, acces, sources et titre de la version affichée (null si aucune) ;
+    // - en_vigueur : numéro de la version en vigueur ;
+    // - a_venir    : { numero, date_parution } de la version programmée ;
+    // - versions   : versions parues, de la plus récente à la plus ancienne ({ numero, date_parution }) ;
+    // - legale, preavis : spécificités de l anicroche ;
+    // - brouillon  : pour les gérants, la dernière version si elle n est pas parue
+    //                ({ numero, date_parution, acces, sources }), ou null.
+    // L API ne donne que les versions visibles : les gérants les voient toutes
+    $charger_anicroche = async (id, demandee = null) =>
+    {
+        const reponse = await $search(adresse_anicroche(id), { projection: 'id;type;langue;region;versions' })
+        const type    = reponse.code === 200 ? await $obtenir_type_anicroche(reponse.data?.type) : null
+        if (!type)
+            return { code: reponse.code === 200 ? 404 : reponse.code, error: reponse.error, type: null, data: null }
+
+        const { versions = [], ...anicroche } = reponse.data
+        const rangees    = [ ...versions ].sort((a, b) => b.numero - a.numero)
+        const gere       = $administre_type(anicroche.type)
+        const en_vigueur = rangees.find(est_parue) ?? null
+        const derniere   = rangees[0] ?? null
+        const programmee = derniere?.date_parution && !est_parue(derniere) ? derniere : null
+        const affichee   = demandee === null ? en_vigueur : rangees.find(version => version.numero === demandee) ?? null
+
+        if (!affichee && (demandee !== null || !programmee) && !gere)
+            return { code: 404, type, data: null }
+
+        const sources = affichee ? await lire_sources_version(anicroche.id, type, affichee.numero) : {}
+
+        anicroche.version       = affichee?.numero ?? null
+        anicroche.date_parution = affichee?.date_parution ?? null
+        anicroche.acces         = affichee?.acces ?? null
+        anicroche.sources       = sources
+        anicroche.titre         = $titre_anicroche(anicroche, sources)
+        anicroche.en_vigueur    = en_vigueur?.numero ?? null
+        anicroche.a_venir       = programmee ? { numero: programmee.numero, date_parution: programmee.date_parution } : null
+        anicroche.versions      = rangees.filter(est_parue).map(({ numero, date_parution }) => ({ numero, date_parution }))
+        anicroche.legale        = $est_legale(anicroche)
+        anicroche.preavis       = $soumise_au_preavis(anicroche)
+        anicroche.brouillon     = gere && derniere && !est_parue(derniere)
+            ? {
+                numero        : derniere.numero,
+                date_parution : derniere.date_parution,
+                acces         : derniere.acces,
+                sources       : derniere.numero === affichee?.numero ? sources : await lire_sources_version(anicroche.id, type, derniere.numero)
+            }
+            : null
+
+        return { code: 200, type, data: anicroche }
+    }
+
+    // Versions programmées des anicroches soumises au préavis, d après les types :
+    // [{ id_anicroche, titre, numero, date_parution }]
+    $lire_versions_a_venir = async () =>
+    {
+        const ids = Object.values($types_anicroches).flatMap(type => (type.exceptions ?? [])
+            .filter(exception => exception.specificites.includes('preavis'))
+            .map(exception => exception.identifiant))
+        const versions = []
+
+        for (const id of ids)
+        {
+            const reponse = await $search(adresse_anicroche(id), { projection: 'id;type;versions' })
+            if (reponse.code !== 200)
+                continue
+
+            const anicroche  = reponse.data
+            const derniere   = [ ...anicroche.versions ?? [] ].sort((a, b) => b.numero - a.numero)[0]
+            if (!derniere?.date_parution || est_parue(derniere))
+                continue
+
+            // Seule la source de titre est lue, dans la langue d origine (- : aucune préférence)
+            const role   = role_titre($type_anicroche(anicroche.type))
+            const titres = role ? await $search(`sources/${encodeURIComponent(id)}/${encodeURIComponent(role)}/${derniere.numero}/-/-`) : null
+            const titre  = $titre_anicroche(anicroche, role && titres?.code === 200 ? { [role]: titres.data?.[0] } : {})
+
+            versions.push({ id_anicroche: id, titre, numero: derniere.numero, date_parution: derniere.date_parution })
+        }
+        return versions
+    }
 
     $add_action('prior_requested', async (options) =>
     {

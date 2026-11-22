@@ -95,4 +95,4 @@ carte.carte-profil.carte-nouveau-profil
     <div .noms>
         <span .pseudonyme>
             lien-ancre [/profil/creation]
-                "Nouveau profil"
+                "Créer un profil"

@@ -156,8 +156,7 @@
             `,
             { $values },
             {
-                order  : 'date_emission',
-                dir    : 'desc',
+                order  : [[ 'date_emission', 'decreasing' ]],
                 offset : 1
             }
         )
