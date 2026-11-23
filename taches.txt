@@ -2,12 +2,10 @@ Tâches :
 - revoir l'organisation des pages d'anicroches
 - relire et compléter les premières versions des pages légales (juridique/conditions-generales-d-utilisation.md, juridique/politique-de-confidentialite.md, juridique/mentions-legales.md : passages « À compléter », adresse d'Infomaniak à vérifier), les publier avant le lancement, et ajouter des liens vers ces pages dans le site
 - finir le préavis des pages légales (voir juridique/RGPD.md § 11, l'essentiel est fait) :
-    - vérifier email_limit (.env du serveur, 200 par défaut) selon l'offre Service Mail (200 ou 500 courriels par 24 heures)
     - zone de publication propre aux pages soumises au préavis, avec un bouton « Enregistrer en tant que correction » et un bouton « Enregistrer en tant que mise à jour »
-    - plus tard : avis des versions à venir dans tout le site (avec la boîte de notifications)
 - compléter juridique/RGPD.md :
-    - adresse de contact RGPD (§ 1)
     - référence et date du contrat de sous-traitance (DPA) d'Infomaniak, couvrant serveur, base et courriels (§ 3)
+    - type de compte Outlook utilisé pour royaume@, localisation de ses données et document de Microsoft qui s'applique (§ 3)
     - fréquence et durée de conservation des sauvegardes Infomaniak, relevées dans le Manager (§ 4 et § 7)
     - durée de conservation des journaux PM2, avec pm2-logrotate (§ 2.6 et § 4)
     - vérifier où en est la loi du 7 juillet 2023 sur la majorité numérique avant le lancement (§ 2.4)
@@ -15,6 +13,7 @@ Tâches :
 - permettre de remplacer une adresse principale perdue (changement différé, avec opposition possible depuis l'adresse actuelle)
 - mettre en place la configuration de compte et de profils (dont la case à cocher des fonctionnalités liées à l'âge, voir juridique/RGPD.md § 2.4, la teinte, le fuseau horaire, les langues)
 - ajout des comptes sous contrôle parental
+- Service Mail : changer l'adresse de base en royaume@anicroche.com, lui ajouter l'alias heraut@anicroche.com, puis dans le .env du serveur email_user=royaume@anicroche.com, email_from=heraut@anicroche.com et le mot de passe, relancer l'API et vérifier l'envoi depuis heraut@ et la réception d'une réponse
 
 Tâches dépendantes :
 - quand des anicroches d'utilisateurs seront publiées (types avec auteurs) :

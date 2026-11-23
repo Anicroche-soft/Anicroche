@@ -28,11 +28,13 @@ const transporteur = () =>
 
 // ─── Expéditeur ───────────────────────────────────────────────────────────────
 
+// Adresse d'expédition : email_from si elle est donnée (un alias de la boîte, par exemple),
+// sinon l'identifiant SMTP
 const expediteur = () =>
 {
-    const name = process.env.email_name
-    const user = process.env.email_user
-    return name ? `"${name}" <${user}>` : user
+    const name    = process.env.email_name
+    const adresse = process.env.email_from || process.env.email_user
+    return name ? `"${name}" <${adresse}>` : adresse
 }
 
 // ─── Texte brut depuis HTML ───────────────────────────────────────────────────

@@ -16,7 +16,7 @@ Dernière mise à jour : 20 novembre 2026.
 |---|---|
 | Responsable | Alexis Bonnet (éditeur d'Anicroche) |
 | Statut | Particulier (éditeur non professionnel) |
-| Adresse de contact RGPD | **À compléter** (adresse dédiée conseillée, ex. `confidentialite@anicroche.com`) |
+| Adresse de contact RGPD | `royaume@anicroche.com`, boîte principale du Service Mail d'Infomaniak, aussi adresse de contact des mentions légales ; les courriels du service partent de son alias `heraut@anicroche.com` (`email_from`), dont les réponses arrivent dans la même boîte |
 | Délégué à la protection des données | Non désigné (pas obligatoire pour ce type de service) |
 
 En tant qu'éditeur non professionnel, la loi pour la confiance dans l'économie numérique (LCEN, art. 6) permet de ne pas publier son nom dans les mentions légales : il suffit de donner son identité à l'hébergeur et d'indiquer dans les mentions légales le nom, l'adresse et le téléphone d'Infomaniak. Les obligations du RGPD restent les mêmes.
@@ -117,10 +117,13 @@ Il n'y a ni outil de mesure d'audience, ni publicité, ni ressource tierce en pr
 | Sous-traitant | Rôle | Données concernées | Localisation | Contrat (art. 28) |
 |---|---|---|---|---|
 | Infomaniak | Hébergement (Serveur Cloud, HAProxy), base de données, envoi des courriels (SMTP), sauvegardes | Toutes | Suisse (décision d'adéquation de la Commission européenne) | **À vérifier** (voir ci-dessous) |
+| Microsoft (Outlook) | Consultation de la boîte `royaume@anicroche.com` par l'éditeur : Outlook la synchronise en IMAP en passant par les serveurs de Microsoft | Messages écrits à l'éditeur (ou en réponse aux courriels du service) et ses réponses : adresse et nom de l'expéditeur, contenu, pièces jointes. Ni la base de données ni les courriels envoyés par l'API | Union européenne ou États-Unis selon le compte (transfert encadré par le *Data Privacy Framework*, auquel Microsoft adhère) | **À vérifier** (voir ci-dessous) |
 
 L'article 28 du RGPD impose un contrat écrit avec chaque prestataire qui traite des données pour le compte d'Anicroche. Ce contrat engage le prestataire à n'utiliser les données que sur instruction, à les protéger, à aider en cas de violation, puis à les supprimer à la fin du contrat. Il n'y a pas à le négocier : les hébergeurs fournissent un modèle standard, souvent appelé « DPA » (*Data Processing Agreement*) ou « contrat de sous-traitance ».
 
 Chez Infomaniak, ce contrat est intégré à leurs conditions générales ou proposé dans le Manager, selon l'offre. À faire une fois : retrouver ce document, vérifier qu'il couvre bien le Serveur Cloud, la base de données et le service de courriel, puis noter ici sa référence et la date. **À compléter.**
+
+Chez Microsoft, le contrat de sous-traitance (*Data Protection Addendum*) n'accompagne que les offres professionnelles (Microsoft 365) : avec un compte Outlook personnel, Microsoft applique son contrat de services et sa déclaration de confidentialité grand public. À faire une fois : vérifier le type de compte utilisé et la localisation de ses données, puis noter ici le document qui s'applique. **À compléter.** Pour éviter ce sous-traitant, la boîte peut être consultée dans le webmail d'Infomaniak ou avec un client qui se connecte directement au serveur (Thunderbird, Outlook de bureau classique) : il faut alors retirer Microsoft de ce tableau et de la politique de confidentialité.
 
 Avant d'ajouter un nouveau prestataire qui reçoit des données personnelles : vérifier sa localisation (UE ou pays adéquat), accepter son contrat de sous-traitance, puis l'ajouter à ce tableau et à la politique de confidentialité.
 

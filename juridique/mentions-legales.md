@@ -6,7 +6,7 @@ Brouillon. Les passages marqués **À compléter** sont à remplir avant la publ
 
 Anicroche est édité par un particulier, à titre non professionnel. Conformément à l'article 6, III, 2 de la loi n° 2004-575 du 21 juin 2004 pour la confiance dans l'économie numérique (LCEN), son identité a été communiquée à l'hébergeur, qui la tient à la disposition des autorités.
 
-Contact : **À compléter** (adresse électronique de contact).
+Contact : royaume@anicroche.com
 
 Directeur de la publication : l'éditeur.
 

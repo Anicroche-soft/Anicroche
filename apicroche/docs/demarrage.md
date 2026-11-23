@@ -106,8 +106,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 |---|---|---|
 | `email_host` | — | Serveur SMTP |
 | `email_port` | `465` | Port SMTP (connexion chiffrée si `465`) |
-| `email_user` | — | Identifiant SMTP, aussi utilisé comme adresse d'expédition |
+| `email_user` | — | Identifiant SMTP, aussi utilisé comme adresse d'expédition sans `email_from` |
 | `email_pass` | — | Mot de passe SMTP |
+| `email_from` | `email_user` | Adresse d'expédition (un alias de la boîte `email_user`, par exemple, que le serveur SMTP doit accepter comme expéditeur) ; les réponses et les retours d'erreur lui sont adressés |
 | `email_name` | — | Nom affiché de l'expéditeur |
 
 ## Construction de la base de données

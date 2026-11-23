@@ -6,7 +6,7 @@ Brouillon. Les passages marqués **À compléter** sont à remplir avant la publ
 
 Le responsable du traitement est l'éditeur d'Anicroche, un particulier (voir les mentions légales).
 
-Pour toute question ou demande sur vos données : **À compléter** (adresse de contact dédiée).
+Pour toute question ou demande sur vos données : royaume@anicroche.com. Les courriels du service vous sont envoyés depuis heraut@anicroche.com, et une réponse à l'un d'eux nous parvient aussi.
 
 ## 2. Les données utilisées, et pourquoi
 
@@ -27,6 +27,8 @@ Il n'y a ni publicité, ni mesure d'audience, ni profilage. Vos données ne sont
 ## 3. Qui les reçoit
 
 Seul l'éditeur accède à vos données. Elles sont hébergées par Infomaniak (Suisse), qui assure aussi l'envoi des courriels et les sauvegardes, dans le cadre d'un contrat de sous-traitance. La Suisse bénéficie d'une décision d'adéquation de la Commission européenne : vos données y sont protégées comme dans l'Union européenne.
+
+Les courriels que vous écrivez à royaume@anicroche.com, y compris vos réponses aux courriels du service, sont consultés par l'éditeur avec la messagerie Outlook de Microsoft. Ces messages (votre adresse, votre nom s'il apparaît, leur contenu et leurs pièces jointes) sont donc aussi conservés par Microsoft, dans l'Union européenne ou aux États-Unis. Un transfert vers les États-Unis est encadré par le *Data Privacy Framework*, auquel Microsoft adhère. Les données de votre compte, elles, ne quittent jamais Infomaniak.
 
 ## 4. Combien de temps elles sont gardées
 
@@ -69,4 +71,4 @@ Il faut avoir au moins 15 ans pour s'inscrire. L'âge indiqué à l'inscription 
 
 ## 8. Modifications
 
-Cette politique peut évoluer avec le service. Chaque version est datée et reste consultable. Un changement dans l'usage de vos données vous est annoncé par courriel et dans le site, au moins 30 jours avant son entrée en vigueur. Un nouvel usage qui demande votre consentement ne s'appliquera jamais sans que vous l'ayez donné.
+Cette politique peut évoluer avec le service. Chaque version est datée et reste consultable. Un changement dans l'usage de vos données est annoncé au moins 30 jours avant son entrée en vigueur : vous recevez un courriel à votre adresse principale, avec le lien vers la nouvelle version et sa date d'entrée en vigueur, et cette page signale la version à venir, avec un lien vers elle. Si vous vous inscrivez pendant ce délai, la version à venir vous est présentée à l'inscription ; si la suppression de votre compte était en cours, elle vous est présentée quand vous le restaurez. Les corrections qui ne changent pas l'usage de vos données s'appliquent sans annonce. Un nouvel usage qui demande votre consentement ne s'appliquera jamais sans que vous l'ayez donné.
