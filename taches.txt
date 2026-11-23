@@ -13,7 +13,6 @@ Tâches :
 - permettre de remplacer une adresse principale perdue (changement différé, avec opposition possible depuis l'adresse actuelle)
 - mettre en place la configuration de compte et de profils (dont la case à cocher des fonctionnalités liées à l'âge, voir juridique/RGPD.md § 2.4, la teinte, le fuseau horaire, les langues)
 - ajout des comptes sous contrôle parental
-- Service Mail : changer l'adresse de base en royaume@anicroche.com, lui ajouter l'alias heraut@anicroche.com, puis dans le .env du serveur email_user=royaume@anicroche.com, email_from=heraut@anicroche.com et le mot de passe, relancer l'API et vérifier l'envoi depuis heraut@ et la réception d'une réponse
 
 Tâches dépendantes :
 - quand des anicroches d'utilisateurs seront publiées (types avec auteurs) :

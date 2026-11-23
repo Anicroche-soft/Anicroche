@@ -1,6 +1,7 @@
 config : {
     name        : Anicroche
     lang        : fr
+    version     : 3
     description : "Application de création et de divertissement"
     theme_color : {
         light : "#FFFFFF"

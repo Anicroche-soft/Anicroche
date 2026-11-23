@@ -3,7 +3,8 @@
  * Gère le caching et le mode hors-ligne
  */
 
-const VERSION = 'v43'
+// Insérée par le serveur (composants.js) : version du site, `version` de `config` dans app.adn
+const VERSION = '__VERSION__'
 const CACHE_ASSETS = `${VERSION}-assets`
 
 const ASSETS_A_CACHER = [

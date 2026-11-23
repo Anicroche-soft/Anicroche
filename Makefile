@@ -2,6 +2,9 @@ SERVICE ?= anicroche
 
 -include .env
 
+# Version du site (voir version.sh), transmise au conteneur d'anicroche par compose.yaml
+export app_version := $(shell sh ./version.sh)
+
 ifeq ($(mode),dev)
 	COMPOSE = docker compose -f compose.yaml -f compose.dev.yaml
 else

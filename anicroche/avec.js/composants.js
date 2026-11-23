@@ -4,6 +4,72 @@ import fs   from "fs"
 import {analyser_adn}  from "./analyseur_adn.js"
 import {analyser_avec} from "./analyseur_avec.js"
 
+// Version du site, lue à chaque demande du service worker : la variable d'environnement
+// `app_version`, sinon la clef `version` de `config` dans app.adn, sinon l'heure de démarrage
+// du serveur (le cache est alors renouvelé à chaque démarrage). En mode dev, un suffixe tiré
+// des dates de modification de adn/ et avec.js/ la change à chaque modification d'un fichier
+const DEMARRAGE = `demarrage-${Date.now()}`
+
+const lire_version_configuree = () =>
+{
+    if (process.env.app_version)
+        return process.env.app_version
+    try
+    {
+        const version = analyser_adn(fs.readFileSync("adn/app.adn", "utf8"))?.config?.version
+        if (version !== undefined && version !== null && String(version).length > 0)
+            return String(version)
+    }
+    catch (erreur)
+    {
+    }
+    return DEMARRAGE
+}
+
+// Date de modification la plus récente et nombre de fichiers d'un dossier (récursivement)
+const parcourir_modifications = (dossier, etat = {date: 0, nombre: 0}) =>
+{
+    for (const entree of fs.readdirSync(dossier, {withFileTypes: true}))
+    {
+        const chemin = path.join(dossier, entree.name)
+        if (entree.isDirectory())
+            parcourir_modifications(chemin, etat)
+        else if (entree.isFile())
+        {
+            etat.date = Math.max(etat.date, fs.statSync(chemin).mtimeMs)
+            etat.nombre++
+        }
+    }
+    return etat
+}
+
+const suffixe_dev = () =>
+{
+    if ((process.env.mode || `prod`) !== `dev`)
+        return ``
+    try
+    {
+        const adn    = parcourir_modifications("adn")
+        const moteur = parcourir_modifications("avec.js")
+        const empreinte = Math.round(Math.max(adn.date, moteur.date)).toString(36)
+            + (adn.nombre + moteur.nombre).toString(36)
+        return `-dev.${empreinte}`
+    }
+    catch (erreur)
+    {
+        return `-dev`
+    }
+}
+
+const lire_version = () => lire_version_configuree() + suffixe_dev()
+
+// Le navigateur installe un nouveau service worker dès que son fichier change :
+// la version du site y est insérée à la place de la marque __VERSION__
+const inserer_version = (contenu, fichier) =>
+    fichier === "service-worker.js"
+        ? contenu.replaceAll("__VERSION__", lire_version())
+        : contenu
+
 // Préfixes servis tels quels ; ceux marqués « composant » ne le sont qu'aux requêtes
 // portant l'en-tête X-AC-Composant (les autres reçoivent la page)
 const composants = {
@@ -19,6 +85,7 @@ const composants = {
     },
     "/systeme/scripts": {
         chemin: "avec.js/scripts",
+        script: inserer_version
     },
     "/systeme/modeles": {
         chemin: "adn/modeles",

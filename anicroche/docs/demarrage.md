@@ -51,8 +51,9 @@ Clefs de `config`, toutes facultatives : une clef absente ne produit aucune bali
 | `lang` | texte | Attribut `lang` de `<html>` |
 | `description` | texte | `<meta name="description">` |
 | `theme_color` | texte ou dictionnaire | `<meta name="theme-color">` : une couleur pour tous les thèmes, ou une par thème (`light`, `dark`), avec la requête média `prefers-color-scheme` correspondante |
+| `version` | texte | Aucun : version du site, insérée dans le [service worker](#service-worker), dont elle renouvelle le cache quand elle change (format libre). La variable d'environnement `app_version` la remplace ; sans l'une ni l'autre, c'est l'heure de démarrage du serveur |
 
-L'adresse canonique (`<link rel="canonical">`) n'est pas configurée : elle est calculée pour chaque page, sur le domaine `app_url`. Le serveur lit `app.adn` au démarrage : une modification de `port`, de `config` ou de `pages` demande de le relancer.
+L'adresse canonique (`<link rel="canonical">`) n'est pas configurée : elle est calculée pour chaque page, sur le domaine `app_url`. Le serveur lit `app.adn` au démarrage : une modification de `port`, de `config` ou de `pages` demande de le relancer, sauf pour `config.version`, relue à chaque demande du service worker.
 
 Toutes les clefs de `app.adn` sont aussi envoyées au navigateur et deviennent des [variables de scope racine](expressions.md#variables-de-scope) :
 
@@ -77,6 +78,8 @@ Les variables sont fournies par l'environnement (typiquement un fichier `.env` t
 | `app_url` | adresse de la requête | Adresse publique du site, utilisée pour l'adresse canonique des pages (`<link rel="canonical">`). Elle est ajoutée à la configuration envoyée au navigateur (`$app_url`), pour écrire des adresses absolues (sitemap…) |
 | `internal_api_url` | — | Adresse à laquelle le serveur joint l'API pendant le [rendu côté serveur](#rendu-côté-serveur), si `api_url` n'est pas joignable depuis le serveur (par exemple `http://apicroche:5030` dans un réseau Docker) |
 | `trusted_proxies` | `127.0.0.1,::1` | Adresses des mandataires inverses dont l'en-tête `X-Forwarded-For` est cru pour connaître l'adresse du visiteur pendant le [rendu côté serveur](#rendu-côté-serveur), séparées par des virgules (même règle que l'API sans.js) |
+| `app_version` | `config.version` | Version du site insérée dans le [service worker](#service-worker), à la place de `version` de `config` dans `app.adn` (utile pour une version calculée au lancement, par exemple d'après git) |
+| `mode` | `prod` | `dev` ajoute à la version du service worker un suffixe (`-dev.<empreinte>`) tiré des dates de modification de `adn/` et `avec.js/`, qui la change à chaque modification d'un fichier |
 | `render_logs` | `false` | `true` affiche les journaux (`console.log`) des scripts pendant le rendu côté serveur ; les erreurs sont toujours affichées |
 
 ## Le point d'entrée `index.avec`
@@ -113,7 +116,7 @@ Les pages sont construites par le serveur : elles sont lisibles et leurs liens u
 
 Le cookie `avec-js` est posé par un script en ligne d'`avec.js/index.html`, exécuté avant l'affichage : quand JavaScript est actif, les pages suivantes ne sont donc plus construites par le serveur. Si JavaScript est désactivé ensuite, la page vide contient une balise `<noscript>` qui renvoie vers la même adresse avec `?sans-js`. Ce paramètre est retiré de l'adresse vue par les modèles (`$path`, `$query`).
 
-Le cookie ne contient aucune donnée personnelle et sert uniquement au fonctionnement du site (il dure un an). L'adresse canonique de chaque page (`<link rel="canonical">`) est fixée par le serveur, sur le domaine `app_url` ; la réponse porte l'en-tête `Vary: Cookie`.
+Le cookie ne contient aucune donnée personnelle et sert uniquement au fonctionnement du site (il dure un an). L'adresse canonique de chaque page (`<link rel="canonical">`) est fixée par le serveur, sur le domaine `app_url` ; la réponse porte les en-têtes `Vary: Cookie` et `Cache-Control: no-cache` (le navigateur redemande toujours la page).
 
 Le serveur exécute le moteur du cadriciel dans un environnement de navigateur simulé (`avec.js/rendu/`), propre à chaque rendu :
 
@@ -181,4 +184,6 @@ Un service worker est enregistré au chargement. Il permet l'installation de l'a
 - les autres requêtes `GET` vers le site (modèles, images, fontes…) sont servies depuis le cache s'il les contient, sinon depuis le réseau puis mises en cache ;
 - les requêtes vers une autre origine, comme l'API, ne sont pas interceptées.
 
-> **Note :** le cache est identifié par la constante `VERSION` de `avec.js/scripts/service-worker.js`. Après une mise à jour des modèles ou du moteur, il faut changer cette version pour que les navigateurs abandonnent l'ancien cache.
+Avant l'enregistrement, tout autre service worker du domaine (resté d'un ancien contenu, avec un autre script ou une autre portée) est désinscrit, pour qu'il ne serve pas d'anciennes pages ; s'il contrôlait la page, celle-ci est rechargée une fois.
+
+> **Note :** le cache est identifié par la version du site, que le serveur insère dans `avec.js/scripts/service-worker.js` à la place de la marque `__VERSION__`, à chaque demande du fichier : la variable d'environnement `app_version`, sinon la clef `version` de `config` dans `app.adn` (relue sans redémarrage), sinon l'heure de démarrage du serveur (le cache est alors renouvelé à chaque démarrage). En mode `dev`, un suffixe tiré des dates de modification des fichiers s'y ajoute. Le navigateur installe un nouveau service worker dès que ce fichier change : après une mise à jour des modèles ou du moteur, la version doit donc changer pour que les navigateurs abandonnent l'ancien cache.

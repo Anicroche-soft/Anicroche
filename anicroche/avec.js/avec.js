@@ -119,8 +119,10 @@ const fixer_adresse_canonique = (html, adresse) =>
 
 const entetes_page = (entetes = {}) => ({
     "Content-Type": "text/html; charset=utf-8",
-    // La réponse dépend du cookie : un cache intermédiaire ne doit pas la servir à un autre
+    // La réponse dépend du cookie : un cache intermédiaire ne doit pas la servir à un autre,
+    // et le navigateur la redemande à chaque fois plutôt que de réutiliser une page périmée
     "Vary": "Cookie",
+    "Cache-Control": "no-cache",
     ...entetes
 })
 

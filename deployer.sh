@@ -33,14 +33,9 @@ do
     fi
 done
 
-# Le service worker sert les modèles depuis son cache tant que sa VERSION ne change pas
-if [ -n "$(git diff --name-only "$avant" "$apres" -- anicroche/)" ] \
-&& [ -z "$(git diff --name-only "$avant" "$apres" -- anicroche/avec.js/scripts/service-worker.js)" ]
-then
-    echo "/!\\ anicroche a changé mais pas la VERSION du service worker : les visiteurs garderont l'ancien cache"
-fi
-
-pm2 startOrReload ecosystem.config.cjs
+# La version du site (version.sh) est recalculée par ecosystem.config.cjs : --update-env
+# la transmet aux applications déjà lancées
+pm2 startOrReload ecosystem.config.cjs --update-env
 pm2 save
 
-echo "Déployé : $(git log -1 --format='%h %s')"
+echo "Déployé : $(git log -1 --format='%h %s') (version du site : $(sh ./version.sh))"
