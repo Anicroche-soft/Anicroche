@@ -60,6 +60,8 @@ Toutes les clefs de `app.adn` sont aussi envoyées au navigateur et deviennent d
 - `$app` contient l'ensemble de la configuration ;
 - chaque clef est aussi accessible directement : `config` donne `$config`.
 
+Le serveur y ajoute `api_url`, `app_url` et `app_version`, la version complète du site, celle du [service worker](#service-worker) (`$app_version`, par exemple `3.26.176`). La console du navigateur l'affiche au démarrage, avec `config.name`, à côté de la bannière d'avec.js.
+
 ```
 <h1>
     "$config.name"
@@ -94,7 +96,8 @@ Le serveur sert une page unique : toute adresse qui ne correspond pas à un fich
 |---|---|
 | adresse d'une [page spéciale](#pages-spéciales) | le modèle de la page, construit par le serveur |
 | `/robots.txt` | `adn/robots.txt`, sauf si une page spéciale occupe cette adresse |
-| `/systeme/app.adn` | Configuration (`app.adn` converti en JSON, avec `api_url` et `app_url`) |
+| `/sw.js`, `/service-worker.js` | Service worker de retrait (`avec.js/scripts/retrait-service-worker.js`, voir [Service worker](#service-worker)) |
+| `/systeme/app.adn` | Configuration (`app.adn` converti en JSON, avec `api_url`, `app_url` et `app_version`) |
 | `/systeme/app.webmanifest` | `adn/app.webmanifest` |
 | `/systeme/modeles/<nom>.avec` | Modèle compilé en JSON (cherché par son nom dans tous les sous-dossiers) |
 | `/systeme/images/<chemin>` | `adn/images/` (recherche récursive) |
@@ -185,5 +188,7 @@ Un service worker est enregistré au chargement. Il permet l'installation de l'a
 - les requêtes vers une autre origine, comme l'API, ne sont pas interceptées.
 
 Avant l'enregistrement, tout autre service worker du domaine (resté d'un ancien contenu, avec un autre script ou une autre portée) est désinscrit, pour qu'il ne serve pas d'anciennes pages ; s'il contrôlait la page, celle-ci est rechargée une fois.
+
+Un ancien service worker peut aussi empêcher la page de se charger, et donc ce nettoyage de s'exécuter. Le navigateur vérifie pourtant régulièrement le fichier d'un service worker installé (à chaque navigation dans sa portée) : aux adresses habituelles de ces fichiers, `/sw.js` (Workbox, Vite PWA…) et `/service-worker.js`, le serveur sert donc un service worker de retrait, qui le remplace, supprime ses caches (sauf ceux d'avec.js, nommés `<version>-assets`), se désinscrit et recharge les pages qu'il contrôlait. Un ancien service worker servi depuis une autre adresse demande d'ajouter celle-ci dans `avec.js/composants.js`.
 
 > **Note :** le cache est identifié par la version du site, que le serveur insère dans `avec.js/scripts/service-worker.js` à la place de la marque `__VERSION__`, à chaque demande du fichier : la variable d'environnement `app_version`, sinon la clef `version` de `config` dans `app.adn` (relue sans redémarrage), sinon l'heure de démarrage du serveur (le cache est alors renouvelé à chaque démarrage). En mode `dev`, un suffixe tiré des dates de modification des fichiers s'y ajoute. Le navigateur installe un nouveau service worker dès que ce fichier change : après une mise à jour des modèles ou du moteur, la version doit donc changer pour que les navigateurs abandonnent l'ancien cache.

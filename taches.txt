@@ -27,3 +27,4 @@ Tâches dépendantes :
     - ne pas garder de trace des anciens gérants
     - annoncer que les brouillons et anciennes versions passent au nouveau gérant avec le profil
     - prévoir dans juridique/RGPD.md § 9 qu'une demande d'effacement d'un ancien gérant sur une publication qui l'identifie se traite en vidant les sources concernées
+    

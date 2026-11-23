@@ -1,6 +1,8 @@
 import { definir_variable_racine, initialiser_sculpteur, enregistrer_nettoyage, observer_variable_racine } from './sculpteur.js'
 
-const charger_adn_app = async () =>
+// Chargée en premier par l'architecte, pour que la bannière de la console (nom et version du
+// site) soit le premier affichage ; null en cas d'échec
+export const charger_adn_app = async () =>
 {
     try
     {
@@ -13,21 +15,25 @@ const charger_adn_app = async () =>
         if (!reponse.ok)
             throw new Error(`Echec du chargement de app.adn (statut : ${reponse.status})`)
 
-        const adn = await reponse.json()
-        definir_variable_racine(`$app`, adn)
-
-        if (adn && typeof adn === 'object' && !Array.isArray(adn))
-            Object.entries(adn).forEach(([cle, valeur]) => definir_variable_racine(`$${cle}`, valeur))
-
-        console.log(`Configuration app.adn chargée avec succès`)
-        return adn
+        return await reponse.json()
     }
     catch (erreur)
     {
         console.error(erreur)
-        definir_variable_racine(`$app`, {})
         return null
     }
+}
+
+const definir_variables_adn = (adn) =>
+{
+    if (!adn || typeof adn !== 'object' || Array.isArray(adn))
+    {
+        definir_variable_racine(`$app`, {})
+        return
+    }
+
+    definir_variable_racine(`$app`, adn)
+    Object.entries(adn).forEach(([cle, valeur]) => definir_variable_racine(`$${cle}`, valeur))
 }
 
 // $title et $description remplacent, tant qu'ils ne sont pas nuls, le name et la description
@@ -80,7 +86,8 @@ const executer_actions_http = async (cas, option, contexte = undefined) =>
     return option
 }
 
-export const initialiser_heraut = async () =>
+// adn : la configuration déjà chargée par charger_adn_app, sinon chargée ici
+export const initialiser_heraut = async (adn_charge) =>
 {
     initialiser_sculpteur()
 
@@ -105,7 +112,8 @@ export const initialiser_heraut = async () =>
         return nettoyage
     })
 
-    const adn = await charger_adn_app()
+    const adn = adn_charge === undefined ? await charger_adn_app() : adn_charge
+    definir_variables_adn(adn)
     initialiser_entete(adn?.config)
     const api_url = adn?.api_url || `http://localhost:5030`
 

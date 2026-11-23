@@ -1,10 +1,5 @@
-console.log(`\
-╔══════╗
-║ AVEC ║
-╚══════╝`)
-
 import {initialiser_navigateur} from './navigateur.js'
-import {initialiser_heraut} from './heraut.js'
+import {initialiser_heraut, charger_adn_app} from './heraut.js'
 import {initialiser_batisseur} from './batisseur.js'
 
 /**
@@ -63,10 +58,23 @@ const enregistrer_service_worker = async () => {
     }
 }
 
+// Bannière de la console, avec le nom et la version complète du site s'ils sont connus
+const afficher_banniere = (adn) =>
+{
+    const details = [adn?.config?.name, adn?.app_version].filter(Boolean).join(` `)
+    console.log(`\
+╔══════╗
+║ AVEC ║${details ? ` ${details}` : ``}
+╚══════╝`)
+}
+
+// La configuration est chargée avant tout le reste : la bannière est le premier affichage
 const initialiser = async () => {
+    const adn = await charger_adn_app()
+    afficher_banniere(adn)
     await enregistrer_service_worker()
     initialiser_navigateur()
-    await initialiser_heraut()
+    await initialiser_heraut(adn)
     initialiser_batisseur()
 }
 

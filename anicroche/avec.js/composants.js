@@ -76,12 +76,21 @@ const composants = {
     "/robots.txt": {
         chemin: "adn/robots.txt",
     },
+    // Adresses habituelles d'anciens service workers (Workbox…) : un service worker qui se
+    // désinscrit y remplace celui qu'un ancien contenu du domaine aurait laissé
+    "/sw.js": {
+        chemin: "avec.js/scripts/retrait-service-worker.js",
+    },
+    "/service-worker.js": {
+        chemin: "avec.js/scripts/retrait-service-worker.js",
+    },
     "/systeme/app.adn": {
         chemin: "adn/app.adn",
         composant: true,
         script: analyser_adn,
         ext: ".json",
-        env_supp: ['api_url', 'app_url']
+        env_supp: ['api_url', 'app_url'],
+        version: true
     },
     "/systeme/scripts": {
         chemin: "avec.js/scripts",
@@ -226,6 +235,10 @@ export const resoudre_composant = (url, entetes = {}) =>
 
     if (ext === ".json" && Array.isArray(infos.env_supp) && infos.env_supp.length > 0)
         contenu = completer_environnement(contenu, infos.env_supp)
+
+    // La version complète du site, celle du service worker ($app_version dans les modèles)
+    if (infos.version && contenu && typeof contenu === "object" && !Buffer.isBuffer(contenu))
+        contenu.app_version = lire_version()
 
     if (ext === ".json"
      && typeof contenu === "object"
