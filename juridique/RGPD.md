@@ -310,7 +310,7 @@ Les conditions d'utilisation, la politique de confidentialité et les mentions l
 
 L'accès d'une version (`PATCH /version/<id_anicroche>/<numero> { acces }`) décide qui la voit : `prive` (seulement les gérants de la page : profils maîtres, et auteurs pour un type qui en a ; valeur d'un nouveau brouillon), `partage` (toute personne qui a le lien, sans que la page apparaisse dans les listes) ou `public`. Pendant un préavis, la version programmée est rendue publique : le site l'annonce alors sur la page (« Une nouvelle version entrera en vigueur le … ») et sur la version elle-même (« Cette nouvelle version entrera en vigueur le … »), avec un lien de l'une vers l'autre. Dans une nouvelle version, seules les sources qui changent sont à déposer : les autres restent celles des versions précédentes.
 
-**Avant le lancement.** En production, l'inscription est refusée (`503`) tant qu'aucune version des conditions d'utilisation n'est publiée : publier les trois pages avant d'ouvrir le service.
+**Avant le lancement.** Tant qu'aucune version des conditions d'utilisation n'est publiée, seul le premier compte peut être créé (celui de l'éditeur, qui publiera les pages, case des conditions cochée) ; toute autre inscription est refusée (`503`) : publier les trois pages avant d'ouvrir le service. La date d'acceptation des conditions de ce premier compte précède la première version, qui n'est donc pas notée comme acceptée par lui : c'est sans conséquence, puisque l'éditeur l'a lui-même rédigée et publiée.
 
 **Quand les conditions d'utilisation changent**, aucune nouvelle acceptation n'est demandée : une modification de fond est acceptée tacitement, après un préavis pendant lequel l'utilisateur peut supprimer son compte s'il la refuse.
 

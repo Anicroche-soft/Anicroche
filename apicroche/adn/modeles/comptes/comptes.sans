@@ -243,10 +243,11 @@
         if ($body.accepte_conditions !== true)
             return $indicate(422, "Conditions d'utilisation non acceptées")
 
-        // En dev, l'inscription reste possible tant qu'aucune version des conditions n'est publiée
+        // Tant qu'aucune version des conditions n'est publiée, seul le premier compte peut être
+        // créé (celui de l'éditeur, qui publiera les conditions)
         const conditions = await $version_en_vigueur('conditions-generales-d-utilisation')
 
-        if (!conditions && (process.env.mode || 'prod') !== 'dev')
+        if (!conditions && await $search_one('compte', `:)`, {}, { select: 'id' }))
             return $indicate(503, "Conditions d'utilisation indisponibles")
 
         const clef = await $verifier_clef()
