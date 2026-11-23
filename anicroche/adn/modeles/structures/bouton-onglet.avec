@@ -37,6 +37,13 @@
         transition: opacity var(--d-animation);
     }
 
+    /* Le texte de l'onglet occupe toute la largeur du bouton, centré */
+    .bouton-onglet > span {
+        flex: 1;
+        min-width: 0;
+        text-align: center;
+    }
+
     .bouton-onglet:not(.actif) > * {
         opacity: 75%;
     }

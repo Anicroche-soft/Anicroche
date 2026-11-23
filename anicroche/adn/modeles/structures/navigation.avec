@@ -98,6 +98,42 @@
         justify-content: flex-end;
     }
 
+    /* Sans onglets, le centre est centré dans toute la barre, quelle que soit la largeur des
+       côtés : chaque côté prend la moitié de la place restante, mais jamais moins que son
+       contenu. Le centre ne se décale donc que lorsqu'un côté a besoin de plus que cette
+       moitié, et son texte se termine par « … » quand même ce décalage ne suffit plus */
+    .navigation:not(:has(.barre-onglets)) {
+        display: grid;
+        grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
+        column-gap: 0;
+    }
+
+    /* Chaque côté, à la largeur de son contenu, reste contre son bord de la barre ; l'écart
+       avec le centre est une marge du côté, et non un gap de la grille, pour qu'un côté absent
+       ne laisse pas d'espace */
+    .navigation:not(:has(.barre-onglets)) > .gauche {
+        grid-area: 1 / 1;
+        justify-self: start;
+        margin-right: 1rem;
+    }
+
+    .navigation:not(:has(.barre-onglets)) > .centre {
+        grid-area: 1 / 2;
+        min-width: 0;
+    }
+
+    .navigation:not(:has(.barre-onglets)) > .droite {
+        grid-area: 1 / 3;
+        justify-self: end;
+        margin-left: 1rem;
+    }
+
+    .navigation .centre > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     .navigation span {
         white-space: nowrap;
         text-align: center;

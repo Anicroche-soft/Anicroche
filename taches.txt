@@ -1,4 +1,6 @@
 Tâches :
+- voir si on peut enregistrer l'état de chaque puce du menu du site
+- supporter le trop plein d'onglets dans la barre de navigation
 - revoir l'organisation des pages d'anicroches
 - relire et compléter les premières versions des pages légales (juridique/conditions-generales-d-utilisation.md, juridique/politique-de-confidentialite.md, juridique/mentions-legales.md : passages « À compléter », adresse d'Infomaniak à vérifier), les publier avant le lancement, et ajouter des liens vers ces pages dans le site
 - finir le préavis des pages légales (voir juridique/RGPD.md § 11, l'essentiel est fait) :
@@ -27,4 +29,3 @@ Tâches dépendantes :
     - ne pas garder de trace des anciens gérants
     - annoncer que les brouillons et anciennes versions passent au nouveau gérant avec le profil
     - prévoir dans juridique/RGPD.md § 9 qu'une demande d'effacement d'un ancien gérant sur une publication qui l'identifie se traite en vidant les sources concernées
-    
