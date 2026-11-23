@@ -87,6 +87,20 @@ const generer_id = (taille = 12, alphabet = CHARS_ID) =>
     return Array.from(octets).map(b => alphabet[b % alphabet.length]).join('')
 }
 
+// Valeur qu'un champ absent d'une création recevra de la base (default littéral), pour que sa
+// règle porte sur la valeur réellement enregistrée ; undefined pour un default calculé (auto,
+// $autre_champ, déjà résolus avant la validation, ou now) ou sans default
+export const default_litteral = (champ) =>
+{
+    const valeur = champ?.default
+    if (valeur === undefined || valeur === null || valeur === '')
+        return undefined
+    if (typeof valeur === 'string'
+     && (valeur === 'auto' || valeur.startsWith('$') || /^now(\s*\+\s*\d+[smhd])?$/.test(valeur)))
+        return undefined
+    return valeur
+}
+
 // Valider la valeur brute contre la rule (expression augure) du champ
 // contexte : { '$nom_champ': valeur | ERREUR_AUGURE }
 const valider_regle = (champ, contexte) =>
@@ -1518,10 +1532,14 @@ const inserer_batch = async (modele, tableau) =>
     // 2. Valider les règles
     for (let i = 0; i < insertions.length; i++)
     {
-        // Construire le contexte : tous les champs connus, absents → ERREUR_AUGURE (':x')
+        // Construire le contexte : tous les champs connus, absents → leur default littéral
+        // (appliqué par la base), sinon ERREUR_AUGURE (':x')
         const contexte = {}
         for (const champ of modele.fields)
-            contexte[`$${champ.name}`] = insertions[i][champ.name] ?? ERREUR_AUGURE
+        {
+            const valeur = insertions[i][champ.name] === undefined ? default_litteral(champ) : insertions[i][champ.name]
+            contexte[`$${champ.name}`] = valeur ?? ERREUR_AUGURE
+        }
 
         for (const champ of modele.fields)
         {

@@ -295,7 +295,7 @@ Une expression [augure](magasin.md#expressions-augure) que la valeur doit vérif
 }
 ```
 
-- En création, toutes les règles du modèle sont vérifiées.
+- En création, toutes les règles du modèle sont vérifiées. Un champ absent y prend sa valeur par défaut littérale (`default : fr`), celle que la base lui donnera ; un default calculé (`auto`, `$autre_champ`) est résolu avant la vérification, et un champ à `now` ou sans default vaut `:x`.
 - En mise à jour, seules les règles des champs modifiés sont vérifiées ; les autres champs ont leur valeur actuelle (les champs hachés non modifiés valent `:x`).
 - La règle d'un champ facultatif (`count : 0-1`) sans valeur n'est pas vérifiée.
 

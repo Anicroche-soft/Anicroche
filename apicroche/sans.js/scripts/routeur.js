@@ -1,4 +1,4 @@
-import { creer_fonctions_magasin, preparer_donnees } from './magasin.js'
+import { creer_fonctions_magasin, preparer_donnees, default_litteral } from './magasin.js'
 import { creer_fonctions_mailer }  from './mailer.js'
 import { evaluer, ERREUR as ERREUR_AUGURE } from './augure.js'
 import { SignJWT, jwtVerify } from 'jose'
@@ -106,11 +106,15 @@ const route_est_active = (route) =>
     return mode_route === mode
 }
 
+// Un champ absent reçoit pour ses règles son default littéral, appliqué par la base
 const valider_regles_modele = (modele, valeurs) =>
 {
     const contexte = {}
     for (const champ of modele.fields)
-        contexte[`$${champ.name}`] = valeurs[champ.name] ?? ERREUR_AUGURE
+    {
+        const valeur = valeurs[champ.name] === undefined ? default_litteral(champ) : valeurs[champ.name]
+        contexte[`$${champ.name}`] = valeur ?? ERREUR_AUGURE
+    }
 
     for (const champ of modele.fields)
     {
