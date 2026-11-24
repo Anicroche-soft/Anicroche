@@ -7,12 +7,17 @@
         const reponse = await $search(`profil/${encodeURIComponent($profil.id)}/derives`)
         $nombre_derives_edition = reponse.error ? 0 : reponse.data?.nombre ?? 0
     }
+
+    // Changer d identifiant demande le mot de passe, sur le second onglet : { identifiant,
+    // pseudonyme } en attente de cette confirmation
+    $modification_profil        = null
+    $erreur_mot_de_passe_profil = false
 ]
 
 $titre = "Édition de profil"
 $puce  = profil
 
-page [$authentification : requise]
+page [:(, $authentification : requise]
     navigation
         <div .gauche>
             fleche-retour [/profil]
@@ -25,4 +30,8 @@ page [$authentification : requise]
             icone-horloge
 
     onglet
-        section-edition-profil
+        section-edition-profil [informations]
+
+    onglet
+        @if [$modification_profil]
+            section-edition-profil [mot_de_passe]

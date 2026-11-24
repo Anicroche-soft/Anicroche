@@ -30,7 +30,7 @@
 
         can_update   : "$context.compte"
         prior_update : "$valider_modification_identifiant($values, $request)"
-        post_update  : "$renommer_profils_derives($values, $request)"
+        post_update  : "$appliquer_renommage_profil($values, $request)"
     }
 
     {
@@ -171,8 +171,10 @@
         })
     }
 
-    // Un profil racine qui a des profils dérivés garde son type : le renommer renomme aussi
-    // ses dérivés, y compris ceux que le compte ne gère pas
+    // PATCH /profil/<id> { identifiant, mot_de_passe } : changer d identifiant demande le mot de
+    // passe du compte (une session seule ne suffit pas). Un profil racine qui a des profils
+    // dérivés garde son type : le renommer renomme aussi ses dérivés, y compris ceux que le
+    // compte ne gère pas
     $valider_modification_identifiant = async ($values, $request) =>
     {
         const profil = await $search_one('profil', `#id = $id`, { $id: $request.params.id })
@@ -181,14 +183,9 @@
 
         await verifier_identifiant($values.identifiant, profil)
 
-        if (profil.identifiant.includes('.'))
-            return
+        const derives = profil.identifiant.includes('.') ? [] : await chercher_derives(profil.identifiant)
 
-        const derives = await chercher_derives(profil.identifiant)
-        if (!derives.length)
-            return
-
-        if ($values.identifiant.includes('.'))
+        if (derives.length && $values.identifiant.includes('.'))
             return $indicate(422, "Un profil qui a des profils dérivés ne peut pas devenir un profil dérivé")
 
         for (const derive of derives)
@@ -198,21 +195,59 @@
                 return $indicate(409, `L'identifiant ${nouveau} est déjà utilisé`)
         }
 
+        // En dernier : une erreur sur l identifiant ne consomme pas d essai de mot de passe
+        if (!await $verifier_mot_de_passe())
+            return $indicate(403, "Mot de passe invalide")
+
         $context.renommage_profil = { ancien: profil.identifiant, derives }
     }
 
-    $renommer_profils_derives = async ($values, $request) =>
+    // Renomme les profils dérivés, puis prévient les gérants de chaque profil renommé
+    $appliquer_renommage_profil = async ($values, $request) =>
     {
         const renommage = $context.renommage_profil
         if (!renommage)
             return
 
+        const renommes = [ { id: $request.params.id, ancien: renommage.ancien, nouveau: $values.identifiant } ]
+
         for (const derive of renommage.derives)
-            await $update_one('profil',
-                `#id = $id`,
-                { identifiant: $values.identifiant + derive.identifiant.slice(renommage.ancien.length) },
-                { $id: derive.id }
+        {
+            const nouveau = $values.identifiant + derive.identifiant.slice(renommage.ancien.length)
+            await $update_one('profil', `#id = $id`, { identifiant: nouveau }, { $id: derive.id })
+            renommes.push({ id: derive.id, ancien: derive.identifiant, nouveau })
+        }
+
+        await prevenir_gerants_renommage(renommes)
+    }
+
+    // Chaque gérant d un profil renommé reçoit, à toutes ses adresses, la liste des profils qu il
+    // gère parmi ceux renommés (les dérivés peuvent avoir d autres gérants que leur racine)
+    const prevenir_gerants_renommage = async (renommes) =>
+    {
+        const par_compte = new Map()
+        for (const profil of renommes)
+        {
+            const liens = await $search_all('gerants_profils', `#id_profil = $id`, { $id: profil.id })
+            for (const lien of liens)
+                par_compte.set(lien.id_compte, [ ...(par_compte.get(lien.id_compte) ?? []), profil ])
+        }
+
+        for (const [ id_compte, profils ] of par_compte)
+        {
+            const changements = profils
+                .map(profil => `<li>@${profil.ancien} devient @${profil.nouveau}</li>`)
+                .join('')
+
+            await $ecrire_courriels(await $lire_courriels(id_compte),
+                profils.length > 1
+                    ? "Les identifiants de profils que vous gérez sur Anicroche ont changé"
+                    : "L'identifiant d'un profil que vous gérez sur Anicroche a changé",
+                `<p>${profils.length > 1 ? "Les identifiants de profils que vous gérez ont été modifiés" : "L'identifiant d'un profil que vous gérez a été modifié"} :</p>`
+              + `<ul>${changements}</ul>`
+              + `<p>Si ni vous ni un autre gérant de ce profil n'êtes à l'origine de ce changement, changez votre mot de passe, fermez les sessions que vous ne reconnaissez pas, puis rétablissez l'identifiant depuis la page d'édition du profil.</p>`
             )
+        }
     }
 
     $compter_profils_derives = async ($request) =>

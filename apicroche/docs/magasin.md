@@ -30,7 +30,7 @@ const profils = await $search_all('profils',
 
 ### Nom d'entrée et nom de table
 
-Les fonctions `_one` attendent de préférence le **nom d'entrée** (`'profil'`), les fonctions `_all` le **nom de table** (`'profils'`). Le nom de table est aussi accepté par les fonctions `_one`. Les tables de jonction s'utilisent par leur nom (`'gerants_profils'`) ou leur entrée (`'gerant_profil'`).
+Les fonctions `_one` attendent de préférence le **nom d'entrée** (`'profil'`), les fonctions `_all` le **nom de table** (`'profils'`). Le nom de table est aussi accepté par les fonctions `_one`. Les tables de jonction suivent la même règle : leur nom (`'gerants_profils'`) partout, leur entrée (`'gerant_profil'`) avec les fonctions `_one` seulement.
 
 ### Valeurs lues
 

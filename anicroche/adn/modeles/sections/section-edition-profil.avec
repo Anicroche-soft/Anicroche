@@ -50,9 +50,30 @@
         $type_edition = $node.value
     }
 
+    // Envoie la modification ; renvoie le message d erreur à afficher, ou rien en cas de succès
+    const envoyer = async (corps) =>
+    {
+        const reponse = await $update(`profil/${encodeURIComponent(id_profil_edite)}`, corps)
+
+        if (reponse.error)
+            return reponse.code === 429
+                ? "Trop de tentatives, veuillez réessayer plus tard"
+                : reponse.error ?? "La modification du profil a échoué"
+
+        const reponse_compte = await $search('moi')
+        if (!reponse_compte.error)
+        {
+            $compte = reponse_compte.data
+            $selectionner_profil(id_profil_edite)
+        }
+        $navigate_to('/profil')
+    }
+
+    // Un nouvel identifiant passe par le second onglet, qui demande le mot de passe
     $envoyer_formulaire_edition = async () =>
     {
-        const data        = new FormData($node)
+        const noeud       = $node
+        const data        = new FormData(noeud)
         const pseudonyme  = String(data.get('pseudonyme') ?? '').trim()
         const identifiant = lire_identifiant(data)
 
@@ -62,21 +83,30 @@
             return
         }
 
-        const reponse = await $update(`profil/${encodeURIComponent(id_profil_edite)}`, { identifiant, pseudonyme })
-
-        if (reponse.error)
+        if (identifiant !== identifiant_actuel)
         {
-            $erreur_edition_profil = reponse.error ?? "La modification du profil a échoué"
+            $erreur_edition_profil      = false
+            $erreur_mot_de_passe_profil = false
+            $modification_profil        = { identifiant, pseudonyme }
+            $basculer_vers_onglet_suivant(noeud)
             return
         }
 
-        const reponse_compte = await $search('moi')
-        if (!reponse_compte.error)
-        {
-            $compte = reponse_compte.data
-            $selectionner_profil(id_profil_edite)
-        }
-        $navigate_to('/profil')
+        $erreur_edition_profil = await envoyer({ identifiant, pseudonyme }) ?? false
+    }
+
+    $envoyer_formulaire_mot_de_passe_profil = async () =>
+    {
+        $erreur_mot_de_passe_profil = await envoyer({
+            ...$modification_profil,
+            mot_de_passe : new FormData($node).get('mot_de_passe')
+        }) ?? false
+    }
+
+    $revenir_edition_profil = () =>
+    {
+        $erreur_mot_de_passe_profil = false
+        $basculer_vers_onglet_precedant()
     }
 ]
 
@@ -90,47 +120,75 @@
     }
 ]
 
-section [edition-profil, centree]
-    titre [centre]
-        "Éditez votre profil"
-    carte
-        formulaire [$envoyer_formulaire_edition]
-            @if [$erreur_edition_profil]
-                erreur-formulaire
-                    "$erreur_edition_profil"
-            <div .identifiant @input="$suivre_identifiant_edition()">
-                @if [$choix_type_edition]
-                    choix-unique [
-                        "Type de profil", type
-                        $choix : [
-                            {etiquette : "Nouveau", nom : racine}
-                            {etiquette : "Suffixé", nom : derive}
-                        ]
-                        $valeur : $type_edition
-                        $action : $mettre_a_jour_type_edition()
-                    ]
+# $etape : informations (identifiant et nom d'affichage), ou mot_de_passe (confirmation d'un
+# nouvel identifiant)
+@args [$etape : informations]
+
+@if [$etape = mot_de_passe]
+    section [edition-profil, centree]
+        titre [centre]
+            "Confirmez le nouvel identifiant"
+        carte
+            formulaire [$envoyer_formulaire_mot_de_passe_profil]
+                @if [$erreur_mot_de_passe_profil]
+                    erreur-formulaire
+                        "$erreur_mot_de_passe_profil"
+                champ-mot-de-passe ["Mot de passe", mot_de_passe]
                 ligne
-                    choix-option [
-                        "Base", base
-                        $choix : $options_edition
-                        $valeur : $base_edition
-                        $desactive : $type_edition = racine
-                        $prefixe : @
-                    ]
-                    champ-texte [
-                        $etiquette : [$type_edition = racine] ? "Identifiant unique" : "Suffixe"
-                        identifiant
-                        $valeur : $nom_edition
-                        $prefixe : [$type_edition = racine] ? @ : .
-                        $regle : "/^(?=.{1,32}$)(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/"
-                        $indice : "Autorisés : a-z, 0-9, -"
-                    ]
-            champ-texte [
-                "Nom d'affichage", pseudonyme
-                $valeur : $profil.pseudonyme
-            ]
-            @if [$a_des_derives_edition & $identifiant_modifie_edition]
-                alerte-formulaire
-                    "En éditant le profil, tous les profils dérivés seront également renommés."
-            bouton-soumission
-                "Éditer le profil"
+                    bouton-action [$revenir_edition_profil]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+                    bouton-soumission
+                        "Éditer le profil"
+
+@else
+    section [edition-profil, centree]
+        titre [centre]
+            "Éditez votre profil"
+        carte
+            formulaire [$envoyer_formulaire_edition]
+                @if [$erreur_edition_profil]
+                    erreur-formulaire
+                        "$erreur_edition_profil"
+                <div .identifiant @input="$suivre_identifiant_edition()">
+                    @if [$choix_type_edition]
+                        choix-unique [
+                            "Type de profil", type
+                            $choix : [
+                                {etiquette : "Nouveau", nom : racine}
+                                {etiquette : "Suffixé", nom : derive}
+                            ]
+                            $valeur : $type_edition
+                            $action : $mettre_a_jour_type_edition()
+                        ]
+                    ligne
+                        choix-option [
+                            "Base", base
+                            $choix : $options_edition
+                            $valeur : $base_edition
+                            $desactive : $type_edition = racine
+                            $prefixe : @
+                        ]
+                        champ-texte [
+                            $etiquette : [$type_edition = racine] ? "Identifiant unique" : "Suffixe"
+                            identifiant
+                            $valeur : $nom_edition
+                            $prefixe : [$type_edition = racine] ? @ : .
+                            $regle : "/^(?=.{1,32}$)(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/"
+                            $indice : "Autorisés : a-z, 0-9, -"
+                        ]
+                champ-texte [
+                    "Nom d'affichage", pseudonyme
+                    $valeur : $profil.pseudonyme
+                ]
+                @if [$a_des_derives_edition & $identifiant_modifie_edition]
+                    alerte-formulaire
+                        "En éditant le profil, tous les profils dérivés seront également renommés."
+                bouton-soumission
+                    @if [$identifiant_modifie_edition]
+                        <span>
+                            "Continuer"
+                        icone-fleche-droite
+                    @else
+                        "Éditer le profil"

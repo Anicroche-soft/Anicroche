@@ -264,7 +264,9 @@ Les demandes arrivent à l'adresse de contact RGPD (§ 1). **Délai de réponse 
    | Adresse principale | `PATCH /coordonnee/<id>` | session, mot de passe, code `modification-courriel-principal` envoyé à l'adresse principale actuelle | Effacement du compte refusé pendant 7 jours (§ 4.1) |
    | Mot de passe | `PATCH /compte/<id>` | session, code `modification-mot-de-passe` envoyé à l'adresse principale (sans l'ancien mot de passe, pour couvrir l'oubli) | Les autres sessions sont fermées |
 
-   Chaque changement d'adresse ou de mot de passe est annoncé par courriel à toutes les adresses du compte, y compris celle qui vient d'être retirée. Une personne qui a perdu l'accès à son adresse principale ne peut pas encore la remplacer seule.
+   | Identifiant d'un profil | `PATCH /profil/<id>` | session d'un gérant, mot de passe | Un profil racine renommé renomme ses profils dérivés ; le nom d'affichage seul ne demande que la session |
+
+   Chaque changement d'adresse ou de mot de passe est annoncé par courriel à toutes les adresses du compte, y compris celle qui vient d'être retirée. Chaque changement d'identifiant est annoncé à toutes les adresses de chaque gérant d'un profil renommé (dérivés compris), avec l'ancien et le nouvel identifiant. Une personne qui a perdu l'accès à son adresse principale ne peut pas encore la remplacer seule.
 
 3. **Répondre** à la personne, en indiquant ce qui a été fait, ou pourquoi la demande est refusée et qu'elle peut saisir la CNIL.
 4. **Consigner** la demande ci-dessous (sans y recopier de données personnelles au-delà du nécessaire).
