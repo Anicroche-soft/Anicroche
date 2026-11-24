@@ -18,6 +18,60 @@
             $node.setCustomValidity('Valeur invalide')
         }
     }
+
+    // Lettres qui ne se décomposent pas en une lettre de base et des marques
+    const SPECIFICITES = { 'œ': 'oe', 'æ': 'ae', 'ß': 'ss', 'ø': 'o', 'đ': 'd', 'ð': 'd', 'ł': 'l', 'þ': 'th', 'ı': 'i' }
+
+    // Sans accents ni autres marques, et sous sa forme ordinaire (pleine chasse, ligatures…)
+    const sans_marques = (texte) => texte.normalize('NFKD').replace(/\p{M}/gu, '')
+
+    const est_permis = (texte) => texte.length > 0 && [ ...texte ].every(caractere => $saisie.includes(caractere))
+
+    // Caractère gardé par $saisie : lui-même s il est permis, sinon le premier remplaçant
+    // permis, dans sa casse puis dans une autre (É → E, puis e ; œ → oe), sinon rien
+    const filtrer_caractere = (caractere) =>
+    {
+        if (est_permis(caractere))
+            return caractere
+
+        const formes = [ ...new Set([ caractere, caractere.toLowerCase(), caractere.toUpperCase() ]) ]
+        for (const forme of formes)
+        {
+            const specificite = SPECIFICITES[forme.toLowerCase()]
+            const candidats   = [
+                forme,
+                sans_marques(forme),
+                ...(specificite ? [ forme === forme.toLowerCase() ? specificite : specificite.toUpperCase() ] : [])
+            ]
+            const candidat = candidats.find(est_permis)
+            if (candidat)
+                return candidat
+        }
+        return ''
+    }
+
+    // Garde dans le champ les seuls caractères permis par $saisie, le curseur restant après le
+    // même caractère
+    const filtrer_saisie = (champ) =>
+    {
+        const filtrer = (texte) => [ ...texte ].map(filtrer_caractere).join('')
+
+        const valeur = filtrer(champ.value)
+        if (valeur === champ.value)
+            return
+
+        const curseur = filtrer(champ.value.slice(0, champ.selectionStart ?? champ.value.length)).length
+        champ.value = valeur
+        champ.setSelectionRange(curseur, curseur)
+    }
+
+    $traiter_saisie = () =>
+    {
+        if ($saisie)
+            filtrer_saisie($node)
+        if ($regle)
+            $tester_regle()
+    }
 ]
 
 @style [
@@ -96,6 +150,9 @@
     }
 ]
 
+# $saisie : caractères permis, seuls gardés au fil de la frappe, avant $regle. Un caractère
+# absent est remplacé, si possible, par sa forme sans accent ni autre marque, dans une autre
+# casse, ou par les lettres qu'il réunit (É → e, œ → oe), sinon retiré
 @args [
     $etiquette, $nom
     $requis : :)
@@ -104,6 +161,7 @@
     $prefixe : :(
     $regle : :(
     $indice : :(
+    $saisie : :(
 ]
 
 <label
@@ -125,7 +183,7 @@
             [$requis] ? required
             [! $modifiable] ? readonly
             [! $modifiable] ? tabindex="-1"
-            [$regle] ? @input="$tester_regle()"
+            [$regle | $saisie] ? @input="$traiter_saisie()"
         >
     @if [$indice]
         indication

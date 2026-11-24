@@ -177,6 +177,7 @@
                             $prefixe : [$type_edition = racine] ? @ : .
                             $regle : "/^(?=.{1,32}$)(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/"
                             $indice : "Autorisés : a-z, 0-9, -"
+                            $saisie : "abcdefghijklmnopqrstuvwxyz0123456789-"
                         ]
                 champ-texte [
                     "Nom d'affichage", pseudonyme
