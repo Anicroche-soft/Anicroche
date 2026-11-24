@@ -51,9 +51,11 @@ En tant qu'éditeur non professionnel, la loi pour la confiance dans l'économie
 |---|---|
 | Finalité | Permettre à l'utilisateur de créer et gérer des profils publics |
 | Base légale | Exécution du contrat — art. 6.1.b |
-| Données | Identifiant ; pseudonyme ; date de création ; comptes gérants ; anicroches dont le profil est l'auteur ; choix fait pour le profil lors d'une demande d'effacement |
-| Visibilité | Identifiant et pseudonyme : publics. Le lien entre un profil et le compte qui le gère n'est pas public |
-| Durée de conservation | Jusqu'à la suppression du profil. À l'effacement de son dernier gérant, le profil est supprimé, ou anonymisé si l'utilisateur ne l'a pas demandé ou si le compte est supprimé pour inactivité (voir § 4.1) |
+| Données | Identifiant ; pseudonyme ; date de création ; comptes gérants ; anicroches dont le profil est l'auteur ; choix fait pour le profil lors d'une demande d'effacement ; anciens identifiants réservés (table `identifiants_reserves` : identifiant, date de fin, profil) |
+| Visibilité | Identifiant et pseudonyme : publics. Le lien entre un profil et le compte qui le gère n'est pas public. Les identifiants réservés ne sont pas publiés : un identifiant réservé est seulement refusé comme déjà utilisé |
+| Durée de conservation | Jusqu'à la suppression du profil. À l'effacement de son dernier gérant, le profil est supprimé, ou anonymisé si l'utilisateur ne l'a pas demandé ou si le compte est supprimé pour inactivité (voir § 4.1). Un ancien identifiant reste réservé 30 jours (voir § 4) |
+
+**Réservation des identifiants** (intérêt légitime — art. 6.1.f : empêcher l'usurpation d'un profil, et permettre de défaire un renommage non voulu). Quand un profil change d'identifiant, l'ancien (et ceux de ses dérivés renommés avec lui) lui reste réservé 30 jours : lui seul peut le reprendre, ce qui supprime la réservation. Un profil a au plus 3 réservations actives : au-delà, il doit attendre la fin de la plus ancienne pour changer d'identifiant, pour qu'on ne puisse ni accaparer des noms ni faire expirer le vrai nom d'un profil à force de le renommer. Le courriel envoyé aux gérants indique la date de fin.
 
 ### 2.4. Âge
 
@@ -139,6 +141,7 @@ Avant d'ajouter un nouveau prestataire qui reçoit des données personnelles : v
 | Compte dont l'effacement est demandé | Suspendu dès la demande, effacé 30 jours après (rappels 14, 7, 3 et 1 jours avant) ; disparition des sauvegardes au bout de leur durée de rotation | `$traiter_fins_de_comptes` (`effacement.sans`), voir § 4.1 |
 | Versions publiées des pages légales | Sans limite : elles prouvent ce que chaque utilisateur a accepté | Voir § 11 |
 | Annonces des nouvelles versions | Jusqu'à l'effacement du compte | Table `annonces`, effacée avec le compte (`effacement.sans`), voir § 11 |
+| Identifiant réservé (ancien identifiant d'un profil renommé, ou d'un profil anonymisé ou supprimé) | 30 jours, suppression quotidienne après expiration | `$nettoyer_identifiants_reserves` (`profils/reservations.sans`), voir § 2.3 et § 4.1 |
 | Sauvegardes | Celle d'Infomaniak (**À noter** : durée indiquée dans le Manager) | Voir § 7 |
 | Journaux du serveur | **À compléter** | Voir § 2.6 |
 
@@ -167,6 +170,8 @@ Avant d'ajouter un nouveau prestataire qui reçoit des données personnelles : v
 Un profil anonymisé n'est plus une donnée personnelle **à condition que ses publications ne permettent pas d'identifier leur auteur** : une personne qui le demande peut toujours obtenir le retrait d'une publication qui l'identifie (art. 17). Garder des publications après le départ de leur auteur suppose aussi une licence dans les conditions d'utilisation (non exclusive, gratuite, maintenue après la suppression du compte, publication sans nom), avec les règles ci-dessus annoncées clairement.
 
 Les profils dérivés d'un profil racine anonymisé ou supprimé, gérés par d'autres comptes, en sont détachés : ils deviennent des profils racines sous un nom proche et libre (`base.x` devient `base-x`, ou `base-x-1`, `base-x-2`…), et leurs gérants en sont prévenus par courriel. Le nom du partant ne reste donc pas attaché à leurs profils.
+
+L'identifiant d'un profil anonymisé ou supprimé reste réservé 30 jours, à aucun profil, comme ses propres réservations en cours (§ 2.3) : personne ne peut le prendre aussitôt pour se faire passer pour lui. Seule la chaîne de caractères est gardée, sans lien avec le profil ni avec le compte ; elle est supprimée à la fin de la réservation.
 
 **Confirmation** : un dernier courriel confirme l'effacement. Le journal n'enregistre que le motif (`COMPTE effacé (demande)` ou `(inactivité)`), sans identifiant.
 
@@ -248,7 +253,7 @@ Les demandes arrivent à l'adresse de contact RGPD (§ 1). **Délai de réponse 
 
    | Droit | Traitement |
    |---|---|
-   | Accès / portabilité (art. 15 et 20) | L'utilisateur télécharge lui-même ses données en JSON depuis son compte (bouton « Exporter les données » de la page du compte, page `/compte/export`, route `POST /export` d'`export.sans`), y compris pendant l'effacement demandé : compte (dates, dont naissance, inscription, acceptation des conditions, dernière activité, avertissements, demande d'effacement, et coordonnées), sessions (révoquées comprises, tant qu'elles ne sont pas nettoyées), profils gérés et leurs anicroches (versions, brouillons et sources). Pour un profil partagé, l'export contient toutes ses anicroches, y compris celles qu'un autre gérant a rédigées : l'auteur est le profil, pas le compte. Le mot de passe est demandé, chaque export est annoncé à toutes les adresses du compte, et la route est limitée à 5 requêtes par 10 min. Sont exclus les empreintes, les clefs, les identifiants internes et les autres gérants des profils partagés (seul le partage est indiqué). Une demande reçue par courriel : l'inviter à le faire en ligne ; si ce n'est pas possible, même extraction à la main |
+   | Accès / portabilité (art. 15 et 20) | L'utilisateur télécharge lui-même ses données en JSON depuis son compte (bouton « Exporter les données » de la page du compte, page `/compte/export`, route `POST /export` d'`export.sans`), y compris pendant l'effacement demandé : compte (dates, dont naissance, inscription, acceptation des conditions, dernière activité, avertissements, demande d'effacement, et coordonnées), sessions (révoquées comprises, tant qu'elles ne sont pas nettoyées), profils gérés, leurs identifiants réservés et leurs anicroches (versions, brouillons et sources). Pour un profil partagé, l'export contient toutes ses anicroches, y compris celles qu'un autre gérant a rédigées : l'auteur est le profil, pas le compte. Le mot de passe est demandé, chaque export est annoncé à toutes les adresses du compte, et la route est limitée à 5 requêtes par 10 min. Sont exclus les empreintes, les clefs, les identifiants internes et les autres gérants des profils partagés (seul le partage est indiqué). Une demande reçue par courriel : l'inviter à le faire en ligne ; si ce n'est pas possible, même extraction à la main |
    | Rectification (art. 16) | L'utilisateur corrige lui-même ses données depuis son compte (page « Modifier le compte », `/compte/edition`, et sessions ouvertes sur `/profil`), voir le tableau ci-dessous. Profils : identifiant et pseudonyme. Une demande reçue par courriel : l'inviter à le faire en ligne ; si ce n'est pas possible, modification manuelle par l'API (les champs `crypt` et `hash` doivent passer par sans.js, pas par du SQL direct) |
    | Effacement (art. 17) | L'utilisateur le demande lui-même depuis son compte (§ 4.1). Une demande reçue par courriel depuis l'adresse du compte : l'inviter à le faire en ligne, ou, si ce n'est pas possible, renseigner `date_demande_effacement` du compte (effacement au bout du délai). Retrait d'une publication anonymisée qui identifie son auteur : vider ses sources |
    | Opposition (art. 21) et retrait du consentement | Arrêter le traitement concerné (ex. décocher les fonctionnalités liées à l'âge) |

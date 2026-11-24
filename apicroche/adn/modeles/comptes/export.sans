@@ -118,13 +118,15 @@
 
         for (const profil of profils)
             resultat.push({
-                identifiant         : profil.identifiant,
-                pseudonyme          : profil.pseudonyme,
-                role                : profil.role,
-                date_creation       : profil.date_creation,
-                est_partage         : profil.gerants.length > 1,
-                sort_a_l_effacement : profil.sort ?? null,
-                anicroches          : await lire_anicroches(profil.id)
+                identifiant           : profil.identifiant,
+                pseudonyme            : profil.pseudonyme,
+                role                  : profil.role,
+                date_creation         : profil.date_creation,
+                est_partage           : profil.gerants.length > 1,
+                sort_a_l_effacement   : profil.sort ?? null,
+                identifiants_reserves : (await $lire_reservations_profil(profil.id))
+                    .map(reservation => ({ identifiant: reservation.identifiant, date_fin: reservation.date_fin })),
+                anicroches            : await lire_anicroches(profil.id)
             })
 
         return resultat

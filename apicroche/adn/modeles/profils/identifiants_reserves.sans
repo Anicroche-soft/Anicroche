@@ -1,0 +1,31 @@
+# Identifiants réservés. L ancien identifiant d un profil renommé lui reste réservé pendant
+# 30 jours (DUREE_RESERVATION, dans reservations.sans) : il peut le reprendre (renommage non
+# voulu, session volée), et personne d autre ne peut le prendre pour se faire passer pour lui.
+# L identifiant d un profil anonymisé ou supprimé est réservé de même, mais à aucun profil :
+# personne ne peut le prendre.
+# Aucune règle d accès : la table n est lue que par les scripts de reservations.sans (un
+# identifiant réservé à un autre profil est refusé comme un identifiant déjà utilisé)
+@name [ identifiants_reserves, identifiant_reserve ]
+
+@primary [ identifiant ]
+
+@fields [
+    {
+        name : identifiant
+        type : char
+        size : 1-65
+    }
+
+    {
+        name    : date_fin
+        type    : datetime
+        default : now+30d
+    }
+
+    # Profil à qui l identifiant est réservé ; aucun pour un profil anonymisé ou supprimé
+    {
+        name  : profil
+        ref   : profils
+        count : 0-1
+    }
+]

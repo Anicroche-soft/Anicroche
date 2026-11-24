@@ -1,0 +1,85 @@
+# Réservation des identifiants de profils (table identifiants_reserves) : nettoyage des
+# réservations expirées, et fonctions utilisées par le renommage (profils.sans) et
+# l effacement (effacement.sans)
+
+@actions [
+    {
+        periodically : $nettoyer_identifiants_reserves()
+        period       : 1d
+    }
+]
+
+@script [
+    // Durée d une réservation, en jours (celle de date_fin par défaut)
+    const DUREE_RESERVATION = 30
+
+    // Réservations actives au plus par profil : au-delà, il ne peut plus changer d identifiant
+    // avant qu une réservation expire (renommer en boucle accaparerait des noms, et ferait
+    // expirer le vrai nom d un profil dont la session a été volée)
+    $LIMITE_RESERVATIONS = 3
+
+    $nettoyer_identifiants_reserves = async () =>
+    {
+        await $delete_all('identifiants_reserves', `#date_fin < now`)
+    }
+
+    // Réservation active d un identifiant, ou null
+    $lire_reservation = (identifiant) =>
+        $search_one('identifiant_reserve',
+            `
+            #identifiant = $identifiant
+          & #date_fin    > now
+            `,
+            { $identifiant: identifiant }
+        )
+
+    // Un identifiant réservé, à un autre profil que id_profil (ou à aucun)
+    $est_reserve_a_un_autre = async (identifiant, id_profil = null) =>
+    {
+        const reservation = await $lire_reservation(identifiant)
+        return !!reservation && (!id_profil || reservation.id_profil !== id_profil)
+    }
+
+    // Réservations actives d un profil, de la plus proche de son expiration à la plus lointaine
+    $lire_reservations_profil = (id_profil) =>
+        $search_all('identifiants_reserves',
+            `
+            #id_profil = $id
+          & #date_fin  > now
+            `,
+            { $id: id_profil },
+            { select: 'identifiant ; date_fin', order: [['date_fin', 'increasing']] }
+        )
+
+    // Réserve un identifiant pour DUREE_RESERVATION jours, au profil id_profil ou à aucun
+    // (null) ; une ancienne réservation du même identifiant est remplacée
+    $reserver_identifiant = async (identifiant, id_profil) =>
+    {
+        if (!identifiant)
+            return
+
+        await $delete_all('identifiants_reserves', `#identifiant = $identifiant`, { $identifiant: identifiant })
+        await $create_one('identifiant_reserve', { identifiant, id_profil })
+    }
+
+    // Un profil qui reprend l un de ses identifiants réservés le libère de sa réservation
+    $retirer_reservation = async (identifiant, id_profil) =>
+    {
+        await $delete_all('identifiants_reserves',
+            `
+            #identifiant = $identifiant
+          & #id_profil   = $id
+            `,
+            { $identifiant: identifiant, $id: id_profil }
+        )
+    }
+
+    // Avant l anonymisation ou la suppression d un profil : ses réservations ne sont plus à
+    // personne (la clef étrangère empêcherait la suppression), et restent jusqu à leur fin
+    $detacher_reservations_profil = async (id_profil) =>
+    {
+        await $update_all('identifiants_reserves', `#id_profil = $id`, { id_profil: null }, { $id: id_profil })
+    }
+
+    $date_fin_reservation = () => new Date(Date.now() + DUREE_RESERVATION * 24 * 60 * 60 * 1000)
+]

@@ -160,8 +160,18 @@
         await $delete_all('sources', `#id_anicroche = $id`, { $id: id_anicroche })
     }
 
-    const anonymiser_profil = async (id_profil) =>
+    // Le nom d un profil qui disparaît reste réservé, à aucun profil, le temps d une réservation
+    // (voir reservations.sans) : personne ne peut le prendre aussitôt pour se faire passer pour lui
+    const reserver_nom_du_partant = async (profil) =>
     {
+        await $detacher_reservations_profil(profil.id)
+        await $reserver_identifiant(profil.identifiant, null)
+    }
+
+    const anonymiser_profil = async (profil) =>
+    {
+        const id_profil = profil.id
+        await reserver_nom_du_partant(profil)
         await $delete_all('gerants_profils', `#id_profil = $id`, { $id: id_profil })
         await $update_one('profil',
             `#id = $id`,
@@ -174,8 +184,11 @@
         )
     }
 
-    const supprimer_profil = async (id_profil) =>
+    const supprimer_profil = async (profil) =>
     {
+        const id_profil = profil.id
+        await reserver_nom_du_partant(profil)
+
         const liens = await $search_all('auteurs_anicroches', `#id_profil = $id`, { $id: id_profil })
         await $delete_all('auteurs_anicroches', `#id_profil = $id`, { $id: id_profil })
 
@@ -210,6 +223,7 @@
     const est_identifiant_libre = async (identifiant) =>
         !await $search_one('profil', `#identifiant = $identifiant`, { $identifiant: identifiant })
      && !(await lire_derives(identifiant)).length
+     && !await $lire_reservation(identifiant)
 
     const trouver_identifiant_libre = async (identifiant) =>
     {
@@ -267,9 +281,9 @@
                 racines.push(profil.identifiant)
 
             if (motif === 'demande' && profil.sort === 'suppression')
-                await supprimer_profil(profil.id)
+                await supprimer_profil(profil)
             else
-                await anonymiser_profil(profil.id)
+                await anonymiser_profil(profil)
         }
 
         // Les liens de gérance des profils partagés sont supprimés avec le compte

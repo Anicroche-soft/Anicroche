@@ -127,6 +127,11 @@
         if (existant && existant.id !== profil_actuel?.id)
             return $indicate(409, "Identifiant déjà utilisé")
 
+        // Réservé à un autre profil, ou à aucun (voir reservations.sans) : refusé de même, sans
+        // dire qu il est réservé
+        if (await $est_reserve_a_un_autre(identifiant, profil_actuel?.id))
+            return $indicate(409, "Identifiant déjà utilisé")
+
         const racine = lire_racine(identifiant)
 
         // Une base portée par des profils dérivés reste réservée, même sans profil racine :
@@ -191,9 +196,18 @@
         for (const derive of derives)
         {
             const nouveau = $values.identifiant + derive.identifiant.slice(profil.identifiant.length)
-            if (await $search_one('profil', `#identifiant = $nouveau`, { $nouveau: nouveau }))
+            if (await $search_one('profil', `#identifiant = $nouveau`, { $nouveau: nouveau })
+             || await $est_reserve_a_un_autre(nouveau, derive.id))
                 return $indicate(409, `L'identifiant ${nouveau} est déjà utilisé`)
         }
+
+        // L ancien identifiant sera réservé au profil : au-delà de la limite, il faut attendre
+        // la fin d une réservation, sauf pour reprendre un identifiant réservé (le nombre de
+        // réservations ne change pas)
+        const reservations = await $lire_reservations_profil(profil.id)
+        const reprise      = reservations.some(reservation => reservation.identifiant === $values.identifiant)
+        if (!reprise && reservations.length >= $LIMITE_RESERVATIONS)
+            return $indicate(403, `Trop de changements d'identifiant récents : le prochain sera possible le ${formater_date(reservations[0].date_fin)}`)
 
         // En dernier : une erreur sur l identifiant ne consomme pas d essai de mot de passe
         if (!await $verifier_mot_de_passe())
@@ -202,7 +216,15 @@
         $context.renommage_profil = { ancien: profil.identifiant, derives }
     }
 
-    // Renomme les profils dérivés, puis prévient les gérants de chaque profil renommé
+    const formater_date = (date) => new Date(date).toLocaleDateString('fr-FR', {
+        day      : 'numeric',
+        month    : 'long',
+        year     : 'numeric',
+        timeZone : 'Europe/Paris'
+    })
+
+    // Renomme les profils dérivés, réserve à chaque profil renommé son ancien identifiant (et
+    // libère celui qu il reprend), puis prévient les gérants
     $appliquer_renommage_profil = async ($values, $request) =>
     {
         const renommage = $context.renommage_profil
@@ -216,6 +238,12 @@
             const nouveau = $values.identifiant + derive.identifiant.slice(renommage.ancien.length)
             await $update_one('profil', `#id = $id`, { identifiant: nouveau }, { $id: derive.id })
             renommes.push({ id: derive.id, ancien: derive.identifiant, nouveau })
+        }
+
+        for (const profil of renommes)
+        {
+            await $retirer_reservation(profil.nouveau, profil.id)
+            await $reserver_identifiant(profil.ancien, profil.id)
         }
 
         await prevenir_gerants_renommage(renommes)
@@ -245,6 +273,7 @@
                     : "L'identifiant d'un profil que vous gérez sur Anicroche a changé",
                 `<p>${profils.length > 1 ? "Les identifiants de profils que vous gérez ont été modifiés" : "L'identifiant d'un profil que vous gérez a été modifié"} :</p>`
               + `<ul>${changements}</ul>`
+              + `<p>${profils.length > 1 ? "Les anciens identifiants restent réservés à leur profil" : "L'ancien identifiant reste réservé à ce profil"} jusqu'au ${formater_date($date_fin_reservation())} : personne d'autre ne peut le prendre, et vous pouvez le reprendre d'ici là.</p>`
               + `<p>Si ni vous ni un autre gérant de ce profil n'êtes à l'origine de ce changement, changez votre mot de passe, fermez les sessions que vous ne reconnaissez pas, puis rétablissez l'identifiant depuis la page d'édition du profil.</p>`
             )
         }

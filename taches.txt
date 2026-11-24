@@ -14,7 +14,10 @@ Tâches :
 - permettre de remplacer une adresse principale perdue (changement différé, avec opposition possible depuis l'adresse actuelle)
 - mettre en place la configuration de compte et de profils (dont la case à cocher des fonctionnalités liées à l'âge, voir juridique/RGPD.md § 2.4, la teinte, le fuseau horaire, les langues)
 - ajout des comptes sous contrôle parental
-- réserver l'ancien identifiant d'un profil renommé pendant x jours (repris seulement par ce profil ; dérivés compris ? durée à fixer, à déclarer dans juridique/RGPD.md)
+- remplacer les majuscules par des minuscules dans les champs d'identifiants et retirer automatiquements les caractères interdits
+- dans la liste de profils de la page /compte, cliquer sur le profil acrif devrait rediriger vers /profil
+- permetre la suppression, l'anonymisation et la désactivation d'un profil
+- corriger la barre de défilement (quand on la tient pour défiler dans la page mais que la souris n'est plus dessus en hover, on ne défile pas dans la page)
 
 Tâches dépendantes :
 - quand des anicroches d'utilisateurs seront publiées (types avec auteurs) :

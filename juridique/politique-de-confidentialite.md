@@ -16,6 +16,7 @@ Pour toute question ou demande sur vos données : royaume@anicroche.com. Les cou
 | Sécuriser votre compte et limiter les abus | Adresse IP, navigateur et appareil utilisés, dates de vos sessions | Intérêt légitime : la sécurité du service |
 | Vérifier votre âge | Date de naissance | Obligation légale (âge minimum de 15 ans) et protection des mineurs |
 | Faire vivre vos profils | Identifiant, pseudonyme, date de création, contenus publiés | Exécution du contrat |
+| Empêcher qu'on se fasse passer pour vos profils | Anciens identifiants de vos profils, réservés après un changement ou une suppression | Intérêt légitime : la protection de votre identité sur le service |
 | Gérer la fin de votre compte | Date de dernière activité, avertissements envoyés, date de la demande de suppression, choix fait pour vos profils | Exécution du contrat, et limitation de la durée de conservation |
 
 L'identifiant et le pseudonyme de vos profils, ainsi que ce qu'ils publient, sont publics. Vos adresses électroniques, votre date de naissance et le lien entre votre compte et vos profils ne le sont pas.
@@ -37,6 +38,7 @@ Les courriels que vous écrivez à royaume@anicroche.com, y compris vos réponse
 | Compte | Jusqu'à sa suppression : 30 jours après votre demande, ou après 3 ans sans activité, avec des avertissements par courriel au moins 30 jours avant |
 | Sessions | 30 jours au plus, puis supprimées le lendemain de leur fin |
 | Codes de connexion et de confirmation | Valables 15 minutes, supprimés le lendemain au plus tard |
+| Ancien identifiant d'un profil | Réservé 30 jours après un changement d'identifiant ou la disparition du profil : seul ce profil peut le reprendre pendant ce temps (personne, s'il a disparu) |
 | Sauvegardes | Une donnée supprimée peut subsister dans les sauvegardes pendant **À compléter** (durée de rotation des sauvegardes) |
 
 À la suppression du compte, chaque profil que vous gériez seul est anonymisé (il perd son identifiant et son pseudonyme, et ses contenus restent visibles sans nom), ou supprimé si vous l'avez choisi. Un contenu anonymisé qui permettrait malgré tout de vous identifier peut être retiré sur simple demande.
