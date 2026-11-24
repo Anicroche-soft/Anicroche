@@ -1291,8 +1291,7 @@ const construire_texte = (bloc, donnees) =>
         {
             if (!noeud._avec_deps.has(propriete)) return
 
-            // Le nœud est-il encore dans le DOM ?
-            if (!document.contains(noeud))
+            if (retire_du_document(noeud))
             {
                 desabonner()
                 return
@@ -1440,7 +1439,7 @@ const construire_balise = (bloc, donnees) =>
                 const desabonner = observer_sculpteur((propriete) =>
                 {
                     if (!noeud._avec_deps.has(propriete)) return
-                    if (!document.contains(noeud)) { desabonner(); return }
+                    if (retire_du_document(noeud)) { desabonner(); return }
                     if (en_retrait(noeud)) return
 
                     definir_noeud_courant(noeud)
@@ -1483,7 +1482,7 @@ const construire_balise = (bloc, donnees) =>
                 const desabonner = observer_sculpteur((propriete) =>
                 {
                     if (!noeud._avec_deps.has(propriete)) return
-                    if (!document.contains(noeud)) { desabonner(); return }
+                    if (retire_du_document(noeud)) { desabonner(); return }
                     if (en_retrait(noeud)) return
 
                     definir_noeud_courant(noeud)
@@ -2114,6 +2113,18 @@ const noeuds_entre = (ancre_debut, ancre_fin) =>
 
 // Un nœud en cours de retrait (ou placé dans un tel nœud) ne réagit plus aux changements de
 // variables : pendant son démontage (animation de sortie…), il garde l'état qu'il avait
+// Un nœud réactif se désabonne une fois retiré du document. Un contenu construit avant son
+// insertion (pendant le retrait d un modèle d attente, par exemple) suit déjà ses variables :
+// une valeur écrite d ici là ne doit pas être perdue. Un élément jamais monté n a pas de
+// _avec_monte ; démonté, il le garde à false
+const retire_du_document = (noeud) =>
+{
+    if (document.contains(noeud))
+        return false
+    const element = noeud.nodeType === 1 ? noeud : noeud.parentElement
+    return !element || element._avec_monte !== undefined
+}
+
 const en_retrait = (noeud) =>
 {
     for (let courant = noeud; courant; courant = courant.parentNode)
