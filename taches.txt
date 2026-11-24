@@ -1,5 +1,4 @@
 Tâches :
-- supporter le trop plein d'onglets dans la barre de navigation
 - revoir l'organisation des pages d'anicroches
 - relire et compléter les premières versions des pages légales (juridique/conditions-generales-d-utilisation.md, juridique/politique-de-confidentialite.md, juridique/mentions-legales.md : passages « À compléter », adresse d'Infomaniak à vérifier), les publier avant le lancement, et ajouter des liens vers ces pages dans le site
 - finir le préavis des pages légales (voir juridique/RGPD.md § 11, l'essentiel est fait) :

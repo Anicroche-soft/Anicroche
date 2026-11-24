@@ -1,25 +1,73 @@
 @script [
+    // L indicateur est replacé quand la barre ou ses boutons changent de taille (fenêtre,
+    // chargement de la police…) : il suit leur position réelle (voir page)
     $monter_barre_onglets = () =>
     {
-        const boutons = $node.querySelectorAll(':scope > .bouton-onglet')
-        if (!boutons.length) return
+        const indicateur = $node
+        const barre      = indicateur.closest('.barre-onglets')
+        if (!barre)
+            return
 
-        const indicateur = $node.querySelector(':scope > .indicateur')
-        if (!indicateur) return
+        const vars = $vars
+        vars.observateur_barre = new ResizeObserver(() => $placer_indicateur_onglets(indicateur))
+        vars.observateur_barre.observe(barre)
+        barre.querySelectorAll(':scope > .bouton-onglet').forEach(bouton => vars.observateur_barre.observe(bouton))
 
-        indicateur.style.width = `calc((100% - ${boutons.length - 1}rem) / ${boutons.length})`
+        // Une molette verticale fait défiler la barre quand elle déborde (un défilement
+        // horizontal, au pavé tactile par exemple, reste celui du navigateur)
+        vars.barre       = barre
+        vars.sur_molette = (evenement) =>
+        {
+            if (barre.scrollWidth <= barre.clientWidth || Math.abs(evenement.deltaY) <= Math.abs(evenement.deltaX))
+                return
+
+            evenement.preventDefault()
+            barre.scrollBy({ left: evenement.deltaY, behavior: 'instant' })
+        }
+        barre.addEventListener('wheel', vars.sur_molette, { passive: false })
+    }
+
+    $demonter_barre_onglets = () =>
+    {
+        $vars.observateur_barre?.disconnect()
+        $vars.barre?.removeEventListener('wheel', $vars.sur_molette)
     }
 ]
 
 @style [
-    .barre-onglets {
-        position: relative;
-        flex-direction: row;
+    /* Toute la hauteur de la zone, et donc de la navigation avec la marge négative de la barre,
+       quelle que soit la taille du texte : l'indicateur est placé d'après le bas de la navigation */
+    .conteneur-onglets {
+        flex: 1;
+        align-self: stretch;
+        min-width: 0;
     }
 
+    /* Les boutons se partagent la largeur à parts égales tant que leur texte y tient ; sinon,
+       chacun garde au moins la largeur de son texte, et la barre défile */
+    .barre-onglets {
+        flex: 1;
+        flex-direction: row;
+        min-width: 0;
+    }
+
+    /* Le bouton a la hauteur de la navigation : son texte y est centré */
+    .barre-onglets > .bouton-onglet {
+        flex: 1 1 0;
+        align-items: center;
+        min-width: max-content;
+    }
+
+    /* La poignée du défilement se confondrait avec l'indicateur : la barre défile à la molette,
+       au pavé tactile, au doigt, ou en cliquant sur un onglet, qui est ramené vers le centre */
+    .barre-onglets > .piste {
+        display: none;
+    }
+
+    /* Au-dessus du bas de la navigation, d'un écart égal à sa propre épaisseur */
     .barre-onglets > .indicateur {
         position: absolute;
-        bottom: -0.875rem;
+        bottom: 0.25rem;
         left: 0rem;
 
         height: 0.25rem;
@@ -30,6 +78,11 @@
     }
 ]
 
-<nav .barre-onglets @mount="$monter_barre_onglets()">
-    @stud
-    <div .indicateur>
+<nav .conteneur-onglets>
+    defilement.barre-onglets [horizontal]
+        @stud
+        <div
+            .indicateur
+            @mount="$monter_barre_onglets()"
+            @unmount="$demonter_barre_onglets()"
+        >

@@ -28,23 +28,13 @@
             $retenir_onglet($path)
         marquer_onglet_actif(noeud, n_initial || 1, vars)
         atteindre_ancre(noeud, vars)
+        placer_indicateur(noeud)
 
         noeud.addEventListener('scroll', () =>
         {
             const ratio = noeud.scrollLeft / (noeud.scrollWidth - noeud.clientWidth)
 
-            const barre = noeud.querySelector(':scope .barre-onglets')
-            if (barre)
-            {
-                const boutons = barre.querySelectorAll(':scope > .bouton-onglet')
-                const indicateur = barre.querySelector(':scope > .indicateur')
-
-                if (indicateur)
-                {
-                    const nb = boutons.length
-                    indicateur.style.left = `calc((100% - ${nb - 1}rem) / ${nb} * ${ratio * (nb - 1)} + ${ratio * (nb - 1)}rem)`
-                }
-            }
+            placer_indicateur(noeud)
 
             const onglets = noeud.querySelectorAll(':scope > .onglet')
             const n = Math.round(ratio * (onglets.length - 1)) + 1
@@ -203,6 +193,43 @@
         $navigate_to(adresse, true)
     }
 
+    // Indicateur sous le bouton de l onglet affiché, à sa position et à sa largeur réelles :
+    // pendant le défilement de la page, il glisse d un bouton à l autre, en changeant de largeur.
+    // Quand les onglets ne tiennent pas dans la barre, celle-ci défile en même temps pour garder
+    // l indicateur vers son centre (sans animation propre : elle suit la page)
+    const placer_indicateur = (page) =>
+    {
+        const barre      = page.querySelector(':scope .barre-onglets')
+        const indicateur = barre?.querySelector(':scope > .indicateur')
+        const boutons    = barre ? [...barre.querySelectorAll(':scope > .bouton-onglet')] : []
+        if (!indicateur || !boutons.length)
+            return
+
+        const defilement_max = page.scrollWidth - page.clientWidth
+        const position       = defilement_max > 0 ? page.scrollLeft / defilement_max * (boutons.length - 1) : 0
+        const i              = Math.min(Math.floor(position), boutons.length - 1)
+        const part           = position - i
+        const depart         = boutons[i]
+        const arrivee        = boutons[Math.min(i + 1, boutons.length - 1)]
+
+        const gauche  = depart.offsetLeft + (arrivee.offsetLeft - depart.offsetLeft) * part
+        const largeur = depart.offsetWidth + (arrivee.offsetWidth - depart.offsetWidth) * part
+
+        indicateur.style.left  = `${gauche}px`
+        indicateur.style.width = `${largeur}px`
+
+        if (barre.scrollWidth > barre.clientWidth)
+            barre.scrollTo({ left: gauche + largeur / 2 - barre.clientWidth / 2, behavior: 'instant' })
+    }
+
+    // Pour la barre d onglets, quand ses boutons changent de taille (voir barre-onglets)
+    $placer_indicateur_onglets = (noeud) =>
+    {
+        const page = noeud.closest('.page')
+        if (page)
+            placer_indicateur(page)
+    }
+
     const marquer_onglet_actif = (page, n, vars = null) =>
     {
         const boutons_onglets = page.querySelectorAll(':scope .bouton-onglet')
@@ -221,17 +248,22 @@
 
             if (actif && vars)
             {
-                if (vars.onglet_actif && vars.onglet_actif !== onglet)
-                    vars.onglet_actif.removeEventListener('scroll', vars.sur_scroll_onglet)
-
-                vars.onglet_actif = onglet
-
-                vars.sur_scroll_onglet = () =>
+                // L écouteur n est attaché qu une fois par onglet, et non à chaque appel (chaque
+                // événement de défilement de la page)
+                if (vars.onglet_actif !== onglet)
                 {
-                    $actualiser_defilement(onglet.scrollTop > 0 ? `interieur` : `sommet`)
-                }
+                    if (vars.onglet_actif)
+                        vars.onglet_actif.removeEventListener('scroll', vars.sur_scroll_onglet)
 
-                onglet.addEventListener('scroll', vars.sur_scroll_onglet)
+                    vars.onglet_actif = onglet
+
+                    vars.sur_scroll_onglet = () =>
+                    {
+                        $actualiser_defilement(onglet.scrollTop > 0 ? `interieur` : `sommet`)
+                    }
+
+                    onglet.addEventListener('scroll', vars.sur_scroll_onglet)
+                }
 
                 $actualiser_defilement(onglet.scrollTop > 0 ? `interieur` : `sommet`)
             }

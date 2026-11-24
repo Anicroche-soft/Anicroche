@@ -89,8 +89,10 @@
         justify-content: flex-start;
     }
 
+    /* Le centre peut être plus étroit que son contenu : une barre d'onglets trop large défile */
     .navigation .centre {
         flex: 1;
+        min-width: 0;
         justify-content: center;
     }
 
