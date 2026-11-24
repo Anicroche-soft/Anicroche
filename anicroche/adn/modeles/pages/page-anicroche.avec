@@ -159,6 +159,7 @@
 @else
     $titre       = $anicroche.titre
     $description = $description_anicroche
+    $puce        = accueil
 
     page
         navigation

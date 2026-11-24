@@ -34,11 +34,13 @@
     }
 ]
 
-@args [$adresse, $alt : '', $etendue : :(]
+@args [$adresse, $alt : '', $etendue : :(, $actif : :(]
 
 <a
     .boite-ancre
     [$etendue] ? .etendue
+    [$actif] ? .actif
+    [$actif] ? aria-current="page"
     href="$adresse"
 >
     @if [$alt != '']

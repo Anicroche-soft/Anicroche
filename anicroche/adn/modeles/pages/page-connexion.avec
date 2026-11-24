@@ -21,6 +21,7 @@
 ]
 
 $titre = "Connexion"
+$puce  = profil
 
 page [:(, $authentification : interdite]
     navigation

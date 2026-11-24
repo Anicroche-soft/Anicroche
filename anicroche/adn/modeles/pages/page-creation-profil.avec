@@ -1,4 +1,5 @@
 $titre = "Création de profil"
+$puce  = profil
 
 page [$authentification : requise_sans_profil]
     navigation

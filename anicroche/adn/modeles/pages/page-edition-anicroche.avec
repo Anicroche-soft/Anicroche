@@ -318,6 +318,7 @@
 ]
 
 $titre = [$type_edition] ? "Édition : $type_edition.libelle" : "Édition"
+$puce  = creer
 
 page [$authentification : requise_sans_profil]
     navigation

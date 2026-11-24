@@ -21,6 +21,7 @@
 ]
 
 $titre = "Restauration du compte"
+$puce  = profil
 
 page [$authentification : ouverte]
     navigation

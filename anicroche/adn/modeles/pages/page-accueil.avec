@@ -1,3 +1,5 @@
+$puce = accueil
+
 page
     navigation
         <div .centre>

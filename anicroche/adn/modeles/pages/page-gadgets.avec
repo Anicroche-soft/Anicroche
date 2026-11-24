@@ -1,4 +1,5 @@
 $titre = "Gadgets"
+$puce  = gadgets
 
 page
     navigation

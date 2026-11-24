@@ -10,6 +10,7 @@
 ]
 
 $titre = "Édition de profil"
+$puce  = profil
 
 page [$authentification : requise]
     navigation

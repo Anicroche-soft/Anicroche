@@ -15,6 +15,19 @@
         display: none;
     }
 
+    #menu > .boite-ancre.actif {
+        --c-flux: var(--c-moins);
+    }
+
+    /* La couleur se calcule sur chaque élément à partir de --c-flux, hérité sans transition */
+    #menu > .boite-ancre span {
+        transition: color var(--d-animation);
+    }
+
+    #menu > .boite-ancre path {
+        transition: stroke var(--d-animation);
+    }
+
     .petit #menu {
         justify-content: flex-end;
 
@@ -28,39 +41,39 @@
 ]
 
 <nav #menu>
-    boite-ancre [/, Accueil]
+    boite-ancre [/, Accueil, $actif : [$puce = accueil] ? :)]
         icone-maison
         <span>
             "Accueil"
 
-    boite-ancre [/explorer, Explorer]
+    boite-ancre [/explorer, Explorer, $actif : [$puce = explorer] ? :)]
         icone-arc
         <span>
             "Explorer"
 
-    boite-ancre [/creer, Créer]
+    boite-ancre [/creer, Créer, $actif : [$puce = creer] ? :)]
         icone-baguette
         <span>
             "Créer"
 
-    boite-ancre [/gadgets, Gadgets]
+    boite-ancre [/gadgets, Gadgets, $actif : [$puce = gadgets] ? :)]
         icone-aimant
         <span>
             "Gadgets"
 
     # Un compte dont l'effacement est demandé n'a accès qu'à la page du compte
     @if [$connecte & ! $compte_actif]
-        boite-ancre [/compte, Compte]
+        boite-ancre [/compte, Compte, $actif : [$puce = profil] ? :)]
             icone-masque
             <span>
                 "Compte"
     @else-if [$connecte]
-        boite-ancre [/profil, Profil]
+        boite-ancre [/profil, Profil, $actif : [$puce = profil] ? :)]
             icone-masque
             <span>
                 "Profil"
     @else
-        boite-ancre [/connexion, Profil]
+        boite-ancre [/connexion, Profil, $actif : [$puce = profil] ? :)]
             icone-masque
             <span>
                 "Connexion"

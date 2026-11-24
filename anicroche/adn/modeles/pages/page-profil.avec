@@ -1,4 +1,5 @@
 $titre = [$path = '/compte'] ? "Compte" : "Profil"
+$puce  = profil
 
 page [$authentification : requise, $page_compte : :)]
     navigation

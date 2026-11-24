@@ -19,6 +19,7 @@
 ]
 
 $titre = "Édition de compte"
+$puce  = profil
 
 page [:(, $authentification : requise_sans_profil]
     navigation

@@ -8,6 +8,10 @@
     // Titre propre à la page, affecté par chaque page (voir $title plus bas)
     $titre = null
 
+    // Puce du menu dont relève la page (accueil, explorer, creer, gadgets, profil), affectée
+    // par chaque page
+    $puce = null
+
     const actualiser_format = () =>
     {
         const w = window.innerWidth
