@@ -1,4 +1,5 @@
 import {lire_variable} from "./sculpteur.js"
+import {appeler_depuis_texte} from "./augure.js"
 
 const est_debut_identifiant = (caractere) => /[A-Za-z_]/.test(caractere)
 const est_suite_identifiant = (caractere) => /[\w]/.test(caractere)
@@ -140,6 +141,15 @@ const lire_interpolation = (str, depart, donnees) =>
                 return { trouve: true, fin: pos, valeur: str.slice(debut, pos) }
 
             valeur = resolution.valeur
+            continue
+        }
+
+        // Appel, seulement si la valeur est une fonction : "$total(s)" reste un texte
+        if (str[pos] === '(' && typeof valeur === 'function')
+        {
+            const appel = appeler_depuis_texte(valeur, str, pos, donnees)
+            valeur = appel.valeur
+            pos    = appel.fin
             continue
         }
 

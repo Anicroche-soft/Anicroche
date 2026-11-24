@@ -227,6 +227,12 @@ const valider_bloc_avec = (bloc, str, pos, fichier) =>
             if (bloc.enfants.length <= 0)
                 erreur(`${bloc.args[0]} doit avoir au moins un enfant`, fichier, str, pos)
         }
+        else if (bloc.args[0] == `@model`)
+        {
+            if (bloc.args.length < 2 || bloc.args.length > 3
+             || !bloc.args.slice(1).every(arg => arg.startsWith('[') && arg.endsWith(']')))
+                erreur(`${bloc.args[0]} doit avoir un ou deux arguments : ${bloc.args[0]} [nom] ([argument_1, argument_2])`, fichier, str, pos)
+        }
         else if (bloc.args[0] == `@static`)
         {
             if (bloc.args.length != 1)

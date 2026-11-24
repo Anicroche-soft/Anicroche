@@ -40,8 +40,10 @@
     }
 ]
 
+# Chaque puce mène à une page par le nom de sa route (app.adn) : la puce Profil ramène au dernier
+# onglet affiché (profil ou compte). Explorer et Créer n'ont pas encore de page
 <nav #menu>
-    boite-ancre [/, Accueil, $actif : [$puce = accueil] ? :)]
+    boite-ancre [accueil, Accueil, $actif : [$puce = accueil] ? :)]
         icone-maison
         <span>
             "Accueil"
@@ -56,7 +58,7 @@
         <span>
             "Créer"
 
-    boite-ancre [/gadgets, Gadgets, $actif : [$puce = gadgets] ? :)]
+    boite-ancre [gadgets, Gadgets, $actif : [$puce = gadgets] ? :)]
         icone-aimant
         <span>
             "Gadgets"
@@ -68,12 +70,12 @@
             <span>
                 "Compte"
     @else-if [$connecte]
-        boite-ancre [/profil, Profil, $actif : [$puce = profil] ? :)]
+        boite-ancre [profil, Profil, $actif : [$puce = profil] ? :)]
             icone-masque
             <span>
                 "Profil"
     @else
-        boite-ancre [/connexion, Profil, $actif : [$puce = profil] ? :)]
+        boite-ancre [connexion, Profil, $actif : [$puce = profil] ? :)]
             icone-masque
             <span>
                 "Connexion"

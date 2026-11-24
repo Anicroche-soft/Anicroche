@@ -13,3 +13,27 @@ pages : {
     /sitemap.xml : { model : sitemap, type : xml,  cache : 10m }
     /robots.txt  : { model : robots,  type : text, cache : 1h }
 }
+
+routes : {
+    accueil             : { path : /,                     model : page-accueil }
+    gadgets             : { path : /gadgets,              model : page-gadgets }
+    connexion           : { path : /connexion,            model : page-connexion }
+    profil              : { path : [/profil, /compte],    model : page-profil }
+    creation_profil     : { path : /profil/creation,      model : page-creation-profil }
+    selection_profil    : { path : /profil/selection,     model : page-selection-profil }
+    edition_profil      : { path : /profil/edition,       model : page-edition-profil }
+    edition_compte      : { path : /compte/edition,       model : page-edition-compte }
+    suppression_compte  : { path : /compte/suppression,   model : page-suppression-compte }
+    export_donnees      : { path : /compte/export,        model : page-export-donnees }
+    restauration_compte : { path : /compte/restauration,  model : page-restauration-compte }
+    chargement          : { path : /chargement,           model : page-chargement }
+    edition_anicroche   : { path : "/<$anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->/edition", model : page-edition-anicroche }
+    anicroche           : {
+        path  : [
+            "/<$anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->"
+            "/<$anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->/<$version :+ 0123456789>"
+        ]
+        model : page-anicroche
+    }
+    introuvable         : { model : page-404 }
+}

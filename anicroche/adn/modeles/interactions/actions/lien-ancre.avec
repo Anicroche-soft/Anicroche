@@ -16,6 +16,9 @@
     }
 ]
 
+# $adresse : une adresse (/compte, https://…), lien précis, ou le nom d'une route à adresse fixe
+# ($routes, dans app.adn) : le lien mène alors à son adresse actuelle, celle de son dernier onglet
+# affiché pour une page dont les onglets ont chacun leur adresse (profil : /profil ou /compte)
 @args [
     $adresse
     $nouvel_onglet : :(
@@ -23,7 +26,7 @@
 
 <a
     .lien-ancre
-    href="$adresse"
+    [$adresses_pages }- $adresse] ? href="$adresses_pages[$adresse]" : href="$adresse"
     [$nouvel_onglet] ? target="_blank"
     [$nouvel_onglet] ? rel="noopener"
 >

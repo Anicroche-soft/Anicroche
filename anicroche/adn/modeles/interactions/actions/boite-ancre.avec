@@ -34,6 +34,9 @@
     }
 ]
 
+# $adresse : une adresse (/compte, https://…), lien précis, ou le nom d'une route à adresse fixe
+# ($routes, dans app.adn) : le lien mène alors à son adresse actuelle, celle de son dernier onglet
+# affiché pour une page dont les onglets ont chacun leur adresse (profil : /profil ou /compte)
 @args [$adresse, $alt : '', $etendue : :(, $actif : :(]
 
 <a
@@ -41,7 +44,7 @@
     [$etendue] ? .etendue
     [$actif] ? .actif
     [$actif] ? aria-current="page"
-    href="$adresse"
+    [$adresses_pages }- $adresse] ? href="$adresses_pages[$adresse]" : href="$adresse"
 >
     @if [$alt != '']
         alt

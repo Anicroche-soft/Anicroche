@@ -1,4 +1,5 @@
 import { initialiser_sculpteur, definir_variable_racine } from './sculpteur.js'
+import { correspondre_motif } from './augure.js'
 
 const historique = []
 
@@ -69,6 +70,10 @@ export const initialiser_navigateur = () =>
             history.back()
         }
     })
+
+    // Correspondance de ~= pour les scripts : captures du motif ({ id : "42" }, {} sans
+    // capture), ou null si le texte n y correspond pas
+    definir_variable_racine(`$match`, (texte, motif) => correspondre_motif(texte, motif))
 
     definir_variable_racine(`$navigate_prev`, () => {
         history.back()

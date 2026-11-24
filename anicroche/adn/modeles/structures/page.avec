@@ -24,6 +24,8 @@
         }
 
         $chemin_onglets = $path
+        if (n_initial)
+            $retenir_onglet($path)
         marquer_onglet_actif(noeud, n_initial || 1, vars)
         atteindre_ancre(noeud, vars)
 
@@ -69,6 +71,9 @@
         $chemin_onglets = $path
 
         const n = onglet_de_l_adresse(page)
+        if (n)
+            $retenir_onglet($path)
+
         const onglets = page.querySelectorAll(':scope > .onglet')
         if (n && !onglets[n - 1].classList.contains('actif'))
             $basculer_vers_onglet(n, page)
@@ -194,6 +199,7 @@
             return
 
         $chemin_onglets = adresse
+        $retenir_onglet(adresse)
         $navigate_to(adresse, true)
     }
 

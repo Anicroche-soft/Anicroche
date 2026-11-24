@@ -1,5 +1,6 @@
 @script [
-    // Deux formes d adresse pour une anicroche :
+    // Deux formes d adresse pour une anicroche (motifs des routes anicroche et edition_anicroche,
+    // dans app.adn) :
     // - un identifiant lisible en minuscules, tel quel : /conditions-generales-d-utilisation
     // - un identifiant en majuscules et chiffres, découpé en groupes de trois : /AB1-C2D
     // Renvoie l identifiant, ou null si le chemin ne correspond à aucune des deux formes
@@ -12,61 +13,37 @@
         return null
     }
 
+    // Route d une adresse, d après routes dans app.adn : la première, dans leur ordre, dont un
+    // motif (path, adresse ou liste d adresses, écrites comme pour ~=) correspond ; une route
+    // sans path correspond à toute adresse. Renvoie la route avec son nom (name) et ses
+    // captures (params), ou null
+    $trouver_route = (chemin) =>
+    {
+        for (const [nom, route] of Object.entries($routes ?? {}))
+        {
+            const motifs = route.path === undefined ? null : [route.path].flat()
+            const params = motifs
+                ? motifs.reduce((trouve, motif) => trouve ?? $match(chemin, motif), null)
+                : {}
+            if (params)
+                return { ...route, name: nom, params }
+        }
+        return null
+    }
+
     // La page n est choisie qu une fois le démarrage terminé : le modèle d attente de l appel
     // (corps) reste affiché jusqu à la page demandée, données comprises
     await $demarrage
 ]
 
-@if [$path ~= '/']
-    -page-accueil
+$route = $trouver_route($path)
 
-@else-if [$path ~= '/gadgets']
-    -page-gadgets
-
-@else-if [$path ~= '/connexion']
-    -page-connexion
-
-# Une page dont les onglets ont chacun leur adresse
-@else-if [$path ~{ ['/profil', '/compte']]
-    -page-profil
-
-@else-if [$path ~= '/profil/creation']
-    -page-creation-profil
-
-@else-if [$path ~= '/profil/selection']
-    -page-selection-profil
-
-@else-if [$path ~= '/profil/edition']
-    -page-edition-profil
-
-@else-if [$path ~= '/compte/edition']
-    -page-edition-compte
-
-@else-if [$path ~= '/compte/suppression']
-    -page-suppression-compte
-
-@else-if [$path ~= '/compte/export']
-    -page-export-donnees
-
-@else-if [$path ~= '/compte/restauration']
-    -page-restauration-compte
-
-@else-if [$path ~= '/chargement']
-    -page-chargement
-
-# Anicroches : identifiant lisible en minuscules, ou majuscules et chiffres par groupes de trois
-# Une même page pour une autre anicroche ou une autre version est reconstruite (@key), avec
-# la transition d un changement de page
-@else-if [$path ~= '/<$chemin_anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->/edition']
-    @key [$path]
-        -page-edition-anicroche
-
-@else-if [$path ~{ ['/<$chemin_anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->', '/<$chemin_anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->/<$version_anicroche :+ 0123456789>']]
-    @key [$path]
-        -page-anicroche
-
-@else
-    -page-404
+# La page est le modèle de la route de l'adresse (la route introuvable reçoit toute autre
+# adresse). Elle est reconstruite, avec la transition d'un changement de page, quand la route
+# change, ou ses captures (une autre anicroche, une autre version) ; elle reste en place d'une
+# adresse à l'autre d'une même route (/profil et /compte)
+@key [[$route.name, $route.params]]
+    @model ["-$route.model"]
 
 ?page-chargement
 !page-404

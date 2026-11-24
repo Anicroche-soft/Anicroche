@@ -12,6 +12,40 @@
     // par chaque page
     $puce = null
 
+    // Route de l adresse (voir routeur), déclarée ici pour que le menu et les pages la voient
+    $route = null
+
+    // Adresse actuelle de chaque page à adresse fixe ($routes, dans app.adn), par le nom de sa
+    // route : celle de son dernier onglet affiché pour une page dont les onglets ont chacun leur
+    // adresse, sinon son adresse. Une ancre vers un nom de route y prend son adresse (voir
+    // boite-ancre). Les routes à captures (anicroches) et sans adresse (introuvable) n y sont pas
+    $adresses_pages = {}
+
+    const adresses_route = (route) => route?.path === undefined ? [] : [route.path].flat()
+
+    $oublier_onglets = () =>
+    {
+        $adresses_pages = Object.fromEntries(
+            Object.entries($routes ?? {})
+                .map(([nom, route]) => [nom, adresses_route(route)])
+                .filter(([nom, adresses]) => adresses.length && !adresses.some(adresse => adresse.includes('<$')))
+                .map(([nom, adresses]) => [nom, adresses[0]])
+        )
+    }
+
+    // Retient l adresse d un onglet affiché, si elle est l une de celles d une route à plusieurs
+    // adresses
+    $retenir_onglet = (adresse) =>
+    {
+        const nom = Object.keys($adresses_pages).find(nom =>
+            adresses_route($routes[nom]).length > 1 && adresses_route($routes[nom]).includes(adresse))
+
+        if (nom && $adresses_pages[nom] !== adresse)
+            $adresses_pages = { ...$adresses_pages, [nom]: adresse }
+    }
+
+    $oublier_onglets()
+
     const actualiser_format = () =>
     {
         const w = window.innerWidth

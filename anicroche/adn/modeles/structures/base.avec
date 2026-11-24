@@ -243,6 +243,7 @@
         {
             $jeton_acces = null
             localStorage.removeItem('id_profil')
+            $oublier_onglets()
         }
 
         if (data && data.est_connecte !== undefined)

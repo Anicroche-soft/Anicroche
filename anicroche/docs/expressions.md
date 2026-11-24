@@ -42,6 +42,7 @@ Si une variable n'existe dans aucun parent, l'affectation crée la variable dans
 | `$navigate_prev` | fonction | Reproduit la flèche "retour" du navigateur (`$navigate_prev()`) |
 | `$navigate_post` | fonction | Reproduit la flèche "suivant" du navigateur (`$navigate_post()`) |
 | `$history` | fonction | Retourne une entrée de l'historique interne (`$history()`, `$history(1)`, `$history(2)`) |
+| `$match` | fonction | Correspondance de motif de [`~=`](#correspondance-de-motif-) pour les scripts : `$match('/article/42', '/article/<$id>')` renvoie les captures (`{ id : "42" }`, `{}` sans capture), ou `null` si le texte ne correspond pas. Rien n'est écrit dans les variables |
 | `$title` | texte ou `:o` | Titre de la page (`<title>`) ; `:o` : `name` de la clef `config` d'`app.adn` |
 | `$description` | texte ou `:o` | Description de la page (`<meta name="description">`) ; `:o` : `description` de la clef `config` d'`app.adn` |
 | `$status` | nombre ou `:o` | Code HTTP de la page construite par le serveur (`:o` : 200) ; sans effet dans le navigateur |
@@ -130,6 +131,32 @@ Les variables de type liste ou dictionnaire supportent l'accès à leurs éléme
 @if [$liste[0] = "premier"]
 ```
 
+### Appels de fonctions
+
+Une variable qui contient une fonction (déclarée dans un `@script`, ou fournie par le cadriciel) peut être appelée dans une expression, comme dans un texte, avec ses arguments entre parenthèses, collées à son nom :
+
+```
+@script [
+    $formater_prix = (prix) => `${prix.toFixed(2)} €`
+    $outils = { majuscules: (texte) => texte.toUpperCase() }
+]
+
+$route = $trouver_route($path)
+
+@if [$est_legale($anicroche) & ! $soumise_au_preavis($anicroche)]
+
+"Total : $formater_prix($total)"
+
+"$outils.majuscules($nom)"
+```
+
+- Les arguments sont des expressions, séparés par des virgules.
+- Comme toute expression, l'appel est réévalué quand une variable dont il dépend change : celles de ses arguments, et celles que la fonction lit elle-même (`$profil` dans `(nom) => $profil.role === nom`).
+- La fonction est exécutée à chaque évaluation : elle doit rendre un résultat sans rien modifier, et sans attendre (une promesse n'est pas attendue).
+- Une fonction qui ne renvoie rien donne `:o` ; une erreur dans la fonction (affichée dans la console), ou une variable qui n'est pas une fonction, donne `:x`.
+- Dans un texte, des parenthèses qui suivent une variable qui n'est pas une fonction restent du texte : `"$quantite(s)"` affiche `3(s)`.
+- Les arguments d'un [appel de modèle](modeles.md#passer-une-fonction-en-argument) gardent leur règle : `[$fn($a)]` y passe une fonction à appeler plus tard, et non son résultat.
+
 ---
 
 ## Littéraux
@@ -144,6 +171,8 @@ Les variables de type liste ou dictionnaire supportent l'accès à leurs éléme
 | Null | `:o` | `@if [:o]` |
 | Liste | `[elem1, elem2, …]` | `[1, 2, 3]`, `["a", "b"]` |
 | Dictionnaire | `{clef: valeur, …}` | `{nom: "Alice", age: 30}` |
+
+Un élément de liste ou une valeur de dictionnaire peut être une expression (`[$id, $page]`, `{nom: $profil.nom}`) : elle est évaluée à chaque lecture du littéral, et ses variables sont suivies comme ailleurs. Un élément qui est une simple valeur reste tel quel, sans interpolation : un motif `'/article/<$id>'` d'une liste passée à [`~{`](#correspondance-avec-une-liste-de-motifs--) n'est pas modifié par la variable `$id`.
 
 Dans le moteur, ces littéraux sont évalués comme des valeurs natives JavaScript: `:)` / `:(` deviennent `true` / `false`, `:o` devient `null`, et la syntaxe reste propre au langage d'expressions.
 

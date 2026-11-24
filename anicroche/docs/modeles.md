@@ -274,7 +274,59 @@ Reconstruit son contenu chaque fois que la **valeur** de son expression change. 
         page-article
 ```
 
-La valeur peut être une liste ou un dictionnaire (`@key [[$id, $page]]`) : deux valeurs de même contenu sont égales. Un changement survenu pendant une reconstruction en déclenche une seule autre, à la fin de celle-ci. Comme les conditionnelles, `@key` n'est pas réactif sous `@static`.
+La valeur peut être une liste ou un dictionnaire (`@key [[$id, $page]]`) : deux valeurs de même contenu sont égales. Un changement survenu pendant une reconstruction en déclenche une seule autre, à la fin de celle-ci. La reconstruction attend la fin des réactions au changement : si un bloc englobant qui en dépend aussi la retire (un `@model` dans un `@key`), le contenu n'est construit qu'une fois, par ce bloc. Comme les conditionnelles, `@key` n'est pas réactif sous `@static`.
+
+### `@model`
+
+Construit le modèle dont une expression donne le nom, éventuellement avec des arguments (même syntaxe qu'un [appel de modèle](#appels-de-modèles)) et des enfants (pour `@stud`) :
+
+```
+@model [$type_carte] [$titre : "Mon titre", $description]
+    "Contenu injecté dans @stud"
+
+@model ["-$route.model"]
+```
+
+- Le nom s'écrit comme dans un appel ordinaire, [suffixes de classe](#suffixe-de-classe) compris (`"carte.$taille"`). Seul le préfixe `-` est permis : il charge le modèle comme un [modèle différé](#types-de-chargement), avec les modèles d'attente (`?nom`) et de repli (`!nom`) du bloc.
+- Sans `-`, le modèle doit déjà être chargé, ce que le cadriciel ne peut pas faire d'avance pour un nom calculé : c'est le cas d'un modèle appelé ailleurs, sans `-`, par un modèle déjà affiché, ou déclaré comme modèle d'attente ou de repli. Sinon, rien n'est construit et la console l'indique.
+- Le modèle est reconstruit, comme avec [`@key`](#key), quand le nom change.
+- Un nom nul, vide ou absent (`$route.model` sans route) ne construit rien ; un nom qui n'est pas un nom de modèle est signalé dans la console.
+
+Associé à une fonction qui choisit la page selon l'adresse, il remplace la chaîne de conditions d'un routeur. Par exemple, avec une liste de pages dans `app.adn` (clef libre, ici `pages_site`) :
+
+```
+# app.adn
+pages_site : [
+    { path : /,                               model : page-accueil }
+    { path : "/article/<$id :+ 0123456789>",  model : page-article }
+    { model : page-404 }
+]
+```
+
+```
+@script [
+    // Première page dont le motif correspond (sans path : toute adresse), avec ses captures
+    $trouver_page = (chemin) =>
+    {
+        for (const page of $pages_site)
+        {
+            const params = page.path === undefined ? {} : $match(chemin, page.path)
+            if (params)
+                return { ...page, params }
+        }
+        return null
+    }
+]
+
+$page = $trouver_page($path)
+
+# Reconstruite quand la page ou ses captures changent (un autre article)
+@key [[$page.model, $page.params]]
+    @model ["-$page.model"]
+
+?page-chargement
+!page-404
+```
 
 ### `@static`
 

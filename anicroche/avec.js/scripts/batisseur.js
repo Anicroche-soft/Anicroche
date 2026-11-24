@@ -768,6 +768,10 @@ const construire_enfants = (bloc, donnees) =>
                 enfants.push(...construire_cle(enfant, static_direct ? { ...donnees, static_direct: true } : donnees))
                 elsable = false
                 break
+            case `@model`:
+                enfants.push(...construire_modele_dynamique(enfant, static_direct ? { ...donnees, static_direct: true } : donnees))
+                elsable = false
+                break
             case `@static`:
                 const donnees_static = { ...donnees, static_direct: true }
                 enfants.push(...construire_enfants({ enfants: enfant.enfants }, donnees_static))
@@ -969,12 +973,14 @@ const empreinte_cle = (valeur) =>
 }
 
 // Construit un bloc @key : son contenu est démonté puis reconstruit chaque fois que la valeur
-// de la clef change, même si le reste ne change pas (une même page pour une autre adresse)
-const construire_cle = (bloc, donnees) =>
+// de la clef change, même si le reste ne change pas (une même page pour une autre adresse).
+// construire_contenu remplace la construction des enfants (voir @model)
+const construire_cle = (bloc, donnees, construire_contenu = null, nom_ancre = `@key`) =>
 {
-    const ancre_debut = document.createComment(`@key`)
-    const ancre_fin   = document.createComment(`/@key`)
+    const ancre_debut = document.createComment(nom_ancre)
+    const ancre_fin   = document.createComment(`/${nom_ancre}`)
     const expression  = decapsuler(bloc.args[1])
+    const construire  = construire_contenu ?? (() => construire_enfants(bloc, donnees))
 
     // Les dépendances sont relevées à chaque lecture, comme pour une condition
     const lire_cle = () =>
@@ -986,7 +992,7 @@ const construire_cle = (bloc, donnees) =>
     }
 
     let cle_active = lire_cle()
-    const noeuds_actifs = construire_enfants(bloc, donnees)
+    const noeuds_actifs = construire()
 
     if (donnees.static_direct || !(ancre_debut._avec_deps?.size > 0))
         return [ancre_debut, ...noeuds_actifs, ancre_fin]
@@ -1000,7 +1006,7 @@ const construire_cle = (bloc, donnees) =>
 
         await vider_entre_ancres(ancre_debut, ancre_fin)
 
-        const nouveaux_noeuds = construire_enfants(bloc, donnees)
+        const nouveaux_noeuds = construire()
         ancre_fin.before(...nouveaux_noeuds)
 
         queueMicrotask(() => {
@@ -1038,12 +1044,62 @@ const construire_cle = (bloc, donnees) =>
         cle_active = nouvelle_cle
 
         if (transition_en_cours)
+        {
             reconstruction_en_attente = true
-        else
+            return
+        }
+
+        // La reconstruction attend la fin des réactions à ce changement : un bloc englobant qui
+        // y réagit aussi (un @model dans un @key, abonné avant lui) le met en retrait, et le
+        // contenu n est alors construit qu une fois, par ce bloc englobant
+        transition_en_cours = true
+        queueMicrotask(() =>
+        {
+            if (!ancre_debut.parentNode || en_retrait(ancre_debut))
+            {
+                transition_en_cours       = false
+                reconstruction_en_attente = false
+                return
+            }
             reconstruire()
+        })
     })
 
     return [ancre_debut, ...noeuds_actifs, ancre_fin]
+}
+
+// Construit un bloc @model [nom] [arguments] : le modèle dont l expression donne le nom, écrit
+// comme dans un appel ordinaire (classes comprises), reconstruit quand ce nom change. Un nom
+// précédé de - est chargé comme un modèle différé (modèles d attente et de repli du bloc
+// compris) ; sans -, le modèle doit déjà être chargé. Un nom vide ou nul ne construit rien
+const construire_modele_dynamique = (bloc, donnees) =>
+{
+    const expression = decapsuler(bloc.args[1])
+
+    const construire = () =>
+    {
+        // Une valeur absente (:x, comme $route.model sans route) ne construit rien non plus
+        const nom_complet = evaluer_valeur(expression, donnees)
+        if ([null, undefined, ``, `:x`].includes(nom_complet))
+            return []
+        if (typeof nom_complet !== `string` || !/^-?[a-zA-Z][\w-]*(\.[\w-]+)*$/.test(nom_complet))
+        {
+            console.error(`@model : nom de modèle invalide (${String(nom_complet)}) ; seul - peut le précéder`)
+            return []
+        }
+
+        const nom = extraire_modele_et_classes(nom_complet.replace(/^-/, ``)).nom
+        if (!nom_complet.startsWith(`-`) && !donnees.dependances[nom])
+        {
+            console.error(`@model : le modèle ${nom} n'est pas chargé ; un appel différé (-${nom}) le charge`)
+            return []
+        }
+
+        const args = bloc.args[2] ? [bloc.args[2]] : []
+        return construire_modele({ type: `modele`, args: [nom_complet, ...args], enfants: bloc.enfants }, donnees)
+    }
+
+    return construire_cle(bloc, donnees, construire, `@model`)
 }
 
 const normaliser_iteration = (valeur, operateur) =>

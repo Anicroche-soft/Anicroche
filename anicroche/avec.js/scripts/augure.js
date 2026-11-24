@@ -81,6 +81,46 @@ const decouper_haut_niveau = (str, separateurs) =>
     return parties
 }
 
+// Position de la parenthèse qui ferme celle de debut (fin de la chaîne si elle manque), en
+// sautant les chaînes et les blocs imbriqués
+const trouver_fermeture = (str, debut) =>
+{
+    const ouvrants = { '(':')', '[':']', '{':'}', '"':'"', "'":"'", '`':'`' }
+    let blocs = ``
+    for (let pos = debut; pos < str.length; pos++)
+    {
+        const c = str[pos]
+        const dans_chaine = /^["'`]$/.test(blocs.slice(-1))
+
+        if (dans_chaine && c === '\\')
+            pos++
+        else if (c === blocs.slice(-1))
+        {
+            blocs = blocs.slice(0, -1)
+            if (blocs === ``)
+                return pos
+        }
+        else if (c in ouvrants && !dans_chaine)
+            blocs += ouvrants[c]
+    }
+    return str.length
+}
+
+// Appel d une fonction interpolée dans un texte ("$formater_date($date)") : debut est la position
+// de la parenthèse ouvrante. Renvoie la valeur (:x en cas d erreur) et la position qui suit l appel
+export const appeler_depuis_texte = (fonction, str, debut, donnees) =>
+{
+    const fin = trouver_fermeture(str, debut)
+    const valeur = evaluer_noeud({
+        type   : 'appel',
+        cible  : { type: 'valeur', valeur: fonction },
+        args   : str.slice(debut + 1, fin).trim() === ''
+            ? []
+            : decouper_haut_niveau(str.slice(debut + 1, fin), new Set([','])).map(arg => parser(tokeniser(arg.trim())))
+    }, donnees)
+    return { valeur, fin: Math.min(fin + 1, str.length) }
+}
+
 // ============================================================
 // Lexer
 // ============================================================
@@ -107,6 +147,41 @@ const OPERATEURS_REGLES = {
     ')': { avant: TOUS, apres: [')'] },
     '!': { avant: ['('], apres: AUCUN },
     '_': { avant: ['('], apres: AUCUN },
+}
+
+// Élément d une liste ou d un dictionnaire littéral qui est une expression ([$id, $page],
+// {nom: $nom}) : évalué à chaque lecture du littéral
+class ElementDynamique
+{
+    constructor(ast) { this.ast = ast }
+}
+
+const contient_dynamique = (valeur) =>
+    valeur instanceof ElementDynamique
+    || (Array.isArray(valeur) && valeur.some(contient_dynamique))
+    || (valeur !== null && typeof valeur === 'object' && Object.values(valeur).some(contient_dynamique))
+
+// Une simple valeur (texte, nombre, motif '/<$id>'…) reste telle quelle, sans interpolation,
+// comme les motifs de ~{ l exigent ; une variable ou une opération devient une expression
+const lire_element_litteral = (element) =>
+{
+    const jetons = tokeniser(element)
+    if (jetons.length === 0)
+        return element
+    if (jetons.length === 1 && jetons[0].type !== 'variable')
+        return jetons[0].valeur ?? element
+    return new ElementDynamique(parser(jetons))
+}
+
+const resoudre_litteral = (valeur, donnees) =>
+{
+    if (valeur instanceof ElementDynamique)
+        return evaluer_noeud(valeur.ast, donnees)
+    if (Array.isArray(valeur))
+        return valeur.map(element => resoudre_litteral(element, donnees))
+    if (valeur !== null && typeof valeur === 'object')
+        return Object.fromEntries(Object.entries(valeur).map(([clef, element]) => [clef, resoudre_litteral(element, donnees)]))
+    return valeur
 }
 
 const tokeniser = (str) =>
@@ -197,10 +272,20 @@ const tokeniser = (str) =>
             while (pos < str.length && /[\w]/.test(str[pos])) { nom += str[pos]; pos++ }
             tokens.push({ type: 'variable', valeur: nom })
 
-            // Accès profond : $var.clef, $var['clef'], $var[0]
-            while (pos < str.length && (str[pos] === '.' || str[pos] === '['))
+            // Accès profond : $var.clef, $var['clef'], $var[0] ; appel : $fonction($a, 2)
+            while (pos < str.length && (str[pos] === '.' || str[pos] === '[' || str[pos] === '('))
             {
-                if (str[pos] === '.')
+                if (str[pos] === '(')
+                {
+                    const fin = trouver_fermeture(str, pos)
+                    const contenu = str.slice(pos + 1, fin)
+                    const args = contenu.trim() === ''
+                        ? []
+                        : decouper_haut_niveau(contenu, new Set([','])).map(arg => parser(tokeniser(arg.trim())))
+                    tokens.push({ type: 'appel', args })
+                    pos = fin + 1
+                }
+                else if (str[pos] === '.')
                 {
                     pos++
                     let clef = ''
@@ -257,7 +342,7 @@ const tokeniser = (str) =>
                 pos++
             }
             const elements = decouper_haut_niveau(contenu, new Set([',', '\n']))
-                .map(element => tokeniser(element)[0]?.valeur ?? element)
+                .map(element => lire_element_litteral(element))
             pos++ // ]
             tokens.push({ type: 'liste', valeur: elements })
             continue
@@ -307,7 +392,7 @@ const tokeniser = (str) =>
                     const clef_brute = morceaux[0]
                     const valeur_brute = morceaux.slice(1).join(':')
                     const clef   = tokeniser(clef_brute.trim())[0]?.valeur ?? clef_brute.trim()
-                    const valeur = tokeniser(valeur_brute.trim())[0]?.valeur ?? valeur_brute.trim()
+                    const valeur = lire_element_litteral(valeur_brute.trim())
                     dict[clef] = valeur
                 }
             }
@@ -707,7 +792,7 @@ const parser_primaire = (etat) =>
 
     if (token.type === 'nombre' || token.type === 'texte' || token.type === 'booleen' || token.type === 'nul' || token.type === 'liste' || token.type === 'dict')
     {
-        let noeud = { type: 'valeur', valeur: token.valeur }
+        let noeud = { type: 'valeur', valeur: token.valeur, dynamique: contient_dynamique(token.valeur) }
 
         // Accès profond sur valeur littérale (rare mais possible)
         while (etat.pos < etat.tokens.length && etat.tokens[etat.pos].type === 'acces')
@@ -723,9 +808,12 @@ const parser_primaire = (etat) =>
     {
         let noeud = { type: 'variable', valeur: token.valeur }
 
-        while (etat.pos < etat.tokens.length && etat.tokens[etat.pos].type === 'acces')
+        while (etat.pos < etat.tokens.length && ['acces', 'appel'].includes(etat.tokens[etat.pos].type))
         {
-            noeud = { type: 'acces', cible: noeud, clef: etat.tokens[etat.pos].valeur, est_dynamique: etat.tokens[etat.pos].est_dynamique }
+            const suivant = etat.tokens[etat.pos]
+            noeud = suivant.type === 'appel'
+                ? { type: 'appel', cible: noeud, args: suivant.args }
+                : { type: 'acces', cible: noeud, clef: suivant.valeur, est_dynamique: suivant.est_dynamique }
             etat.pos++
         }
 
@@ -742,10 +830,9 @@ const parser_primaire = (etat) =>
 // Correspondance de motif
 // ============================================================
 
-// ecrire : faux pour vérifier la correspondance sans écrire les variables capturées
-const op_correspondance = (chaine, motif_brut, donnees, ecrire = true) =>
+// Captures du motif dans la chaîne ({ nom : valeur }), ou null si elle n y correspond pas
+const lire_captures = (chaine, motif_brut, donnees) =>
 {
-    if (!est_texte(chaine)) return ERREUR
 
     // Décomposer le motif en segments fixes et captures
     const segments = []
@@ -817,7 +904,7 @@ const op_correspondance = (chaine, motif_brut, donnees, ecrire = true) =>
 
         if (seg.type === 'fixe')
         {
-            if (!chaine.startsWith(seg.texte, pos_chaine)) return FAUX
+            if (!chaine.startsWith(seg.texte, pos_chaine)) return null
             pos_chaine += seg.texte.length
         }
         else if (seg.type === 'capture')
@@ -855,7 +942,22 @@ const op_correspondance = (chaine, motif_brut, donnees, ecrire = true) =>
     }
 
     // Vérifier que toute la chaîne a été consommée
-    if (pos_chaine !== chaine.length) return FAUX
+    if (pos_chaine !== chaine.length) return null
+
+    return captures
+}
+
+// Captures d une adresse selon un motif, sans rien écrire (routes d app.adn), ou null
+export const correspondre_motif = (chaine, motif) =>
+    typeof chaine === 'string' && typeof motif === 'string' ? lire_captures(chaine, motif, {}) : null
+
+// ecrire : faux pour vérifier la correspondance sans écrire les variables capturées
+const op_correspondance = (chaine, motif_brut, donnees, ecrire = true) =>
+{
+    if (!est_texte(chaine)) return ERREUR
+
+    const captures = lire_captures(chaine, motif_brut, donnees)
+    if (!captures) return FAUX
 
     if (!ecrire)
         return VRAI
@@ -880,10 +982,31 @@ const evaluer_noeud = (noeud, donnees) =>
     case 'valeur':
         if (est_texte(noeud.valeur))
             return valoriser(noeud.valeur, donnees)
+        if (noeud.dynamique)
+            return resoudre_litteral(noeud.valeur, donnees)
         return noeud.valeur
 
     case 'erreur':
         return ERREUR
+
+    // Appel d une fonction ($f($a, 2)) : ses arguments, et les variables qu elle lit, sont suivis
+    // comme ceux de toute expression. Une erreur de la fonction donne :x
+    case 'appel':
+    {
+        const fonction = evaluer_noeud(noeud.cible, donnees)
+        if (typeof fonction !== 'function') return ERREUR
+
+        const args = noeud.args.map(arg => evaluer_noeud(arg, donnees))
+        try
+        {
+            return fonction(...args) ?? NUL
+        }
+        catch (erreur)
+        {
+            console.error(erreur)
+            return ERREUR
+        }
+    }
 
     case 'variable':
     {
