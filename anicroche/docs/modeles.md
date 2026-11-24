@@ -518,6 +518,16 @@ carte [
 ]
 ```
 
+Une valeur est lue comme une [expression](expressions.md) ; si elle n'en est pas une valide, un texte écrit sans guillemets vaut ce texte (`boite-ancre [/compte]`). Elle peut aussi prendre la forme d'un ternaire, avec la condition entre crochets comme pour les [attributs conditionnels](#attributs-conditionnels) : l'argument suit alors la condition, recalculé quand une variable lue change. Chaque branche suit la même règle : une branche sans variable qui n'est pas une expression valide vaut son texte (`/profil`, qui commencerait sinon une expression régulière), alors qu'une branche qui lit une variable absente vaut `:x`.
+
+```
+carte-profil [
+    $p
+    $ancre : [$p.id = $profil.id] ? /profil : :(
+    $alt   : [$p.id = $profil.id] ? "Voir le profil" : "Basculer sur le profil"
+]
+```
+
 Les enfants du modèle (destinés à `@stud`) se déclarent en indentation :
 
 ```

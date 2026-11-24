@@ -1597,6 +1597,20 @@ const extraire_appel_fonction = (str) =>
 
 // Le nœud qui porte la liste des modèles d'un groupe de nœuds racines : le premier élément,
 // à défaut le premier nœud (ancre d'un @if ou d'un modèle différé)
+// Valeur d une branche de ternaire passée en argument de modèle. Comme un argument simple, un
+// texte écrit sans guillemets que l expression ne sait pas lire (/profil, pris pour le début
+// d une expression régulière) vaut ce texte ; une branche qui lit une variable garde son
+// résultat, :x compris
+const evaluer_branche_argument = (branche, donnees) =>
+{
+    const valeur = evaluer_valeur(branche, donnees)
+    const texte  = branche.trim()
+    const echec  = valeur === `:x` || (valeur === null && texte !== `:o`)
+    if (echec && !texte.includes(`$`) && texte !== `:x`)
+        return texte
+    return valeur
+}
+
 const porteur_modeles = (noeuds) => noeuds.find(noeud => noeud.nodeType === 1) ?? noeuds[0] ?? null
 
 const ajouter_modeles = (noeuds, entrees) =>
@@ -1989,7 +2003,7 @@ const construire_modele = (bloc, donnees, options = {}) =>
                                     }
                                 }
 
-                                return evaluer_valeur(branche_decapsule, donnees)
+                                return evaluer_branche_argument(branche_decapsule, donnees)
                             },
                             expression: valeur_brute,
                             donnees
@@ -2016,7 +2030,7 @@ const construire_modele = (bloc, donnees, options = {}) =>
                                     continue
                                 }
                             }
-                            args[nom] = evaluer_valeur(branche_decapsule, donnees)
+                            args[nom] = evaluer_branche_argument(branche_decapsule, donnees)
                         }
                         else
                         {

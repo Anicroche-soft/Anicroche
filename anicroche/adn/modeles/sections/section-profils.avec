@@ -26,10 +26,13 @@ section [profils]
     @else
         defilement [horizontal]
             @for-each [$i, $p] of [$ps]
+                # Le profil actif mène à son onglet (/profil, sur la même page) ; les autres y
+                # basculent
                 carte-profil [
                     $p
                     $selectionnee : $p.id = $profil.id
+                    $ancre : [$p.id = $profil.id] ? "/profil" : :(
                     $action : [$p.id != $profil.id] ? $selectionner_profil($p.id) : :(
-                    $alt : "Basculer sur le profil $p.identifiant"
+                    $alt : [$p.id = $profil.id] ? "Voir le profil $p.identifiant" : "Basculer sur le profil $p.identifiant"
                 ]
             carte-nouveau-profil
