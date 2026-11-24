@@ -74,20 +74,18 @@
         document.documentElement.classList.add($theme)
     }
 
+    // Appelée à chaque défilement d'un onglet : rien ne change tant que l état reste le même,
+    // car modifier les classes de <html> fait recalculer les styles de toute la page
     $actualiser_defilement = (defilement) =>
     {
-        if (defilement == `interieur`)
-        {
-            $defilement = `interieur`
-            document.documentElement.classList.remove(`sommet`)
-            document.documentElement.classList.add(`interieur`)
-        }
-        else if (defilement == `sommet`)
-        {
-            $defilement = `sommet`
-            document.documentElement.classList.remove(`interieur`)
-            document.documentElement.classList.add(`sommet`)
-        }
+        const racine = document.documentElement
+
+        if (![ `interieur`, `sommet` ].includes(defilement) || racine.classList.contains(defilement))
+            return
+
+        $defilement = defilement
+        racine.classList.remove(defilement === `interieur` ? `sommet` : `interieur`)
+        racine.classList.add(defilement)
     }
 
     const media_query_pointeur = window.matchMedia(`(pointer: coarse)`)

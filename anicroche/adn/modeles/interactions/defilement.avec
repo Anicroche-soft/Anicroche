@@ -82,11 +82,14 @@
                 ? noeud.scrollWidth  - noeud.clientWidth
                 : noeud.scrollHeight - noeud.clientHeight
             const ratio      = delta / (taille_piste - taille_poigne)
+            const position   = glissement.depart_scroll + ratio * scroll_max
 
+            // Sans animation : le scroll-behavior: smooth du conteneur ferait courir la page (et
+            // la poignée, placée d'après elle) derrière la souris
             if (horizontal)
-                noeud.scrollLeft = glissement.depart_scroll + ratio * scroll_max
+                noeud.scrollTo({ left: position, behavior: 'instant' })
             else
-                noeud.scrollTop  = glissement.depart_scroll + ratio * scroll_max
+                noeud.scrollTo({ top: position, behavior: 'instant' })
         }
 
         const sur_souris_relachee = () =>
