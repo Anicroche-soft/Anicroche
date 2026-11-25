@@ -1,5 +1,26 @@
 @script [
-    $monter_icone_horloge = () =>
+    // $horaire : une date (Date, ou texte comme une date-heure de l API) ou une heure HH:MM ;
+    // null si absent ou illisible
+    const lire_horaire = (horaire) =>
+    {
+        if (horaire === null || horaire === undefined || horaire === '' || horaire === false)
+            return null
+        if (horaire instanceof Date)
+            return isNaN(horaire) ? null : horaire
+
+        const heure_minute = /^(\d{1,2}):(\d{2})$/.exec(String(horaire).trim())
+        if (heure_minute)
+        {
+            const date = new Date()
+            date.setHours(Number(heure_minute[1]), Number(heure_minute[2]), 0, 0)
+            return date
+        }
+
+        const date = new Date(horaire)
+        return isNaN(date) ? null : date
+    }
+
+    $monter_icone_horloge = (horaire) =>
     {
         const horloge = {
             aiguilles : {
@@ -23,6 +44,14 @@
         }
 
         const vars = $vars
+
+        // Avec un horaire, les aiguilles le montrent, immobiles
+        const fixe = lire_horaire(horaire)
+        if (fixe)
+        {
+            actualiser(horloge, vars, fixe)
+            return
+        }
 
         actualiser(horloge, vars)
 
@@ -51,15 +80,17 @@
         }
     }
 
-    const actualiser = (horloge, vars) =>
+    // date : l horaire fixe à montrer ; sans elle, l heure actuelle
+    const actualiser = (horloge, vars, date = null) =>
     {
-        const maintenant = new Date()
+        const maintenant = date ?? new Date()
 
         const heures = maintenant.getHours()
         const minutes = maintenant.getMinutes()
 
-        // Compensation du retard visuel induit par la transition de 60s.
-        const compensation_minutes = 1
+        // Compensation du retard visuel induit par la transition de 60s (aucune pour un
+        // horaire fixe, montré sans transition)
+        const compensation_minutes = date ? 0 : 1
 
         const angle_heures = (heures % 12) * 30 + minutes * 0.5
         const angle_minutes = minutes * 6
@@ -125,6 +156,10 @@
         transition: transform 60s linear;
     }
 
+    .icone-horloge.fixe .aiguille {
+        transition: none;
+    }
+
     .icone-horloge .nombre {
         transform-origin: 50% 50%;
         transition: d var(--d-animation);
@@ -183,10 +218,15 @@
     }
 ]
 
+# $horaire : un horaire à montrer, immobile (date, date-heure de l'API ou heure HH:MM) ; sans lui,
+# l'horloge suit l'heure actuelle
+@args [$horaire : :o]
+
 <svg
     .icone
     .icone-horloge
-    @mount="$monter_icone_horloge()"
+    [$horaire] ? .fixe
+    @mount="$monter_icone_horloge($horaire)"
     @unmount="$demonter_icone_horloge()"
     viewBox="0 0 24 24"
 >

@@ -113,12 +113,17 @@
 
 # Barre d'informations d'une anicroche : $auteurs, profils auteurs (pour un type avec auteurs),
 # $lien et $texte_lien, lien vers une autre version, $date, date de parution de la version
-# affichée
+# affichée, $versions, versions listées dans le sous-menu Versions du menu (page-anicroche),
+# $gestion et $edition, adresses des pages de gestion et d'édition, vides pour qui n'est pas
+# gérant de l'anicroche
 @args [
     $auteurs    : []
     $lien       : ''
     $texte_lien : ''
     $date       : :o
+    $versions   : []
+    $gestion    : ''
+    $edition    : ''
 ]
 
 <div .informations-anicroche>
@@ -148,5 +153,38 @@
             icone-points
 
         boite-dialogue [menu-anicroche]
-            lien-action [$copier_lien_anicroche]
-                "Copier le lien"
+            boite-action [$copier_lien_anicroche]
+                icone-chaine
+                <span>
+                    "Copier le lien"
+            @if [$edition]
+                boite-ancre [$edition]
+                    icone-baguette
+                    <span>
+                        "Éditer"
+
+            @if [$gestion]
+                boite-ancre [$gestion]
+                    icone-engrenage [$animation : :(]
+                    <span>
+                        "Gérer"
+
+            @if [_ $versions > 1]
+                boite-action [$ouvrir_sous_menu('versions')]
+                    icone-pile
+                    <span>
+                        "Versions"
+
+                sous-menu [versions, Versions]
+                    @for-each [$version] of [$versions]
+                        boite-ancre [$version.lien, $actif : $version.affichee]
+                            @if [$version.etat = brouillon]
+                                icone-feuille
+                            @else-if [$version.etat = a_paraitre]
+                                icone-horloge [$horaire : $version.date]
+                            @else-if [$version.etat = en_vigueur]
+                                icone-parchemin
+                            @else
+                                icone-pochette
+                            <span>
+                                "$version.texte"

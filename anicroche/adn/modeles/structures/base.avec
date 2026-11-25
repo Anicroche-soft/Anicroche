@@ -469,6 +469,18 @@
         boite_ouverte()?.dispatchEvent(new Event('fermer-boite'))
     }
 
+    // Ouvre le sous-menu de ce nom (modèle sous-menu) dans la boîte ouverte, et revient à son
+    // menu principal
+    $ouvrir_sous_menu = (nom) =>
+    {
+        boite_ouverte()?.dispatchEvent(new CustomEvent('ouvrir-sous-menu', { detail: nom }))
+    }
+
+    $fermer_sous_menu = () =>
+    {
+        boite_ouverte()?.dispatchEvent(new Event('fermer-sous-menu'))
+    }
+
     // Appelée par chaque boîte à chaque changement de $path : une navigation vers une autre
     // page ferme la boîte ouverte
     $suivre_navigation_boite = (chemin) =>

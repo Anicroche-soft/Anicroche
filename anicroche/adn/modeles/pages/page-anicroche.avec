@@ -16,6 +16,7 @@
     $lien_version         = ''
     $texte_lien_version   = ''
     $date_anicroche       = null
+    $versions_anicroche   = []
 
     // /<id> montre la version en vigueur, /<id>/<numero> une version précise : le lien mène à
     // la version en vigueur depuis une version qui ne l est pas, et sinon à la version à
@@ -38,6 +39,39 @@
             lien(`Voir la version à paraître le ${$formater_date(anicroche.a_venir.date_parution)}`, `${chemin}/${anicroche.a_venir.numero}`)
         else if (anicroche.a_l_essai && anicroche.a_l_essai.numero !== affichee)
             lien("Voir la version à l'essai", `${chemin}/${anicroche.a_l_essai.numero}`)
+    }
+
+    // Versions du menu de la barre d informations, de la plus récente à la plus ancienne :
+    // { etat (brouillon, a_paraitre, en_vigueur ou ancienne), texte, lien, date, affichee }. Le
+    // brouillon n est connu que des gérants, sauf à l essai (brouillon public) ; un brouillon
+    // programmé est la version à paraître
+    const preparer_versions = (anicroche, affichee, chemin) =>
+    {
+        const entrees = []
+        const entree  = (etat, numero, texte, date = null) => entrees.push({
+            etat,
+            texte,
+            date,
+            lien     : numero === anicroche.en_vigueur ? chemin : `${chemin}/${numero}`,
+            affichee : numero === affichee
+        })
+
+        const brouillon = anicroche.brouillon && !anicroche.brouillon.date_parution
+            ? anicroche.brouillon
+            : anicroche.a_l_essai
+        if (brouillon)
+            entree('brouillon', brouillon.numero, anicroche.a_l_essai?.numero === brouillon.numero ? "Brouillon à l'essai" : "Brouillon")
+
+        if (anicroche.a_venir)
+            entree('a_paraitre', anicroche.a_venir.numero, `À paraître le ${$formater_date(anicroche.a_venir.date_parution, true)}`, anicroche.a_venir.date_parution)
+
+        for (const version of anicroche.versions ?? [])
+            if (version.numero === anicroche.en_vigueur)
+                entree('en_vigueur', version.numero, "Version en vigueur", version.date_parution)
+            else
+                entree('ancienne', version.numero, `Version du ${$formater_date(version.date_parution)}`, version.date_parution)
+
+        $versions_anicroche = entrees
     }
 
     // Début du premier contenu qui n est pas un titre, repris par les moteurs de recherche
@@ -95,13 +129,15 @@
         $texte_anicroche       = listees.filter(source => source.format !== 'titre')
         $description_anicroche = resumer(listees)
         preparer_lien_version(reponse.data, apercu ? apercu.numero : reponse.data.version, chemin)
+        preparer_versions(reponse.data, apercu ? apercu.numero : reponse.data.version, chemin)
 
         // Les auteurs ne sont pas encore lisibles par la projection ; seule une version datée
         // a une date
         $auteurs_anicroche = []
         $date_anicroche    = apercu ? apercu.date_parution : reponse.data.date_parution
 
-        // La gestion et l édition sont réservées aux gérants ; l API le vérifie de son côté
+        // La gestion et l édition (menu de la barre d informations) sont réservées aux gérants ;
+        // l API le vérifie de son côté
         $gerant_anicroche       = $administre_type(reponse.data.type)
         $lien_gestion_anicroche = `${chemin}/gestion`
         $lien_edition_anicroche = `${chemin}/edition`
@@ -143,15 +179,12 @@
                         $lien       : $lien_version
                         $texte_lien : $texte_lien_version
                         $date       : $date_anicroche
+                        $versions   : $versions_anicroche
+                        $gestion    : [$gerant_anicroche] ? $lien_gestion_anicroche : ''
+                        $edition    : [$gerant_anicroche] ? $lien_edition_anicroche : ''
                     ]
                     @if [$etat_anicroche = non_publiee]
                         <p>
                             "Cette page n'est pas encore publiée."
                     @else
                         sources-anicroche [$texte_anicroche]
-                    @if [$gerant_anicroche]
-                        ligne
-                            bouton-ancre [$lien_gestion_anicroche]
-                                "Gestion"
-                            bouton-ancre [$lien_edition_anicroche]
-                                "Édition"

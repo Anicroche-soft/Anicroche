@@ -1,0 +1,43 @@
+@style [
+    /* Le sous-menu n apparaît qu ouvert (boite-dialogue) ; pendant sa transition, il est posé
+       par-dessus le menu principal, dans les marges du contenu */
+    .sous-menu {
+        display: none;
+    }
+
+    .sous-menu.ouvert {
+        display: flex;
+        flex-flow: column nowrap;
+    }
+
+    .sous-menu.superpose {
+        position: absolute;
+        top: var(--l-marge);
+        right: var(--l-marge);
+        left: var(--l-marge);
+    }
+
+    .sous-menu > .separateur-sous-menu {
+        flex: none;
+
+        width: 100%;
+        height: 0.125rem;
+
+        border-radius: 0.0625rem;
+
+        --f-fond: var(--c-flux);
+    }
+]
+
+# Sous-menu d'une boîte de dialogue, placé dans son contenu (boite-dialogue) et ouvert par
+# $ouvrir_sous_menu($nom) : il commence par le retour au menu principal ($fermer_sous_menu), avec
+# son titre ; un seul niveau de sous-menu
+@args [$nom, $titre]
+
+<div .sous-menu data-sous-menu="$nom">
+    boite-action [$fermer_sous_menu]
+        icone-fleche-gauche
+        <span>
+            "$titre"
+    <hr .separateur-sous-menu>
+    @stud

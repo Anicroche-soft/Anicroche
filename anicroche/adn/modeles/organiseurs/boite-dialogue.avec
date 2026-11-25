@@ -8,9 +8,11 @@
         // Au bas de l écran en format petit ou au toucher, au centre sinon
         const en_feuille = () => racine.classList.contains('petit') || racine.classList.contains('grossier')
 
+        // Durée des animations de la boîte (--d-boite), lue dans sa transition calculée par le
+        // navigateur : la variable elle-même garde son calc() non calculé
         const duree = () =>
         {
-            const valeur = getComputedStyle(boite).getPropertyValue('--d-boite').trim()
+            const valeur = getComputedStyle(boite).transitionDuration.split(',')[0].trim()
             const nombre = parseFloat(valeur) || 0
             return valeur.endsWith('ms') ? nombre : nombre * 1000
         }
@@ -47,6 +49,7 @@
             fermeture    = false
             hauteur_base = null
             geste        = null
+            remettre_menu_principal()
         }
 
         // La boîte se ferme une fois son animation de sortie finie : elle part de là où elle
@@ -73,11 +76,152 @@
         boite.addEventListener('close', reinitialiser)
         boite.addEventListener('fermer-boite', fermer)
 
-        // Échap, ou retour d Android : la boîte se ferme avec son animation
+        // ─── Sous-menus ──────────────────────────────────────────────────────
+
+        // Un sous-menu (modèle sous-menu) arrive de la droite par-dessus le menu principal, qui
+        // reste en place et s estompe ; le retour fait l inverse. Pendant la transition, le
+        // sous-menu qui arrive ou qui part est posé par-dessus le menu principal, et la hauteur
+        // du contenu passe de l une à l autre
+        let sous_menu   = null
+        let transition  = null
+
+        const principaux = () => [ ...contenu().children ]
+            .filter(element => !element.classList.contains('piste') && !element.classList.contains('sous-menu'))
+
+        // Les animations gardent leur état final (fill: forwards) jusqu à ce que la vue finale
+        // soit en place, pour qu aucune image ne montre l état de départ entre les deux
+        const options_animation = () => ({ duration: duree(), easing: 'ease', fill: 'forwards' })
+
+        const animer_vues = (cible, principaux, entree) =>
+        {
+            // Hors de vue : décalé de sa largeur et de la marge de droite du contenu
+            const marge   = parseFloat(getComputedStyle(contenu()).paddingRight) || 0
+            const dehors  = { transform: `translateX(calc(100% + ${marge}px))` }
+            const dedans  = { transform: 'none' }
+            const visible = { opacity: 1 }
+            const estompe = { opacity: 0 }
+
+            return [
+                cible.animate(entree ? [ dehors, dedans ] : [ dedans, dehors ], options_animation()),
+                ...principaux.map(element => element.animate(entree ? [ visible, estompe ] : [ estompe, visible ], options_animation()))
+            ]
+        }
+
+        // La hauteur du contenu passe de depart à arrivee, sauf dans une boîte agrandie, dont la
+        // hauteur ne dépend pas de son contenu
+        const animer_hauteur = (element, depart, arrivee) =>
+        {
+            if (boite.classList.contains('agrandie') || Math.abs(depart - arrivee) < 1)
+                return null
+            return element.animate([ { height: `${depart}px` }, { height: `${arrivee}px` } ], options_animation())
+        }
+
+        // La vue finale est mise en place à la fin réelle des animations, puis celles-ci sont
+        // retirées, dans la même image
+        const finir_transition = (animations, action) =>
+        {
+            const actives = animations.filter(Boolean)
+            transition = { animations: actives }
+            contenu().classList.add('transition-sous-menu')
+
+            Promise.all(actives.map(animation => animation.finished))
+                .then(() =>
+                {
+                    if (transition?.animations !== actives)
+                        return
+                    transition = null
+                    action()
+                    actives.forEach(animation => animation.cancel())
+                    contenu()?.classList.remove('transition-sous-menu')
+                })
+                .catch(() => {})
+        }
+
+        // Le focus suit le sous-menu au clavier
+        const deplacer_focus = (vers) =>
+        {
+            if (document.activeElement?.matches(':focus-visible') && boite.contains(document.activeElement))
+                vers?.focus({ preventScroll: true })
+        }
+
+        const ouvrir_sous_menu = (nom) =>
+        {
+            if (transition || sous_menu || fermeture)
+                return
+
+            const element = contenu()
+            const cible   = [ ...element.children ].find(enfant => enfant.classList.contains('sous-menu') && enfant.dataset.sousMenu === nom)
+            if (!cible)
+                return
+
+            const depart = element.getBoundingClientRect().height
+            element.scrollTop = 0
+
+            cible.classList.add('ouvert', 'superpose')
+            const style   = getComputedStyle(element)
+            const arrivee = cible.getBoundingClientRect().height + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+
+            const sortants = principaux()
+            sous_menu = cible
+            const animations = [ ...animer_vues(cible, sortants, true), animer_hauteur(element, depart, arrivee) ]
+            deplacer_focus(cible.querySelector('a, button'))
+
+            finir_transition(animations, () =>
+            {
+                sortants.forEach(sortant => sortant.classList.add('masque-sous-menu'))
+                cible.classList.remove('superpose')
+            })
+        }
+
+        const fermer_sous_menu = () =>
+        {
+            if (transition || !sous_menu || fermeture)
+                return
+
+            const element = contenu()
+            const cible   = sous_menu
+            const depart  = element.getBoundingClientRect().height
+            const entrants = principaux()
+
+            cible.classList.add('superpose')
+            entrants.forEach(entrant => entrant.classList.remove('masque-sous-menu'))
+            element.scrollTop = 0
+            const arrivee = element.getBoundingClientRect().height
+
+            sous_menu = null
+            const animations = [ ...animer_vues(cible, entrants, false), animer_hauteur(element, depart, arrivee) ]
+            deplacer_focus(entrants.find(entrant => entrant.matches('a, button')) ?? entrants[0]?.querySelector('a, button'))
+
+            finir_transition(animations, () => cible.classList.remove('ouvert', 'superpose'))
+        }
+
+        // À la fermeture de la boîte, le menu principal revient sans transition
+        const remettre_menu_principal = () =>
+        {
+            transition?.animations.forEach(animation => animation.cancel())
+            transition = null
+            sous_menu  = null
+
+            const element = contenu()
+            if (!element)
+                return
+            element.classList.remove('transition-sous-menu')
+            for (const enfant of element.children)
+                enfant.classList.remove('masque-sous-menu', 'ouvert', 'superpose')
+        }
+
+        boite.addEventListener('ouvrir-sous-menu', (evenement) => ouvrir_sous_menu(evenement.detail))
+        boite.addEventListener('fermer-sous-menu', fermer_sous_menu)
+
+        // Échap, ou retour d Android : depuis un sous-menu, retour au menu principal ; sinon, la
+        // boîte se ferme avec son animation
         boite.addEventListener('cancel', (evenement) =>
         {
             evenement.preventDefault()
-            fermer()
+            if (sous_menu)
+                fermer_sous_menu()
+            else
+                fermer()
         })
 
         // Un clic sur le fond grisé a pour cible la boîte elle-même, hors de son rectangle ;
@@ -103,6 +247,18 @@
             if (appui_sur_fond && hors_boite(evenement))
                 fermer()
             appui_sur_fond = false
+        })
+
+        // Un lien vers la page affichée ne navigue pas (navigateur) : il ferme la boîte
+        boite.addEventListener('click', (evenement) =>
+        {
+            const lien = evenement.target.closest?.('a[href]')
+            if (!lien || !boite.contains(lien) || lien.target === '_blank')
+                return
+
+            const adresse = new URL(lien.href, location.href)
+            if (adresse.origin === location.origin && adresse.pathname + adresse.search === location.pathname + location.search)
+                fermer()
         })
 
         // ─── Glissement ──────────────────────────────────────────────────────
@@ -354,7 +510,7 @@
                     opacity   var(--d-boite) ease,
                     height    var(--d-boite) ease;
 
-        --d-boite: 300ms;
+        --d-boite: var(--d-animation-page);
         --l-boite: 32rem;
 
         --l-fonte: 1rem;
@@ -466,19 +622,36 @@
         --c-flux: var(--c-gris);
     }
 
-    /* Liens d action dans la couleur du texte */
-    .boite-dialogue .lien-action {
-        --c-flux: var(--c-inverse);
-    }
-
     .grossier .boite-dialogue .croix-boite,
     .precis .boite-dialogue .barre-boite {
+        display: none;
+    }
+
+    /* Pendant l arrivée ou le départ d un sous-menu, le bord droit du contenu s estompe sur sa
+       marge, en plus des bords haut et bas du défilement intégré ; hors transition, la marge
+       de droite garde la piste du défilement */
+    .boite-dialogue > .contenu-boite.transition-sous-menu {
+        mask: linear-gradient(to bottom, transparent 0%, white var(--l-marge), white calc(100% - var(--l-marge)), transparent 100%),
+              linear-gradient(to right, white calc(100% - var(--l-marge)), transparent 100%);
+        mask-composite: intersect;
+    }
+
+    /* Lien vers la page affichée (boite-ancre active), en gras */
+    .boite-dialogue .boite-ancre.actif {
+        --e-fonte: var(--e-gras);
+    }
+
+    /* Menu principal caché derrière un sous-menu ouvert */
+    .boite-dialogue > .contenu-boite > .masque-sous-menu {
         display: none;
     }
 
     .boite-dialogue > .contenu-boite {
         flex: 1 1 auto;
         min-height: 0;
+
+        /* Les vues d un sous-menu glissent sur les côtés sans faire défiler le contenu */
+        overflow-x: hidden;
 
         overscroll-behavior: contain;
     }
