@@ -1,0 +1,152 @@
+@script [
+    // Texte placé avant la date, sur la première ligne présente : les auteurs, sinon le lien
+    const texte_avant = $auteurs.length > 0 || !!$lien
+
+    $noms_auteurs           = $auteurs.map(auteur => auteur.pseudonyme).join(', ')
+    $anciennete_anicroche   = $formater_anciennete($date)
+    $separateur_anciennete  = texte_avant ? '· ' : ''
+    $date_lisible_anicroche = $formater_date($date, true)
+
+    $copier_lien_anicroche = async () =>
+    {
+        await navigator.clipboard?.writeText(`${location.origin}${$path}`)
+        $fermer_boite()
+    }
+]
+
+@style [
+    /* Trois parties : les avatars, le centre (abrégé, ligne par ligne, s il manque de place)
+       et la droite, qui prend la place restante : la date suit le texte de la première ligne,
+       et le menu reste tout à droite, sur la première ligne. Texte de 14 px, sur des lignes
+       de 16 px */
+    .informations-anicroche {
+        flex-flow: row nowrap;
+        align-items: flex-start;
+
+        --l-fonte: 0.875rem;
+        --l-ecart: 0.5rem;
+        --h-ligne-informations: 1rem;
+    }
+
+    .informations-anicroche > .avatars {
+        flex: none;
+        flex-direction: row;
+
+        --l-ecart: 0;
+        --h-avatar: calc(var(--h-ligne-informations) * 2);
+    }
+
+    .informations-anicroche > .avatars > .avatar-profil:not(:first-child) {
+        margin-left: calc(var(--h-avatar) / -3);
+        outline: 0.125rem solid var(--c-analogue);
+        outline-offset: 0;
+    }
+
+    .informations-anicroche > .centre {
+        flex: 0 1 auto;
+        min-width: 0;
+
+        --l-ecart: 0;
+    }
+
+    .informations-anicroche > .centre:empty {
+        display: none;
+    }
+
+    .informations-anicroche > .centre > span,
+    .informations-anicroche > .centre .lien-ancre,
+    .informations-anicroche > .droite > .date {
+        line-height: var(--h-ligne-informations);
+        white-space: nowrap;
+    }
+
+    .informations-anicroche > .centre > .auteurs,
+    .informations-anicroche > .centre .lien-ancre {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Le lien s abrège lui-même, pour que ses points de suspension prennent sa couleur ; sa
+       ligne ne coupe pas ce qui dépasse, pour laisser voir son contour au focus */
+    .informations-anicroche > .centre .lien-ancre {
+        display: block;
+        max-width: 100%;
+    }
+
+    /* Le lien (survol compris), la date et le menu sont en gris */
+    .informations-anicroche > .centre .lien-ancre,
+    .informations-anicroche > .droite > .date,
+    .informations-anicroche .bouton-menu-anicroche {
+        --c-flux: var(--c-gris);
+    }
+
+    .informations-anicroche > .centre > .auteurs {
+        --e-fonte: var(--e-gras);
+    }
+
+    .informations-anicroche > .droite {
+        flex: 1 0 auto;
+        flex-direction: row;
+        align-self: stretch;
+        align-items: flex-start;
+    }
+
+    .grand .informations-anicroche .date > .court,
+    .petit .informations-anicroche .date > .long {
+        display: none;
+    }
+
+    .informations-anicroche .bouton-menu-anicroche {
+        flex: none;
+        margin-left: auto;
+
+        height: var(--h-ligne-informations);
+
+        border-radius: 0.125rem;
+
+        display: flex;
+        align-items: center;
+
+        --c-focus: var(--c-vif);
+    }
+]
+
+# Barre d'informations d'une anicroche : $auteurs, profils auteurs (pour un type avec auteurs),
+# $lien et $texte_lien, lien vers une autre version, $date, date de parution de la version
+# affichée
+@args [
+    $auteurs    : []
+    $lien       : ''
+    $texte_lien : ''
+    $date       : :o
+]
+
+<div .informations-anicroche>
+    @if [_ $auteurs > 0]
+        <div .avatars>
+            @for-each [$auteur] of [$auteurs]
+                avatar-profil [$auteur]
+
+    <div .centre>
+        @if [_ $auteurs > 0]
+            <span .auteurs>
+                "$noms_auteurs"
+        @if [$lien]
+            <span .autres>
+                lien-ancre [$lien]
+                    "$texte_lien"
+
+    <div .droite>
+        @if [$anciennete_anicroche]
+            <time .date datetime="$date" title="$date_lisible_anicroche">
+                <span .court>
+                    "$separateur_anciennete$anciennete_anicroche.court"
+                <span .long>
+                    "$separateur_anciennete$anciennete_anicroche.long"
+
+        <button .bouton-menu-anicroche type="button" aria-label="Menu" @click="$ouvrir_boite('menu-anicroche')">
+            icone-points
+
+        boite-dialogue [menu-anicroche]
+            lien-action [$copier_lien_anicroche]
+                "Copier le lien"

@@ -37,7 +37,8 @@
         border-style: dashed solid;
         border-radius: 0.375rem;
 
-        transition: background var(--d-animation);
+        transition: background var(--d-animation),
+                    outline-color var(--d-animation);
 
         --c-focus: var(--c-vif);
     }

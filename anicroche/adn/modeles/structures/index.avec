@@ -218,6 +218,9 @@
         --c-boue-trans:  oklch(0.25 calc(var(--s-theme) / 20) var(--t-theme) / var(--p-trans));
         --c-creme-trans: oklch(0.95 calc(var(--s-theme) / 20) var(--t-theme) / var(--p-trans));
 
+        --c-gris-fonce: oklch(0.52 calc(var(--s-theme) / 20) var(--t-theme));
+        --c-gris-clair: oklch(0.68 calc(var(--s-theme) / 20) var(--t-theme));
+
         --c-sombre: oklch(0.45 var(--s-theme) var(--t-theme));
         --c-vif:    oklch(0.65 var(--s-theme) var(--t-theme));
         --c-clair:  oklch(0.85 var(--s-theme) var(--t-theme));
@@ -250,6 +253,7 @@
         --c-theme:    var(--c-blanc);
         --c-analogue: var(--c-creme);
         --c-inverse:  var(--c-boue);
+        --c-gris:     var(--c-gris-fonce);
 
         --c-theme-trans:    var(--c-blanc-trans);
         --c-analogue-trans: var(--c-creme-trans);
@@ -271,6 +275,7 @@
         --c-theme:    var(--c-noir);
         --c-analogue: var(--c-boue);
         --c-inverse:  var(--c-creme);
+        --c-gris:     var(--c-gris-clair);
 
         --c-theme-trans:    var(--c-noir-trans);
         --c-analogue-trans: var(--c-boue-trans);

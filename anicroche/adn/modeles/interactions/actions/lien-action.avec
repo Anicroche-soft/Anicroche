@@ -138,7 +138,8 @@
 
         --c-flux: var(--c-vif);
 
-        transition: text-decoration-color var(--d-animation);
+        transition: text-decoration-color var(--d-animation),
+                    outline-color var(--d-animation);
     }
 
     .lien-action:hover {

@@ -1,5 +1,6 @@
 Tâches :
-- revoir l'organisation des pages d'anicroches
+- revoir l'organisation des pages d'anicroches : /<id> est faite, il reste à remplir /<id>/gestion (l'historique des versions, retiré de /<id>, pourrait y aller) et à revoir /<id>/edition
+- voir ce qui doit être intégré au pied de page
 - relire et compléter les premières versions des pages légales (juridique/conditions-generales-d-utilisation.md, juridique/politique-de-confidentialite.md, juridique/mentions-legales.md : passages « À compléter », adresse d'Infomaniak à vérifier), les publier avant le lancement, et ajouter des liens vers ces pages dans le site
 - finir le préavis des pages légales (voir juridique/RGPD.md § 11, l'essentiel est fait) :
     - zone de publication propre aux pages soumises au préavis, avec un bouton « Enregistrer en tant que correction » et un bouton « Enregistrer en tant que mise à jour »
@@ -13,12 +14,12 @@ Tâches :
 - permettre de remplacer une adresse principale perdue (changement différé, avec opposition possible depuis l'adresse actuelle)
 - mettre en place la configuration de compte et de profils (dont la case à cocher des fonctionnalités liées à l'âge, voir juridique/RGPD.md § 2.4, la teinte, le fuseau horaire, les langues)
 - ajout des comptes sous contrôle parental
-- permetre la suppression, l'anonymisation et la désactivation d'un profil
+- permettre la suppression, l'anonymisation et la désactivation d'un profil
 
 Tâches dépendantes :
 - quand des anicroches d'utilisateurs seront publiées (types avec auteurs) :
     - masquer les profils des comptes dont l'effacement est en cours et afficher les profils anonymisés sans nom
-    - ouvrir la relation auteurs des anicroches à la projection (can_search, avec un restrict_search sur les profils), et en tenir compte dans $charger_anicroche (base.avec), qui ne considère pour l'instant comme gérants que les profils qui administrent le type (l'API, elle, compte déjà les auteurs)
+    - ouvrir la relation auteurs des anicroches à la projection (can_search, avec un restrict_search sur les profils), et en tenir compte dans $charger_anicroche (base.avec), qui ne considère pour l'instant comme gérants que les profils qui administrent le type (l'API, elle, compte déjà les auteurs), puis passer les auteurs à la barre d'informations de page-anicroche.avec ($auteurs_anicroche, aujourd'hui toujours vide) et aux boutons Gestion et Édition
 - quand la création d'anicroches existera : choisir la langue et la région d'origine de l'anicroche (champs langue et region d'anicroches.sans, fr et FR par défaut pour l'instant), et peut-être permettre de les modifier ; les sources ajoutées dans l'édition prennent déjà cette langue
 - quand les tables auront beaucoup d'entrées : réfléchir à une pagination presque obligatoire des routes GET automatiques de sans.js (paramètres limit et offset, ou curseur ; limite par défaut et maximale, par table dans @rules), aujourd'hui sans aucune limite
 - quand les anicroches publiées approcheront 50 000 (limite d'adresses d'un sitemap) : découper sitemap.xml en plusieurs fichiers réunis par un index de sitemaps (sitemapindex), annoncé dans robots.txt (nécessite la pagination de GET /anicroches)

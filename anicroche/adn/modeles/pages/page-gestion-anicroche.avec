@@ -1,0 +1,87 @@
+@script [
+    // interdite, introuvable ou prete
+    $etat_gestion      = 'introuvable'
+    $anicroche_gestion = null
+    $type_gestion      = null
+
+    const SUFFIXE = '/gestion'
+
+    const lire_id = () => $lire_identifiant_anicroche($path.slice(1, -SUFFIXE.length))
+
+    const charger_gestion = async () =>
+    {
+        const chemin = $path
+
+        // Sans profil, aucun type ne peut être administré
+        if (!$profil)
+        {
+            $etat_gestion = 'interdite'
+            return
+        }
+
+        const id = lire_id()
+        if (!id)
+        {
+            $etat_gestion = 'introuvable'
+            return
+        }
+
+        const reponse = await $charger_anicroche(id)
+
+        // Une réponse arrivée après une nouvelle navigation est ignorée
+        if ($path !== chemin)
+            return
+
+        if (reponse.code !== 200)
+        {
+            $etat_gestion = 'introuvable'
+            return
+        }
+
+        // Le droit vient de l administration du type ; l API le vérifie de son côté
+        if (!$administre_type(reponse.data.type))
+        {
+            $etat_gestion = 'interdite'
+            return
+        }
+
+        $anicroche_gestion = reponse.data
+        $type_gestion      = reponse.type
+        $etat_gestion      = 'prete'
+    }
+
+    // La page n est affichée qu une fois l anicroche chargée : le routeur montre d ici là son
+    // modèle d attente
+    await charger_gestion()
+]
+
+$titre = [$type_gestion] ? "Gestion : $type_gestion.libelle" : "Gestion"
+$puce  = creer
+
+page [$authentification : requise_sans_profil]
+    navigation
+        <div .gauche>
+            fleche-retour
+
+        <div .centre>
+            <span>
+                @if [$type_gestion]
+                    "Gestion : $type_gestion.libelle"
+                @else
+                    "Gestion"
+
+    onglet
+        @if [$etat_gestion = interdite]
+            section [gestion-interdite, centree]
+                titre [centre]
+                    "Vous ne pouvez pas gérer ce contenu"
+
+        @else-if [$etat_gestion = introuvable]
+            section [gestion-introuvable, centree]
+                titre [centre]
+                    "Contenu introuvable !"
+
+        @else
+            section [gestion]
+                titre
+                    "$anicroche_gestion.titre"

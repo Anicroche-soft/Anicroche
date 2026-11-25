@@ -131,6 +131,7 @@
     // - version, date_parution, acces, sources et titre de la version affichée (null si aucune) ;
     // - en_vigueur : numéro de la version en vigueur ;
     // - a_venir    : { numero, date_parution } de la version programmée ;
+    // - a_l_essai  : { numero } de la version à l essai (dernière version, non datée et publique) ;
     // - versions   : versions parues, de la plus récente à la plus ancienne ({ numero, date_parution }) ;
     // - legale, preavis : spécificités de l anicroche ;
     // - brouillon  : pour les gérants, la dernière version si elle n est pas parue
@@ -149,9 +150,10 @@
         const en_vigueur = rangees.find(est_parue) ?? null
         const derniere   = rangees[0] ?? null
         const programmee = derniere?.date_parution && !est_parue(derniere) ? derniere : null
+        const essai      = derniere && !derniere.date_parution && derniere.acces === 'public' ? derniere : null
         const affichee   = demandee === null ? en_vigueur : rangees.find(version => version.numero === demandee) ?? null
 
-        if (!affichee && (demandee !== null || !programmee) && !gere)
+        if (!affichee && (demandee !== null || (!programmee && !essai)) && !gere)
             return { code: 404, type, data: null }
 
         const sources = affichee ? await lire_sources_version(anicroche.id, type, affichee.numero) : {}
@@ -163,6 +165,7 @@
         anicroche.titre         = $titre_anicroche(anicroche, sources)
         anicroche.en_vigueur    = en_vigueur?.numero ?? null
         anicroche.a_venir       = programmee ? { numero: programmee.numero, date_parution: programmee.date_parution } : null
+        anicroche.a_l_essai     = essai ? { numero: essai.numero } : null
         anicroche.versions      = rangees.filter(est_parue).map(({ numero, date_parution }) => ({ numero, date_parution }))
         anicroche.legale        = $est_legale(anicroche)
         anicroche.preavis       = $soumise_au_preavis(anicroche)
@@ -291,6 +294,38 @@
         }
     }
 
+    // Écart entre une date et maintenant, en deux formes : court (« 3 h », « dans 2 j ») et
+    // long (« il y a 3 heures », « dans 2 jours ») ; null sans date
+    $formater_anciennete = (date) =>
+    {
+        if (!date)
+            return null
+
+        const ecart    = new Date(date).getTime() - Date.now()
+        const futur    = ecart > 0
+        const secondes = Math.abs(ecart) / 1000
+        const jours    = secondes / 86400
+
+        const [ nombre, court, singulier, pluriel ] =
+            secondes < 3600     ? [ Math.floor(secondes / 60),   'min',  'minute',  'minutes'  ] :
+            secondes < 86400    ? [ Math.floor(secondes / 3600), 'h',    'heure',   'heures'   ] :
+            jours < 7           ? [ Math.floor(jours),           'j',    'jour',    'jours'    ] :
+            jours < 30          ? [ Math.floor(jours / 7),       'sem',  'semaine', 'semaines' ] :
+            jours < 365         ? [ Math.floor(jours / 30.44),   'mois', 'mois',    'mois'     ] :
+                                  [ Math.floor(jours / 365.25),  'an',   'an',      'ans'      ]
+
+        if (nombre < 1)
+            return { court: '< 1 min', long: futur ? "dans un instant" : "à l'instant" }
+
+        const duree_courte = `${nombre} ${court === 'an' && nombre > 1 ? 'ans' : court}`
+        const duree_longue = `${nombre} ${nombre > 1 ? pluriel : singulier}`
+
+        return {
+            court : futur ? `dans ${duree_courte}` : duree_courte,
+            long  : futur ? `dans ${duree_longue}` : `il y a ${duree_longue}`
+        }
+    }
+
     // Date lisible (« 19 novembre 2026 », ou « 19 novembre 2026 à 14:05 » avec l heure) : une
     // date seule AAAA-MM-JJ est lue telle quelle, une date et heure de l API (en UTC) dans le
     // fuseau du visiteur
@@ -404,6 +439,43 @@
                 }, duree_animation(noeud))
             })
         }
+    }
+
+    // ─── Boîtes de dialogue ──────────────────────────────────────────────────
+
+    // Une seule boîte de dialogue (boite-dialogue) est ouverte à la fois
+    const boite_ouverte = () => document.querySelector('dialog.boite-dialogue[open]')
+
+    // Ouvre la boîte de ce nom ; renvoie false si une boîte est déjà ouverte ou si aucune ne
+    // porte ce nom dans la page
+    $ouvrir_boite = (nom) =>
+    {
+        if (boite_ouverte())
+            return false
+
+        const boite = [ ...document.querySelectorAll('dialog.boite-dialogue') ]
+            .find(element => element.dataset.boite === nom)
+        if (!boite)
+            return false
+
+        boite.dataset.chemin = location.pathname
+        boite.showModal()
+        return true
+    }
+
+    // Ferme la boîte ouverte, avec son animation
+    $fermer_boite = () =>
+    {
+        boite_ouverte()?.dispatchEvent(new Event('fermer-boite'))
+    }
+
+    // Appelée par chaque boîte à chaque changement de $path : une navigation vers une autre
+    // page ferme la boîte ouverte
+    $suivre_navigation_boite = (chemin) =>
+    {
+        const boite = boite_ouverte()
+        if (boite && boite.dataset.chemin !== chemin)
+            $fermer_boite()
     }
 
     // ─── Démarrage ───────────────────────────────────────────────────────────

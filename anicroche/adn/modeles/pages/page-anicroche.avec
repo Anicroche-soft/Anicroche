@@ -1,88 +1,43 @@
 @script [
     // introuvable, non_publiee ou trouvee
-    $etat_anicroche           = 'introuvable'
-    $anicroche                = null
-    $sources_anicroche        = []
-    $libelle_anicroche        = ''
-    $description_anicroche    = null
+    $etat_anicroche         = 'introuvable'
+    $anicroche              = null
+    $libelle_anicroche      = ''
+    $titre_page_anicroche   = ''
+    $texte_anicroche        = []
+    $description_anicroche  = null
+    $gerant_anicroche       = false
+    $lien_gestion_anicroche = ''
+    $lien_edition_anicroche = ''
 
-    // Avis au-dessus du contenu : texte, puis lien vers l autre version
-    $avis_anicroche       = ''
-    $lien_avis_anicroche  = ''
-    $texte_avis_anicroche = ''
+    // Barre d informations : auteurs, lien vers une autre version et date de parution de la
+    // version affichée
+    $auteurs_anicroche    = []
+    $lien_version         = ''
+    $texte_lien_version   = ''
+    $date_anicroche       = null
 
-    // Historique des versions : { texte, lien, affichee }
-    $historique_anicroche = []
-
-    const avis = (texte, lien = '', texte_lien = '') =>
+    // /<id> montre la version en vigueur, /<id>/<numero> une version précise : le lien mène à
+    // la version en vigueur depuis une version qui ne l est pas, et sinon à la version à
+    // paraître ou à l essai (brouillon public). Les gérants de l anicroche (auteurs, ou profils
+    // qui administrent son type) reçoivent aussi son brouillon : /<id> en montre l aperçu tant
+    // qu aucune version n est parue
+    const preparer_lien_version = (anicroche, affichee, chemin) =>
     {
-        $avis_anicroche       = texte
-        $lien_avis_anicroche  = lien
-        $texte_avis_anicroche = texte_lien
-    }
-
-    // /<id> montre la version en vigueur, /<id>/<numero> une version précise. Les
-    // gérants de l anicroche (auteurs, ou profils qui administrent son type) reçoivent aussi
-    // son brouillon : /<id> en montre l aperçu tant qu aucune version n est parue, et un lien
-    // y mène sinon
-    const preparer_avis = (anicroche, chemin) =>
-    {
-        const a_venir   = anicroche.a_venir
-        const brouillon = anicroche.brouillon ?? null
-        const lien      = (numero) => `${chemin}/${numero}`
-        const date      = (valeur) => $formater_date(valeur)
-
-        avis('')
-
-        if (anicroche.version === null)
+        const lien = (texte, adresse) =>
         {
-            if (brouillon)
-                return avis(brouillon.date_parution
-                    ? `Aperçu de la version ${brouillon.numero} : cette page paraîtra le ${date(brouillon.date_parution)}.`
-                    : `Aperçu du brouillon de la version ${brouillon.numero} : cette page n'est pas encore parue.`)
-            if (a_venir)
-                avis(`Cette page entrera en vigueur le ${date(a_venir.date_parution)}.`, lien(a_venir.numero), "Voir cette version")
-            return
+            $texte_lien_version = texte
+            $lien_version       = adresse
         }
 
-        if (anicroche.version === anicroche.en_vigueur)
-        {
-            if (a_venir)
-                avis(`Une nouvelle version entrera en vigueur le ${date(a_venir.date_parution)}.`, lien(a_venir.numero), "Voir la nouvelle version")
-            else if (brouillon)
-                avis(`Le brouillon de la version ${brouillon.numero} n'est pas encore paru.`, lien(brouillon.numero), "Voir son aperçu")
-            return
-        }
+        lien('', '')
 
-        const actuelle = anicroche.en_vigueur === null ? '' : chemin
-
-        if (a_venir?.numero === anicroche.version)
-            avis(`Cette nouvelle version entrera en vigueur le ${date(anicroche.date_parution)}.`, actuelle, "Voir la version actuelle")
-        else if (brouillon?.numero === anicroche.version)
-            avis(`Aperçu du brouillon de la version ${anicroche.version}, qui n'est pas encore paru.`, actuelle, "Voir la version actuelle")
-        else if (!anicroche.date_parution)
-            avis("Cette version n'est pas encore parue.", actuelle, "Voir la version actuelle")
-        else
-            avis(`Cette version, parue le ${date(anicroche.date_parution)}, n'est plus en vigueur.`, actuelle, "Voir la version actuelle")
-    }
-
-    // La version à venir, puis les versions parues, de la plus récente à la plus ancienne
-    const preparer_historique = (anicroche, chemin) =>
-    {
-        const entrees = []
-        const entree  = (numero, texte) => entrees.push({
-            texte,
-            lien     : numero === anicroche.en_vigueur ? chemin : `${chemin}/${numero}`,
-            affichee : numero === anicroche.version
-        })
-
-        if (anicroche.a_venir)
-            entree(anicroche.a_venir.numero, `Version ${anicroche.a_venir.numero}, en vigueur le ${$formater_date(anicroche.a_venir.date_parution)}`)
-
-        for (const version of anicroche.versions ?? [])
-            entree(version.numero, `Version ${version.numero}, parue le ${$formater_date(version.date_parution)}${version.numero === anicroche.en_vigueur ? ' (en vigueur)' : ''}`)
-
-        $historique_anicroche = entrees
+        if (affichee !== null && affichee !== anicroche.en_vigueur && anicroche.en_vigueur !== null)
+            lien("Voir la version en vigueur", chemin)
+        else if (anicroche.a_venir && anicroche.a_venir.numero !== affichee)
+            lien(`Voir la version à paraître le ${$formater_date(anicroche.a_venir.date_parution)}`, `${chemin}/${anicroche.a_venir.numero}`)
+        else if (anicroche.a_l_essai && anicroche.a_l_essai.numero !== affichee)
+            lien("Voir la version à l'essai", `${chemin}/${anicroche.a_l_essai.numero}`)
     }
 
     // Début du premier contenu qui n est pas un titre, repris par les moteurs de recherche
@@ -98,9 +53,9 @@
     // Le routeur reconstruit la page à chaque adresse (@key) : /<id> ou /<id>/<numero>
     const charger_anicroche = async () =>
     {
-        const adresse                = $path
+        const adresse                   = $path
         const [ segment, version = '' ] = adresse.slice(1).split('/')
-        const chemin                 = `/${segment}`
+        const chemin                    = `/${segment}`
 
         const id = $lire_identifiant_anicroche(segment)
         if (!id || (version !== '' && !/^[1-9][0-9]*$/.test(version)))
@@ -127,21 +82,29 @@
         // Sans version visible, un gérant voit l aperçu du brouillon
         const apercu  = reponse.data.version === null ? reponse.data.brouillon ?? null : null
         const sources = apercu ? apercu.sources : reponse.data.sources
+        const listees = $lister_sources_anicroche(type, sources)
+            .filter(source => String(source.contenu ?? '').trim() !== '')
 
         $anicroche         = reponse.data
         $libelle_anicroche = type.libelle
-        const listees      = $lister_sources_anicroche(type, sources)
-            .filter(source => String(source.contenu ?? '').trim() !== '')
 
         // Une version parue avant la source de titre de son type prend le titre de son exception
-        // (voir $titre_anicroche)
-        const role_titre   = type.sources.find(source => source.format === 'titre')?.role
-        $sources_anicroche = role_titre && !apercu && !listees.some(source => source.role === role_titre)
-            ? [ { role: role_titre, format: 'titre', contenu: reponse.data.titre }, ...listees ]
-            : listees
+        // (voir $titre_anicroche) ; l aperçu prend celui de son brouillon
+        $titre_page_anicroche  = listees.find(source => source.format === 'titre')?.contenu
+            ?? (apercu ? $titre_anicroche(reponse.data, apercu.sources) : reponse.data.titre)
+        $texte_anicroche       = listees.filter(source => source.format !== 'titre')
         $description_anicroche = resumer(listees)
-        preparer_avis(reponse.data, chemin)
-        preparer_historique(reponse.data, chemin)
+        preparer_lien_version(reponse.data, apercu ? apercu.numero : reponse.data.version, chemin)
+
+        // Les auteurs ne sont pas encore lisibles par la projection ; seule une version datée
+        // a une date
+        $auteurs_anicroche = []
+        $date_anicroche    = apercu ? apercu.date_parution : reponse.data.date_parution
+
+        // La gestion et l édition sont réservées aux gérants ; l API le vérifie de son côté
+        $gerant_anicroche       = $administre_type(reponse.data.type)
+        $lien_gestion_anicroche = `${chemin}/gestion`
+        $lien_edition_anicroche = `${chemin}/edition`
 
         // Une page sans version visible n est renvoyée qu à ses gérants, ou quand sa parution
         // est annoncée
@@ -157,7 +120,7 @@
     page-404
 
 @else
-    $titre       = $anicroche.titre
+    $titre       = $titre_page_anicroche
     $description = $description_anicroche
     $puce        = accueil
 
@@ -171,37 +134,24 @@
                     "$libelle_anicroche"
 
         onglet
-            @if [$etat_anicroche = non_publiee]
-                section [anicroche-non-publiee, centree]
-                    titre [centre]
-                        "Cette page n'est pas encore publiée"
-                    @if [$avis_anicroche]
-                        carte
-                            information-formulaire
-                                "$avis_anicroche "
-                                lien-ancre [$lien_avis_anicroche]
-                                    "$texte_avis_anicroche"
-
-            @else
-                section [anicroche]
-                    @if [$avis_anicroche]
-                        carte
-                            information-formulaire
-                                "$avis_anicroche "
-                                @if [$lien_avis_anicroche]
-                                    lien-ancre [$lien_avis_anicroche]
-                                        "$texte_avis_anicroche"
-                    sources-anicroche [$sources_anicroche]
-
-                @if [_ $historique_anicroche > 1]
-                    section [historique-anicroche]
-                        titre
-                            "Historique des versions"
-                        carte
-                            @for-each [$entree] of [$historique_anicroche]
-                                @if [$entree.affichee]
-                                    <span>
-                                        "$entree.texte"
-                                @else
-                                    lien-ancre [$entree.lien]
-                                        "$entree.texte"
+            section [anicroche]
+                titre
+                    "$titre_page_anicroche"
+                carte
+                    informations-anicroche [
+                        $auteurs    : $auteurs_anicroche
+                        $lien       : $lien_version
+                        $texte_lien : $texte_lien_version
+                        $date       : $date_anicroche
+                    ]
+                    @if [$etat_anicroche = non_publiee]
+                        <p>
+                            "Cette page n'est pas encore publiée."
+                    @else
+                        sources-anicroche [$texte_anicroche]
+                    @if [$gerant_anicroche]
+                        ligne
+                            bouton-ancre [$lien_gestion_anicroche]
+                                "Gestion"
+                            bouton-ancre [$lien_edition_anicroche]
+                                "Édition"

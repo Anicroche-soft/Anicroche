@@ -1,0 +1,9 @@
+@style [
+    .icone-croix {
+        width: 1rem;
+        height: 1rem;
+    }
+]
+
+<svg .icone .icone-croix viewBox="0 0 16 16">
+    <path d="M1 1L8 8M8 8L15 15M8 8L15 1M8 8L1 15" stroke-width="2">

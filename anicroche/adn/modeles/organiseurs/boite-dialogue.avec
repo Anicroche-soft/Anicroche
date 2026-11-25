@@ -1,0 +1,508 @@
+@script [
+    $monter_boite_dialogue = () =>
+    {
+        const boite   = $node
+        const racine  = document.documentElement
+        const contenu = () => boite.querySelector('.contenu-boite')
+
+        // Au bas de l écran en format petit ou au toucher, au centre sinon
+        const en_feuille = () => racine.classList.contains('petit') || racine.classList.contains('grossier')
+
+        const duree = () =>
+        {
+            const valeur = getComputedStyle(boite).getPropertyValue('--d-boite').trim()
+            const nombre = parseFloat(valeur) || 0
+            return valeur.endsWith('ms') ? nombre : nombre * 1000
+        }
+
+        const rem = () => parseFloat(getComputedStyle(racine).fontSize) || 16
+
+        // Hauteur de la boîte agrandie : tout l écran, moins 2rem de fond grisé au-dessus
+        const hauteur_max = () => window.innerHeight - 2 * rem()
+
+        const deborde = () =>
+        {
+            const element = contenu()
+            return !!element && element.scrollHeight > element.clientHeight + 1
+        }
+
+        let fermeture    = false
+        let hauteur_base = null
+        let geste        = null
+        let retour       = null
+
+        const vider_styles = () =>
+        {
+            for (const propriete of [ 'transform', 'height', 'max-height', '--retrait-boite' ])
+                boite.style.removeProperty(propriete)
+        }
+
+        // Après la fermeture, quelle qu en soit la cause (y compris une demande de fermeture
+        // que le navigateur n a pas laissé retarder)
+        const reinitialiser = () =>
+        {
+            clearTimeout(retour)
+            boite.classList.remove('fermeture', 'glissement', 'agrandie')
+            vider_styles()
+            fermeture    = false
+            hauteur_base = null
+            geste        = null
+        }
+
+        // La boîte se ferme une fois son animation de sortie finie : elle part de là où elle
+        // est (glissée vers le bas, par exemple)
+        const fermer = () =>
+        {
+            if (!boite.open || fermeture)
+                return
+
+            fermeture = true
+            clearTimeout(retour)
+            boite.classList.remove('glissement')
+            boite.style.removeProperty('transform')
+            boite.style.removeProperty('--retrait-boite')
+            boite.classList.add('fermeture')
+
+            setTimeout(() =>
+            {
+                if (boite.open)
+                    boite.close()
+            }, duree())
+        }
+
+        boite.addEventListener('close', reinitialiser)
+        boite.addEventListener('fermer-boite', fermer)
+
+        // Échap, ou retour d Android : la boîte se ferme avec son animation
+        boite.addEventListener('cancel', (evenement) =>
+        {
+            evenement.preventDefault()
+            fermer()
+        })
+
+        // Un clic sur le fond grisé a pour cible la boîte elle-même, hors de son rectangle ;
+        // l appui doit aussi y avoir commencé (et non dans la boîte, en sélectionnant du texte)
+        const dehors = (x, y) =>
+        {
+            const rectangle = boite.getBoundingClientRect()
+            return x < rectangle.left || x > rectangle.right || y < rectangle.top || y > rectangle.bottom
+        }
+
+        const hors_boite = (evenement) =>
+            evenement.target === boite && dehors(evenement.clientX, evenement.clientY)
+
+        let appui_sur_fond = false
+
+        boite.addEventListener('pointerdown', (evenement) =>
+        {
+            appui_sur_fond = hors_boite(evenement)
+        })
+
+        boite.addEventListener('click', (evenement) =>
+        {
+            if (appui_sur_fond && hors_boite(evenement))
+                fermer()
+            appui_sur_fond = false
+        })
+
+        // ─── Glissement ──────────────────────────────────────────────────────
+
+        // La position du geste est la hauteur visible de la boîte. Au-dessus de sa hauteur de
+        // base (75 % de l écran au plus), la boîte grandit, si son contenu déborde ou si elle
+        // est déjà agrandie ; en dessous, elle descend
+        const placer = (visible) =>
+        {
+            const base = hauteur_base
+            const max  = geste.extensible ? Math.max(base, hauteur_max()) : base
+
+            if (visible >= base)
+            {
+                // Au-delà de la hauteur permise, la boîte résiste
+                const hauteur = visible > max ? max + (visible - max) / 4 : visible
+
+                boite.style.height = `${hauteur}px`
+                boite.style.removeProperty('transform')
+                boite.style.removeProperty('--retrait-boite')
+                return
+            }
+
+            const descente = base - visible
+            boite.style.height    = `${base}px`
+            boite.style.transform = `translateY(${descente}px)`
+            boite.style.setProperty('--retrait-boite', Math.min(1, descente / base).toFixed(3))
+        }
+
+        // Vitesse des 100 dernières millisecondes, en pixels par milliseconde (positive vers le
+        // bas)
+        const vitesse = () =>
+        {
+            const points = geste.points
+            const dernier = points.at(-1)
+            const premier = points.find(point => dernier.temps - point.temps <= 100) ?? dernier
+            const temps   = dernier.temps - premier.temps
+            return temps > 0 ? (dernier.y - premier.y) / temps : 0
+        }
+
+        // Retour à la hauteur de base ou agrandie, puis la hauteur revient à celle du style
+        // (75 % de l écran au plus, ou agrandie), qui suit la taille de l écran
+        const revenir = (hauteur, agrandie) =>
+        {
+            boite.style.removeProperty('transform')
+            boite.style.removeProperty('--retrait-boite')
+            boite.style.maxHeight = 'none'
+            boite.style.height    = `${hauteur}px`
+            boite.classList.toggle('agrandie', agrandie)
+
+            clearTimeout(retour)
+            retour = setTimeout(() =>
+            {
+                if (!geste)
+                    vider_styles()
+            }, duree())
+        }
+
+        const relacher = () =>
+        {
+            const base    = hauteur_base
+            const max     = hauteur_max()
+            const visible = geste.visible
+            const elan    = vitesse()
+
+            boite.classList.remove('glissement')
+
+            if (visible < base)
+            {
+                if (base - visible > base / 4 || elan > 0.5)
+                    return fermer()
+                return revenir(base, false)
+            }
+
+            const vers_le_haut = elan < -0.5 || (elan <= 0.5 && visible - base > (max - base) / 2)
+            if (geste.extensible && max > base && vers_le_haut)
+                return revenir(max, true)
+            revenir(base, false)
+        }
+
+        // Un geste commence sur la boîte (marges comprises), jamais sur le fond grisé
+        const debuter = (x, y, cible) =>
+        {
+            if (!en_feuille() || fermeture || dehors(x, y))
+                return
+
+            clearTimeout(retour)
+            if (!boite.classList.contains('agrandie') || hauteur_base === null)
+                hauteur_base = boite.getBoundingClientRect().height
+
+            geste = {
+                depart     : y,
+                hauteur    : boite.getBoundingClientRect().height,
+                visible    : null,
+                poignee    : !!cible.closest('.entete-boite'),
+                extensible : boite.classList.contains('agrandie') || deborde(),
+                mode       : null,
+                points     : [ { y, temps: performance.now() } ]
+            }
+        }
+
+        // La boîte suit le doigt partout : vers le bas quand son contenu est tout en haut, vers
+        // le haut tant qu elle peut s agrandir. Sinon, le contenu défile normalement
+        const choisir_mode = (deplacement) =>
+        {
+            if (geste.poignee)
+                return 'glissement'
+
+            const element = contenu()
+            const en_haut = !element || element.scrollTop <= 0
+
+            if (deplacement > 0 && en_haut)
+                return 'glissement'
+            if (deplacement < 0 && !boite.classList.contains('agrandie') && deborde())
+                return 'glissement'
+            return 'defilement'
+        }
+
+        const deplacer = (y) =>
+        {
+            geste.points.push({ y, temps: performance.now() })
+            if (geste.points.length > 20)
+                geste.points.shift()
+
+            geste.visible = geste.hauteur - (y - geste.depart)
+            placer(geste.visible)
+        }
+
+        // Le premier mouvement décide du geste : la décision doit tomber avant que le
+        // navigateur ne commence à faire défiler, tant que touchmove peut encore être annulé
+        const bouger = (y, evenement) =>
+        {
+            if (!geste)
+                return
+
+            const deplacement = y - geste.depart
+
+            if (!geste.mode)
+            {
+                if (deplacement === 0)
+                    return
+
+                geste.mode = evenement.cancelable === false ? 'defilement' : choisir_mode(deplacement)
+                if (geste.mode === 'glissement')
+                {
+                    boite.classList.add('glissement')
+                    geste.depart = y
+                }
+            }
+
+            if (geste.mode !== 'glissement')
+                return
+
+            evenement.preventDefault()
+            deplacer(y)
+        }
+
+        const finir = () =>
+        {
+            if (geste?.mode === 'glissement' && geste.visible !== null)
+                relacher()
+            else
+                boite.classList.remove('glissement')
+            geste = null
+        }
+
+        // Toucher : touchmove, contrairement aux évènements de pointeur, peut empêcher le
+        // défilement une fois le geste commencé
+        boite.addEventListener('touchstart', (evenement) =>
+        {
+            if (evenement.touches.length !== 1)
+            {
+                geste = null
+                return
+            }
+            debuter(evenement.touches[0].clientX, evenement.touches[0].clientY, evenement.target)
+        }, { passive: true })
+
+        boite.addEventListener('touchmove', (evenement) =>
+        {
+            if (evenement.touches.length === 1)
+                bouger(evenement.touches[0].clientY, evenement)
+        }, { passive: false })
+
+        boite.addEventListener('touchend',    finir)
+        boite.addEventListener('touchcancel', finir)
+
+        // Souris : seulement par l en-tête (la barre)
+        const souris_bougee = (evenement) => bouger(evenement.clientY, evenement)
+
+        const souris_relachee = () =>
+        {
+            document.removeEventListener('pointermove', souris_bougee)
+            document.removeEventListener('pointerup',   souris_relachee)
+            finir()
+        }
+
+        boite.addEventListener('pointerdown', (evenement) =>
+        {
+            if (evenement.pointerType !== 'mouse' || evenement.button !== 0 || !evenement.target.closest('.entete-boite'))
+                return
+            if (evenement.target.closest('button'))
+                return
+
+            debuter(evenement.clientX, evenement.clientY, evenement.target)
+            if (!geste)
+                return
+
+            geste.mode = 'glissement'
+            boite.classList.add('glissement')
+            evenement.preventDefault()
+            document.addEventListener('pointermove', souris_bougee)
+            document.addEventListener('pointerup',   souris_relachee)
+        })
+
+        $vars.souris_bougee   = souris_bougee
+        $vars.souris_relachee = souris_relachee
+    }
+
+    // Une boîte retirée (page quittée) se ferme avec elle
+    $demonter_boite_dialogue = () =>
+    {
+        document.removeEventListener('pointermove', $vars.souris_bougee)
+        document.removeEventListener('pointerup',   $vars.souris_relachee)
+        if ($node.open)
+            $node.close()
+    }
+]
+
+@style [
+    /* Boîte de dialogue modale : au centre de l écran, avec une croix, pour un pointeur précis
+       sur grand écran ; au bas de l écran, en format petit ou au toucher, avec une barre au
+       toucher. Le fond grisé (::backdrop) s éclaircit quand la boîte descend */
+    .boite-dialogue {
+        margin: auto;
+        width: min(var(--l-boite), 100% - 2rem);
+        max-width: none;
+        max-height: 75dvh;
+
+        overflow: hidden;
+        border-radius: 1.5rem;
+        padding: 1rem;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+
+        transform: none;
+        opacity: 1;
+
+        transition: transform var(--d-boite) ease,
+                    opacity   var(--d-boite) ease,
+                    height    var(--d-boite) ease;
+
+        --d-boite: 300ms;
+        --l-boite: 32rem;
+
+        --l-fonte: 1rem;
+        --l-ecart: 1rem;
+        --f-fond:  var(--c-theme);
+        --c-fond:  var(--c-theme);
+        --c-flux:  var(--c-inverse);
+    }
+
+    .boite-dialogue[open] {
+        display: flex;
+        flex-flow: column nowrap;
+    }
+
+    .boite-dialogue::backdrop {
+        background: oklch(0 0 0 / 40%);
+        opacity: calc(1 - var(--retrait-boite, 0));
+
+        transition: opacity var(--d-boite) ease;
+    }
+
+    @starting-style {
+        .boite-dialogue[open] {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        .boite-dialogue[open]::backdrop {
+            opacity: 0;
+        }
+    }
+
+    .boite-dialogue.fermeture {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    .boite-dialogue.fermeture::backdrop {
+        opacity: 0;
+    }
+
+    .boite-dialogue.glissement,
+    .boite-dialogue.glissement::backdrop {
+        transition: none;
+    }
+
+    .boite-dialogue.glissement {
+        max-height: none;
+    }
+
+    /* Au bas de l écran */
+    :is(.petit, .grossier) .boite-dialogue {
+        margin: auto auto 0;
+        width: min(var(--l-boite), 100%);
+
+        border-radius: 1.5rem 1.5rem 0 0;
+    }
+
+    :is(.petit, .grossier) .boite-dialogue.agrandie {
+        height: calc(100dvh - 2rem);
+        max-height: none;
+    }
+
+    @starting-style {
+        :is(.petit, .grossier) .boite-dialogue[open] {
+            opacity: 1;
+            transform: translateY(100%);
+        }
+    }
+
+    :is(.petit, .grossier) .boite-dialogue.fermeture {
+        opacity: 1;
+        transform: translateY(100%);
+    }
+
+    /* En-tête : la croix pour un pointeur précis, la barre au toucher */
+    .boite-dialogue > .entete-boite {
+        flex: none;
+        flex-direction: row;
+        justify-content: flex-end;
+        align-items: center;
+    }
+
+    .grossier .boite-dialogue > .entete-boite {
+        justify-content: center;
+
+        cursor: grab;
+        touch-action: none;
+    }
+
+    .grossier .boite-dialogue.glissement > .entete-boite {
+        cursor: grabbing;
+    }
+
+    .boite-dialogue .barre-boite {
+        width: 6rem;
+        height: 0.25rem;
+
+        border-radius: 0.125rem;
+
+        --f-fond: var(--c-gris);
+    }
+
+    .boite-dialogue .croix-boite {
+        display: flex;
+
+        border-radius: 0.125rem;
+
+        --c-flux: var(--c-gris);
+    }
+
+    /* Liens d action dans la couleur du texte */
+    .boite-dialogue .lien-action {
+        --c-flux: var(--c-inverse);
+    }
+
+    .grossier .boite-dialogue .croix-boite,
+    .precis .boite-dialogue .barre-boite {
+        display: none;
+    }
+
+    .boite-dialogue > .contenu-boite {
+        flex: 1 1 auto;
+        min-height: 0;
+
+        overscroll-behavior: contain;
+    }
+]
+
+# Boîte de dialogue, ouverte par $ouvrir_boite($nom) et fermée par $fermer_boite() (base.avec) :
+# une seule à la fois. Elle se ferme aussi par la croix, par la barre ou en la glissant vers le
+# bas, par un clic sur le fond grisé, par Échap ou le retour d'Android, et à la navigation vers
+# une autre page. Son contenu peut défiler ; au bas de l'écran, elle s'agrandit en la tirant
+# vers le haut
+@args [$nom]
+
+$navigation_boite_dialogue = $suivre_navigation_boite($path)
+
+<dialog
+    .boite-dialogue
+    data-boite="$nom"
+    @mount="$monter_boite_dialogue()"
+    @unmount="$demonter_boite_dialogue()"
+>
+    <div .entete-boite>
+        <div .barre-boite>
+        <button .croix-boite type="button" aria-label="Fermer" @click="$fermer_boite()">
+            icone-croix
+
+    defilement.contenu-boite
+        @stud
