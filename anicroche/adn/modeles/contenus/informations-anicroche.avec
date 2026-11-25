@@ -106,8 +106,6 @@
 
         display: flex;
         align-items: center;
-
-        --c-focus: var(--c-vif);
     }
 ]
 
