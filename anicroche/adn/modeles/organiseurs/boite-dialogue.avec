@@ -22,9 +22,12 @@
         // Hauteur de la boîte agrandie : tout l écran, moins 2rem de fond grisé au-dessus
         const hauteur_max = () => window.innerHeight - 2 * rem()
 
+        // Ce qui défile : le sous-menu ouvert, sinon le contenu
+        const defilant = () => sous_menu?.querySelector(':scope > .liste-sous-menu') ?? contenu()
+
         const deborde = () =>
         {
-            const element = contenu()
+            const element = defilant()
             return !!element && element.scrollHeight > element.clientHeight + 1
         }
 
@@ -81,7 +84,7 @@
         // Un sous-menu (modèle sous-menu) arrive de la droite par-dessus le menu principal, qui
         // reste en place et s estompe ; le retour fait l inverse. Pendant la transition, le
         // sous-menu qui arrive ou qui part est posé par-dessus le menu principal, et la hauteur
-        // du contenu passe de l une à l autre
+        // du contenu passe de l une à l autre. Chacun défile pour lui-même
         let sous_menu   = null
         let transition  = null
 
@@ -132,7 +135,11 @@
                     transition = null
                     action()
                     actives.forEach(animation => animation.cancel())
-                    contenu()?.classList.remove('transition-sous-menu')
+
+                    // Après la mise à jour de la piste par le défilement (son observateur, appelé
+                    // dans une microtâche mise en file par action) : sinon, sa mesure la ferait
+                    // afficher, survolée, avant de la cacher, et elle s estomperait
+                    queueMicrotask(() => contenu()?.classList.remove('transition-sous-menu'))
                 })
                 .catch(() => {})
         }
@@ -154,14 +161,23 @@
             if (!cible)
                 return
 
-            const depart = element.getBoundingClientRect().height
-            element.scrollTop = 0
-
-            cible.classList.add('ouvert', 'superpose')
-            const style   = getComputedStyle(element)
-            const arrivee = cible.getBoundingClientRect().height + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
-
+            const depart   = element.getBoundingClientRect().height
             const sortants = principaux()
+            element.scrollTo({ top: 0, behavior: 'instant' })
+
+            // Hauteur finale, celle du sous-menu seul (limitée par la boîte), mesurée dans sa
+            // vue finale avant la transition
+            sortants.forEach(sortant => sortant.classList.add('masque-sous-menu'))
+            cible.classList.add('ouvert')
+            cible.querySelector(':scope > .liste-sous-menu')?.scrollTo({ top: 0, behavior: 'instant' })
+            const arrivee = element.getBoundingClientRect().height
+            sortants.forEach(sortant => sortant.classList.remove('masque-sous-menu'))
+
+            // Superposé, il garde la hauteur de sa vue ouverte, et non celle du contenu qui
+            // change : sa piste n apparaît que s il déborde vraiment
+            cible.style.height = `${arrivee}px`
+            cible.classList.add('superpose')
+
             sous_menu = cible
             const animations = [ ...animer_vues(cible, sortants, true), animer_hauteur(element, depart, arrivee) ]
             deplacer_focus(cible.querySelector('a, button'))
@@ -170,6 +186,7 @@
             {
                 sortants.forEach(sortant => sortant.classList.add('masque-sous-menu'))
                 cible.classList.remove('superpose')
+                cible.style.removeProperty('height')
             })
         }
 
@@ -183,16 +200,21 @@
             const depart  = element.getBoundingClientRect().height
             const entrants = principaux()
 
+            cible.style.height = `${depart}px`
             cible.classList.add('superpose')
             entrants.forEach(entrant => entrant.classList.remove('masque-sous-menu'))
-            element.scrollTop = 0
+            element.scrollTo({ top: 0, behavior: 'instant' })
             const arrivee = element.getBoundingClientRect().height
 
             sous_menu = null
             const animations = [ ...animer_vues(cible, entrants, false), animer_hauteur(element, depart, arrivee) ]
             deplacer_focus(entrants.find(entrant => entrant.matches('a, button')) ?? entrants[0]?.querySelector('a, button'))
 
-            finir_transition(animations, () => cible.classList.remove('ouvert', 'superpose'))
+            finir_transition(animations, () =>
+            {
+                cible.classList.remove('ouvert', 'superpose')
+                cible.style.removeProperty('height')
+            })
         }
 
         // À la fermeture de la boîte, le menu principal revient sans transition
@@ -207,7 +229,11 @@
                 return
             element.classList.remove('transition-sous-menu')
             for (const enfant of element.children)
+            {
                 enfant.classList.remove('masque-sous-menu', 'ouvert', 'superpose')
+                if (enfant.classList.contains('sous-menu'))
+                    enfant.style.removeProperty('height')
+            }
         }
 
         boite.addEventListener('ouvrir-sous-menu', (evenement) => ouvrir_sous_menu(evenement.detail))
@@ -367,7 +393,7 @@
             if (geste.poignee)
                 return 'glissement'
 
-            const element = contenu()
+            const element = defilant()
             const en_haut = !element || element.scrollTop <= 0
 
             if (deplacement > 0 && en_haut)
@@ -627,13 +653,10 @@
         display: none;
     }
 
-    /* Pendant l arrivée ou le départ d un sous-menu, le bord droit du contenu s estompe sur sa
-       marge, en plus des bords haut et bas du défilement intégré ; hors transition, la marge
-       de droite garde la piste du défilement */
-    .boite-dialogue > .contenu-boite.transition-sous-menu {
-        mask: linear-gradient(to bottom, transparent 0%, white var(--l-marge), white calc(100% - var(--l-marge)), transparent 100%),
-              linear-gradient(to right, white calc(100% - var(--l-marge)), transparent 100%);
-        mask-composite: intersect;
+    /* La piste du menu principal s estompe avec lui pendant la transition (règle plus précise
+       que celle du survol, dans defilement) */
+    :root dialog.boite-dialogue > .defilement.contenu-boite.transition-sous-menu > .piste {
+        opacity: 0;
     }
 
     /* Lien vers la page affichée (boite-ancre active), en gras */
@@ -650,10 +673,12 @@
         flex: 1 1 auto;
         min-height: 0;
 
-        /* Les vues d un sous-menu glissent sur les côtés sans faire défiler le contenu */
+        /* Les vues d un sous-menu glissent sur les côtés sans faire défiler le contenu, coupées
+           au bord de la boîte */
         overflow-x: hidden;
 
-        overscroll-behavior: contain;
+        /* none plutôt que contain : pas de rebond du trackpad quand rien ne déborde */
+        overscroll-behavior: none;
     }
 ]
 

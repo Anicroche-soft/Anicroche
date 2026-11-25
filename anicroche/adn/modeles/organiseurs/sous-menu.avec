@@ -1,6 +1,7 @@
 @style [
-    /* Le sous-menu n apparaît qu ouvert (boite-dialogue) ; pendant sa transition, il est posé
-       par-dessus le menu principal, dans les marges du contenu */
+    /* Le sous-menu n apparaît qu ouvert (boite-dialogue), à la place du menu principal, sur
+       tout le contenu de la boîte (marges comprises) : il y défile lui-même, et sa piste part
+       avec lui. Pendant sa transition, il est posé par-dessus le menu principal */
     .sous-menu {
         display: none;
     }
@@ -8,16 +9,30 @@
     .sous-menu.ouvert {
         display: flex;
         flex-flow: column nowrap;
+        flex: 1 1 auto;
+        min-height: 0;
+
+        margin: calc(0rem - var(--l-marge));
     }
 
+    /* Sa hauteur, celle de sa vue ouverte, est fixée par boite-dialogue */
     .sous-menu.superpose {
         position: absolute;
-        top: var(--l-marge);
-        right: var(--l-marge);
-        left: var(--l-marge);
+        top: 0;
+        right: 0;
+        left: 0;
+
+        margin: 0;
     }
 
-    .sous-menu > .separateur-sous-menu {
+    .sous-menu > .liste-sous-menu {
+        flex: 1 1 auto;
+        min-height: 0;
+
+        padding: var(--l-marge);
+    }
+
+    .liste-sous-menu > .separateur-sous-menu {
         flex: none;
 
         width: 100%;
@@ -35,9 +50,10 @@
 @args [$nom, $titre]
 
 <div .sous-menu data-sous-menu="$nom">
-    boite-action [$fermer_sous_menu]
-        icone-fleche-gauche
-        <span>
-            "$titre"
-    <hr .separateur-sous-menu>
-    @stud
+    defilement.liste-sous-menu [$integration : :(]
+        boite-action [$fermer_sous_menu]
+            icone-fleche-gauche
+            <span>
+                "$titre"
+        <hr .separateur-sous-menu>
+        @stud

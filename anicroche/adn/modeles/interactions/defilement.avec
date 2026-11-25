@@ -32,14 +32,17 @@
         {
             const { padding_debut, taille_piste, taille_poigne } = calculer_geometrie()
 
+            // La piste, en position absolue, compte dans le débordement : elle est posée à sa
+            // place avant qu il soit mesuré (voir aussi le style de .piste)
             if (horizontal)
             {
+                piste.style.left   = `${noeud.scrollLeft + padding_debut}px`
+                piste.style.width  = `${taille_piste}px`
+
                 const scroll_max = noeud.scrollWidth - noeud.clientWidth
                 const invisible  = scroll_max <= 0
 
                 piste.classList.toggle('cachee', invisible)
-                piste.style.left   = `${noeud.scrollLeft + padding_debut}px`
-                piste.style.width  = `${taille_piste}px`
 
                 if (invisible) return
 
@@ -51,12 +54,13 @@
             }
             else
             {
+                piste.style.top    = `${noeud.scrollTop + padding_debut}px`
+                piste.style.height = `${taille_piste}px`
+
                 const scroll_max = noeud.scrollHeight - noeud.clientHeight
                 const invisible  = scroll_max <= 0
 
                 piste.classList.toggle('cachee', invisible)
-                piste.style.top    = `${noeud.scrollTop + padding_debut}px`
-                piste.style.height = `${taille_piste}px`
 
                 if (invisible) return
 
@@ -114,11 +118,20 @@
         const evenement_scroll = horizontal ? 'scroll' : 'scroll'
         noeud.addEventListener('scroll', actualiser_poigne)
 
+        // Un changement de classe ou de style du contenu (élément masqué, affiché…) change ce qui
+        // déborde sans forcément redimensionner le conteneur. Les changements de la piste, faits
+        // par actualiser_poigne elle-même, sont ignorés
+        const sur_mutation = (mutations) =>
+        {
+            if (mutations.some(mutation => !piste.contains(mutation.target)))
+                actualiser_poigne()
+        }
+
         $vars.observateur_taille  = new ResizeObserver(actualiser_poigne)
-        $vars.observateur_contenu = new MutationObserver(actualiser_poigne)
+        $vars.observateur_contenu = new MutationObserver(sur_mutation)
 
         $vars.observateur_taille.observe(noeud)
-        $vars.observateur_contenu.observe(noeud, { childList: true, subtree: true })
+        $vars.observateur_contenu.observe(noeud, { childList: true, subtree: true, attributes: true, attributeFilter: [ 'class', 'style', 'hidden' ] })
 
         $vars.actualiser_poigne   = actualiser_poigne
         $vars.sur_souris_bougee   = sur_souris_bougee
@@ -183,9 +196,12 @@
         display: none;
     }
 
+    /* La poignée ne déborde pas de la piste : avec une taille d avant (contenu qui vient de
+       rétrécir), elle ferait croire que le contenu déborde */
     .defilement > .piste {
         position: absolute;
         z-index: 5;
+        overflow: hidden;
 
         pointer-events: none;
         opacity: 0%;
