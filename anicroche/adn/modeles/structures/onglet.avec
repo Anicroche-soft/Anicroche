@@ -23,6 +23,10 @@
     }
 ]
 
+@args [$pied : :)]
+
 defilement.onglet [$integration : :(]
     <div .contenu>
         @stud
+        @if [$pied]
+            pied-de-page

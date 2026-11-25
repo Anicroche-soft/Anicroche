@@ -1,0 +1,21 @@
+@style [
+    /* Repoussé en bas de l onglet quand le contenu ne le remplit pas, à sa suite sinon */
+    .pied-de-page {
+        margin-top: auto;
+
+        flex-flow: row wrap;
+        justify-content: center;
+        gap: 0.5rem 1.5rem;
+    }
+
+    .pied-de-page .lien-ancre {
+        font-size: 0.875rem;
+
+        --c-flux: var(--c-gris);
+    }
+]
+
+<footer .pied-de-page>
+    @for-each [$page_legale] of [$pages_legales]
+        lien-ancre [/$page_legale.identifiant]
+            "$page_legale.titre"

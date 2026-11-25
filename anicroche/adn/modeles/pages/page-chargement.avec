@@ -22,5 +22,5 @@ page.page-chargement [$authentification : libre_sans_profil]
         <div .droite>
             icone-horloge
 
-    onglet
+    onglet [$pied : :(]
         section-chargement

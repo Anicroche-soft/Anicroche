@@ -13,6 +13,10 @@
     // { <nom> : { libelle, identifiant, auteurs, administration, exceptions, sources } }
     $types_anicroches = {}
 
+    // Pages qui ont la spécificité legalite, tous types confondus, pour le pied de page :
+    // [{ identifiant, specificites, titre }]
+    $pages_legales = []
+
     // Types rencontrés mais absents de l API même après rechargement : ils ne la font plus
     // recharger jusqu à l actualisation de la page
     const types_inconnus = new Set()
@@ -26,7 +30,11 @@
         {
             const reponse = await $search('types')
             if (!reponse.error && reponse.data && typeof reponse.data === 'object')
+            {
                 $types_anicroches = reponse.data
+                $pages_legales    = Object.values($types_anicroches).flatMap(type =>
+                    (type.exceptions ?? []).filter(exception => exception.specificites.includes('legalite')))
+            }
             chargement_types = null
             return !reponse.error
         })()
