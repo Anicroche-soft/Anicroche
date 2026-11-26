@@ -626,7 +626,7 @@
 @style [
     /* Tiroir : boîte de dialogue modale, au centre de l écran, avec une croix, pour un
        pointeur précis sur grand écran ; au bas de l écran, en format petit ou au toucher, avec
-       une barre au toucher. Le fond grisé (::backdrop) s éclaircit quand le tiroir descend.
+       une barre au toucher. Le fond (::backdrop) s estompe quand le tiroir descend.
        Il se place dans la page sans le menu de gauche (--l-tete), qu il ne couvre jamais : il
        est centré sur ce qui reste, sans dépasser sa largeur */
     .tiroir {
@@ -664,10 +664,16 @@
     }
 
     .tiroir::backdrop {
-        background: oklch(0 0 0 / 40%);
+        background: oklch(0 0 0 / 50%);
         opacity: calc(1 - var(--retrait-tiroir, 0));
 
         transition: opacity var(--d-tiroir) ease;
+    }
+
+    /* En thème sombre, le tiroir a le fond noir de la page : le fond s éclaircit au lieu de
+       s assombrir, pour qu il s en détache */
+    .sombre .tiroir::backdrop {
+        background: oklch(1 0 0 / 50%);
     }
 
     /* Extensible : non modal, il se place comme un tiroir modal, par-dessus la page */

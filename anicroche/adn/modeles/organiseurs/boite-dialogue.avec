@@ -118,9 +118,15 @@
     }
 
     .boite-dialogue::backdrop {
-        background: oklch(0 0 0 / 40%);
+        background: oklch(0 0 0 / 50%);
 
         transition: opacity var(--d-boite) ease;
+    }
+
+    /* En thème sombre, la boîte a le fond noir de la page : le fond s éclaircit au lieu de
+       s assombrir, pour qu elle s en détache */
+    .sombre .boite-dialogue::backdrop {
+        background: oklch(1 0 0 / 50%);
     }
 
     @starting-style {
