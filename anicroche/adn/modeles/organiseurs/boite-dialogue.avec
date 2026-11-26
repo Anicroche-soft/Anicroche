@@ -1,0 +1,204 @@
+@script [
+    $monter_boite = () =>
+    {
+        const boite = $node
+
+        // Durée des animations de la boîte (--d-boite), lue dans sa transition calculée par le
+        // navigateur : la variable elle-même garde son calc() non calculé
+        const duree = () =>
+        {
+            const valeur = getComputedStyle(boite).transitionDuration.split(',')[0].trim()
+            const nombre = parseFloat(valeur) || 0
+            return valeur.endsWith('ms') ? nombre : nombre * 1000
+        }
+
+        let fermeture = false
+
+        // La boîte se ferme une fois son animation de sortie finie
+        const fermer = () =>
+        {
+            if (!boite.open || fermeture)
+                return
+
+            fermeture = true
+            boite.classList.add('fermeture')
+
+            setTimeout(() =>
+            {
+                if (boite.open)
+                    boite.close()
+            }, duree())
+        }
+
+        // Après la fermeture, quelle qu en soit la cause (y compris une demande de fermeture
+        // que le navigateur n a pas laissé retarder)
+        boite.addEventListener('close', () =>
+        {
+            boite.classList.remove('fermeture')
+            fermeture = false
+        })
+
+        boite.addEventListener('fermer-boite', fermer)
+
+        // Échap, ou retour d Android : la boîte se ferme avec son animation
+        boite.addEventListener('cancel', (evenement) =>
+        {
+            evenement.preventDefault()
+            fermer()
+        })
+
+        // Un clic sur le fond grisé a pour cible la boîte elle-même, hors de son rectangle ;
+        // l appui doit aussi y avoir commencé (et non dans la boîte, en sélectionnant du texte)
+        const hors_boite = (evenement) =>
+        {
+            if (evenement.target !== boite)
+                return false
+            const rectangle = boite.getBoundingClientRect()
+            return evenement.clientX < rectangle.left || evenement.clientX > rectangle.right
+                || evenement.clientY < rectangle.top  || evenement.clientY > rectangle.bottom
+        }
+
+        let appui_sur_fond = false
+
+        boite.addEventListener('pointerdown', (evenement) =>
+        {
+            appui_sur_fond = hors_boite(evenement)
+        })
+
+        boite.addEventListener('click', (evenement) =>
+        {
+            if (appui_sur_fond && hors_boite(evenement))
+                fermer()
+            appui_sur_fond = false
+        })
+    }
+
+    // Une boîte retirée (page quittée) se ferme avec elle
+    $demonter_boite = () =>
+    {
+        if ($node.open)
+            $node.close()
+    }
+]
+
+@style [
+    /* Boîte de dialogue modale, au centre de l écran sur tous les formats, comme le tiroir sur
+       grand écran : fond grisé, croix, entrée et sortie en fondu agrandi. Elle se place dans la
+       page sans le menu de gauche (--l-tete), qu elle ne couvre jamais */
+    .boite-dialogue {
+        inset: 0 0 0 var(--l-tete);
+        margin: auto;
+        width: min(var(--l-boite), 100% - var(--l-tete) - 2rem);
+        max-width: none;
+        max-height: calc(100dvh - 2rem);
+
+        overflow: hidden;
+        border-radius: 1.5rem;
+        padding: 1rem;
+
+        transform: none;
+        opacity: 1;
+
+        transition: transform var(--d-boite) ease,
+                    opacity   var(--d-boite) ease;
+
+        --d-boite: var(--d-animation-page);
+        --l-boite: 48rem;
+
+        --l-fonte: 1rem;
+        --l-ecart: 1rem;
+        --f-fond:  var(--c-theme);
+        --c-fond:  var(--c-theme);
+        --c-flux:  var(--c-inverse);
+    }
+
+    .boite-dialogue[open] {
+        display: flex;
+        flex-flow: column nowrap;
+    }
+
+    .boite-dialogue::backdrop {
+        background: oklch(0 0 0 / 40%);
+
+        transition: opacity var(--d-boite) ease;
+    }
+
+    @starting-style {
+        .boite-dialogue[open] {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        .boite-dialogue[open]::backdrop {
+            opacity: 0;
+        }
+    }
+
+    .boite-dialogue.fermeture {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    .boite-dialogue.fermeture::backdrop {
+        opacity: 0;
+    }
+
+    /* En-tête : le titre, puis la croix, à droite */
+    .boite-dialogue > .entete-boite {
+        flex: none;
+        flex-direction: row;
+        align-items: flex-start;
+    }
+
+    .boite-dialogue .titre-boite {
+        flex: 1;
+        min-width: 0;
+
+        text-wrap: balance;
+
+        --l-fonte: 1.25rem;
+        --p-fonte: var(--p-titre);
+    }
+
+    .boite-dialogue .croix-boite {
+        display: flex;
+        margin-left: auto;
+
+        border-radius: 0.125rem;
+
+        --c-flux: var(--c-gris);
+    }
+
+    .boite-dialogue > .contenu-boite {
+        flex: 1 1 auto;
+        min-height: 0;
+
+        overscroll-behavior: none;
+    }
+]
+
+# Boîte de dialogue modale, au centre de l'écran, ouverte par $ouvrir_boite($nom) et fermée par
+# $fermer_boite() (base.avec) : une seule fenêtre (boîte ou tiroir) à la fois. Elle se ferme
+# aussi par la croix, par un clic sur le fond grisé, par Échap ou le retour d'Android, et à la
+# navigation vers une autre adresse. $titre, facultatif, s'affiche à côté de la croix ; son
+# contenu peut défiler
+@args [$nom, $titre : :o]
+
+$navigation_boite = $suivre_navigation_boite($path)
+
+<dialog
+    .boite-dialogue
+    data-boite="$nom"
+    [$titre] ? aria-label="$titre"
+    @mount="$monter_boite()"
+    @unmount="$demonter_boite()"
+>
+    <div .entete-boite>
+        @if [$titre]
+            <h2 .titre-boite>
+                "$titre"
+        <button .croix-boite type="button" aria-label="Fermer" @click="$fermer_boite()">
+            icone-croix
+
+    defilement.contenu-boite
+        @stud

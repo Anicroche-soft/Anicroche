@@ -455,16 +455,17 @@
 
     // ─── Tiroirs ─────────────────────────────────────────────────────────────
 
-    // Un seul tiroir (boîte de dialogue, modèle tiroir) est ouvert à la fois
-    const tiroir_ouvert = () => document.querySelector('dialog.tiroir[open]')
+    // Une seule fenêtre (tiroir ou boîte de dialogue) est ouverte à la fois
+    const tiroir_ouvert   = () => document.querySelector('dialog.tiroir[open]')
+    const fenetre_ouverte = () => document.querySelector('dialog:is(.tiroir, .boite-dialogue)[open]')
 
-    // Ouvre le tiroir de ce nom ; renvoie false si un tiroir est déjà ouvert ou si aucun ne
-    // porte ce nom dans la page. Avec haut (en pixels), le tiroir, quand il s ouvre au bas de
-    // l écran, a son haut à cette distance du haut de l écran (la moitié de l écran au plus),
-    // même s il est plus grand que son contenu
+    // Ouvre le tiroir de ce nom ; renvoie false si une fenêtre est déjà ouverte ou si aucun
+    // tiroir ne porte ce nom dans la page. Avec haut (en pixels), le tiroir, quand il s ouvre au
+    // bas de l écran, a son haut à cette distance du haut de l écran (la moitié de l écran au
+    // plus), même s il est plus grand que son contenu
     $ouvrir_tiroir = (nom, haut = null) =>
     {
-        if (tiroir_ouvert())
+        if (fenetre_ouverte())
             return false
 
         const tiroir = [ ...document.querySelectorAll('dialog.tiroir') ]
@@ -512,6 +513,53 @@
         const tiroir = tiroir_ouvert()
         if (tiroir && tiroir.dataset.chemin !== chemin)
             $fermer_tiroir()
+    }
+
+    // ─── Boîtes de dialogue ──────────────────────────────────────────────────
+
+    const boite_ouverte = () => document.querySelector('dialog.boite-dialogue[open]')
+
+    // Ouvre la boîte de dialogue de ce nom (modèle boite-dialogue) ; renvoie false si une
+    // fenêtre est déjà ouverte ou si aucune boîte ne porte ce nom dans la page. a_la_fermeture,
+    // facultative, est appelée une fois la boîte fermée, de quelque façon que ce soit (pour
+    // rétablir un choix qu elle n a pas confirmé, par exemple)
+    $ouvrir_boite = (nom, a_la_fermeture = null) =>
+    {
+        if (fenetre_ouverte())
+            return false
+
+        const boite = [ ...document.querySelectorAll('dialog.boite-dialogue') ]
+            .find(element => element.dataset.boite === nom)
+        if (!boite)
+            return false
+
+        boite.dataset.chemin = location.pathname
+        if (a_la_fermeture)
+            boite.addEventListener('close', () => a_la_fermeture(), { once: true })
+        boite.showModal()
+        return true
+    }
+
+    // Ferme la boîte ouverte, avec son animation ; renvoie une promesse tenue une fois la
+    // boîte fermée
+    $fermer_boite = () =>
+    {
+        const boite = boite_ouverte()
+        if (!boite)
+            return Promise.resolve()
+
+        const fermee = new Promise(resolve => boite.addEventListener('close', resolve, { once: true }))
+        boite.dispatchEvent(new Event('fermer-boite'))
+        return fermee
+    }
+
+    // Appelée par chaque boîte à chaque changement de $path : une navigation vers une autre
+    // adresse ferme la boîte ouverte
+    $suivre_navigation_boite = (chemin) =>
+    {
+        const boite = boite_ouverte()
+        if (boite && boite.dataset.chemin !== chemin)
+            $fermer_boite()
     }
 
     // ─── Démarrage ───────────────────────────────────────────────────────────
