@@ -1,34 +1,66 @@
 @script [
-    $monter_boite_dialogue = () =>
+    $monter_tiroir = () =>
     {
-        const boite   = $node
+        const tiroir  = $node
         const racine  = document.documentElement
-        const contenu = () => boite.querySelector('.contenu-boite')
+        const contenu = () => tiroir.querySelector('.contenu-tiroir')
 
         // Au bas de l écran en format petit ou au toucher, au centre sinon
         const en_feuille = () => racine.classList.contains('petit') || racine.classList.contains('grossier')
 
-        // Durée des animations de la boîte (--d-boite), lue dans sa transition calculée par le
+        // Durée des animations du tiroir (--d-tiroir), lue dans sa transition calculée par le
         // navigateur : la variable elle-même garde son calc() non calculé
         const duree = () =>
         {
-            const valeur = getComputedStyle(boite).transitionDuration.split(',')[0].trim()
+            const valeur = getComputedStyle(tiroir).transitionDuration.split(',')[0].trim()
             const nombre = parseFloat(valeur) || 0
             return valeur.endsWith('ms') ? nombre : nombre * 1000
         }
 
-        const rem = () => parseFloat(getComputedStyle(racine).fontSize) || 16
-
-        // Hauteur de la boîte agrandie : tout l écran, moins 2rem de fond grisé au-dessus
-        const hauteur_max = () => window.innerHeight - 2 * rem()
-
         // Ce qui défile : le sous-menu ouvert, sinon le contenu
         const defilant = () => sous_menu?.querySelector(':scope > .liste-sous-menu') ?? contenu()
 
-        const deborde = () =>
+        // Tiroir extensible ($extensible) : non modal (la page reste utilisable, sans fond
+        // grisé) ; au bas de l écran, il garde sa hauteur de base (celle où il est positionné,
+        // même petite) quel que soit son contenu, et seule sa barre l agrandit, jusqu à sa
+        // hauteur agrandie
+        const extensible = () => tiroir.classList.contains('extensible')
+
+        // Hauteur de base d un tiroir positionné ($ouvrir_tiroir(nom, haut)), comme dans le
+        // style : son haut à cette distance du haut de l écran (la moitié de l écran au plus,
+        // sauf pour un tiroir extensible)
+        const hauteur_positionnee = () =>
         {
-            const element = defilant()
-            return !!element && element.scrollHeight > element.clientHeight + 1
+            const haut = parseFloat(tiroir.style.getPropertyValue('--haut-tiroir'))
+            if (Number.isNaN(haut))
+                return null
+            const limite = extensible() ? haut : Math.min(haut, window.innerHeight / 2)
+            return Math.max(0, window.innerHeight - limite)
+        }
+
+        // Hauteur du tiroir où tout son contenu est visible, mesurée en lui rendant un instant
+        // sa hauteur naturelle (fit-content : en auto, le dialog modal, fixé en haut et en bas
+        // de l écran, le prendrait tout), sans limite ni transition (le style d origine revient
+        // avant que la transition ne soit rétablie, pour qu aucune ne parte)
+        const hauteur_entiere = () =>
+        {
+            const proprietes = [ 'transition', 'height', 'min-height', 'max-height' ]
+            const origine    = proprietes.map(propriete => tiroir.style.getPropertyValue(propriete))
+
+            tiroir.style.transition = 'none'
+            tiroir.style.height     = 'fit-content'
+            tiroir.style.minHeight  = '0'
+            tiroir.style.maxHeight  = 'none'
+            const hauteur = tiroir.getBoundingClientRect().height
+
+            proprietes.forEach((propriete, i) =>
+            {
+                if (propriete !== 'transition')
+                    tiroir.style.setProperty(propriete, origine[i])
+            })
+            tiroir.getBoundingClientRect()
+            tiroir.style.setProperty('transition', origine[0])
+            return hauteur
         }
 
         let fermeture    = false
@@ -38,8 +70,8 @@
 
         const vider_styles = () =>
         {
-            for (const propriete of [ 'transform', 'height', 'max-height', '--retrait-boite' ])
-                boite.style.removeProperty(propriete)
+            for (const propriete of [ 'transform', 'height', 'max-height', '--retrait-tiroir' ])
+                tiroir.style.removeProperty(propriete)
         }
 
         // Après la fermeture, quelle qu en soit la cause (y compris une demande de fermeture
@@ -47,37 +79,39 @@
         const reinitialiser = () =>
         {
             clearTimeout(retour)
-            boite.classList.remove('fermeture', 'glissement', 'agrandie')
+            tiroir.classList.remove('fermeture', 'glissement', 'positionne', 'agrandi')
             vider_styles()
+            tiroir.style.removeProperty('--haut-tiroir')
             fermeture    = false
             hauteur_base = null
             geste        = null
+            ne_plus_veiller()
             remettre_menu_principal()
         }
 
-        // La boîte se ferme une fois son animation de sortie finie : elle part de là où elle
-        // est (glissée vers le bas, par exemple)
+        // Le tiroir se ferme une fois son animation de sortie finie : il part de là où il est
+        // (glissé vers le bas, par exemple)
         const fermer = () =>
         {
-            if (!boite.open || fermeture)
+            if (!tiroir.open || fermeture)
                 return
 
             fermeture = true
             clearTimeout(retour)
-            boite.classList.remove('glissement')
-            boite.style.removeProperty('transform')
-            boite.style.removeProperty('--retrait-boite')
-            boite.classList.add('fermeture')
+            tiroir.classList.remove('glissement')
+            tiroir.style.removeProperty('transform')
+            tiroir.style.removeProperty('--retrait-tiroir')
+            tiroir.classList.add('fermeture')
 
             setTimeout(() =>
             {
-                if (boite.open)
-                    boite.close()
+                if (tiroir.open)
+                    tiroir.close()
             }, duree())
         }
 
-        boite.addEventListener('close', reinitialiser)
-        boite.addEventListener('fermer-boite', fermer)
+        tiroir.addEventListener('close', reinitialiser)
+        tiroir.addEventListener('fermer-tiroir', fermer)
 
         // ─── Sous-menus ──────────────────────────────────────────────────────
 
@@ -87,6 +121,17 @@
         // du contenu passe de l une à l autre. Chacun défile pour lui-même
         let sous_menu   = null
         let transition  = null
+
+        // Position du menu principal dans son défilement, gardée pendant la transition (le
+        // sous-menu superposé est posé à cette hauteur, devant la partie visible) et retrouvée
+        // au retour
+        let position_menu = 0
+
+        const defiler_vers = (element, haut) =>
+        {
+            element.scrollTo({ top: haut, behavior: 'instant' })
+            return element.scrollTop
+        }
 
         const principaux = () => [ ...contenu().children ]
             .filter(element => !element.classList.contains('piste') && !element.classList.contains('sous-menu'))
@@ -110,11 +155,10 @@
             ]
         }
 
-        // La hauteur du contenu passe de depart à arrivee, sauf dans une boîte agrandie, dont la
-        // hauteur ne dépend pas de son contenu
+        // La hauteur du contenu passe de depart à arrivee
         const animer_hauteur = (element, depart, arrivee) =>
         {
-            if (boite.classList.contains('agrandie') || Math.abs(depart - arrivee) < 1)
+            if (Math.abs(depart - arrivee) < 1)
                 return null
             return element.animate([ { height: `${depart}px` }, { height: `${arrivee}px` } ], options_animation())
         }
@@ -147,7 +191,7 @@
         // Le focus suit le sous-menu au clavier
         const deplacer_focus = (vers) =>
         {
-            if (document.activeElement?.matches(':focus-visible') && boite.contains(document.activeElement))
+            if (document.activeElement?.matches(':focus-visible') && tiroir.contains(document.activeElement))
                 vers?.focus({ preventScroll: true })
         }
 
@@ -163,19 +207,21 @@
 
             const depart   = element.getBoundingClientRect().height
             const sortants = principaux()
-            element.scrollTo({ top: 0, behavior: 'instant' })
+            position_menu  = element.scrollTop
 
-            // Hauteur finale, celle du sous-menu seul (limitée par la boîte), mesurée dans sa
-            // vue finale avant la transition
+            // Hauteur finale, celle du sous-menu seul (limitée par le tiroir), mesurée dans sa
+            // vue finale avant la transition ; le menu principal reste là où il était défilé
             sortants.forEach(sortant => sortant.classList.add('masque-sous-menu'))
             cible.classList.add('ouvert')
             cible.querySelector(':scope > .liste-sous-menu')?.scrollTo({ top: 0, behavior: 'instant' })
             const arrivee = element.getBoundingClientRect().height
             sortants.forEach(sortant => sortant.classList.remove('masque-sous-menu'))
+            const haut = defiler_vers(element, position_menu)
 
             // Superposé, il garde la hauteur de sa vue ouverte, et non celle du contenu qui
             // change : sa piste n apparaît que s il déborde vraiment
             cible.style.height = `${arrivee}px`
+            cible.style.top    = `${haut}px`
             cible.classList.add('superpose')
 
             sous_menu = cible
@@ -187,6 +233,12 @@
                 sortants.forEach(sortant => sortant.classList.add('masque-sous-menu'))
                 cible.classList.remove('superpose')
                 cible.style.removeProperty('height')
+                cible.style.removeProperty('top')
+
+                // Le sous-menu, à sa place, est tout en haut du contenu : le défilement du menu
+                // principal y revient aussitôt (sinon, la piste, encore posée à sa hauteur, le
+                // garderait défilé jusqu à sa mise à jour, et le sous-menu sauterait)
+                element.scrollTo({ top: 0, behavior: 'instant' })
             })
         }
 
@@ -200,11 +252,13 @@
             const depart  = element.getBoundingClientRect().height
             const entrants = principaux()
 
+            // Le menu principal revient là où il était défilé, le sous-menu superposé devant
+            // la partie visible
             cible.style.height = `${depart}px`
             cible.classList.add('superpose')
             entrants.forEach(entrant => entrant.classList.remove('masque-sous-menu'))
-            element.scrollTo({ top: 0, behavior: 'instant' })
             const arrivee = element.getBoundingClientRect().height
+            cible.style.top = `${defiler_vers(element, position_menu)}px`
 
             sous_menu = null
             const animations = [ ...animer_vues(cible, entrants, false), animer_hauteur(element, depart, arrivee) ]
@@ -214,15 +268,17 @@
             {
                 cible.classList.remove('ouvert', 'superpose')
                 cible.style.removeProperty('height')
+                cible.style.removeProperty('top')
             })
         }
 
-        // À la fermeture de la boîte, le menu principal revient sans transition
+        // À la fermeture du tiroir, le menu principal revient sans transition
         const remettre_menu_principal = () =>
         {
             transition?.animations.forEach(animation => animation.cancel())
-            transition = null
-            sous_menu  = null
+            transition    = null
+            sous_menu     = null
+            position_menu = 0
 
             const element = contenu()
             if (!element)
@@ -232,54 +288,100 @@
             {
                 enfant.classList.remove('masque-sous-menu', 'ouvert', 'superpose')
                 if (enfant.classList.contains('sous-menu'))
+                {
                     enfant.style.removeProperty('height')
+                    enfant.style.removeProperty('top')
+                }
             }
         }
 
-        boite.addEventListener('ouvrir-sous-menu', (evenement) => ouvrir_sous_menu(evenement.detail))
-        boite.addEventListener('fermer-sous-menu', fermer_sous_menu)
+        tiroir.addEventListener('ouvrir-sous-menu', (evenement) => ouvrir_sous_menu(evenement.detail))
+        tiroir.addEventListener('fermer-sous-menu', fermer_sous_menu)
 
-        // Échap, ou retour d Android : depuis un sous-menu, retour au menu principal ; sinon, la
-        // boîte se ferme avec son animation
-        boite.addEventListener('cancel', (evenement) =>
+        // Échap, ou retour d Android : depuis un sous-menu, retour au menu principal ; sinon, le
+        // tiroir se ferme avec son animation
+        const annuler = () =>
         {
-            evenement.preventDefault()
             if (sous_menu)
                 fermer_sous_menu()
             else
                 fermer()
+        }
+
+        tiroir.addEventListener('cancel', (evenement) =>
+        {
+            evenement.preventDefault()
+            annuler()
         })
 
-        // Un clic sur le fond grisé a pour cible la boîte elle-même, hors de son rectangle ;
-        // l appui doit aussi y avoir commencé (et non dans la boîte, en sélectionnant du texte)
+        // Un tiroir non modal (extensible) ne reçoit pas cancel : Échap et le retour d Android
+        // passent par un CloseWatcher, renouvelé après chaque retour d un sous-menu, ou à
+        // défaut Échap seul, écouté sur la page
+        let veilleur = null
+
+        const echap = (evenement) =>
+        {
+            if (evenement.key === 'Escape' && !evenement.defaultPrevented)
+                annuler()
+        }
+
+        const veiller = () =>
+        {
+            if (!tiroir.open || tiroir.matches(':modal') || fermeture)
+                return
+
+            if (!('CloseWatcher' in window))
+                return document.addEventListener('keydown', echap)
+
+            veilleur = new CloseWatcher()
+            veilleur.addEventListener('close', () =>
+            {
+                veilleur = null
+                annuler()
+                veiller()
+            })
+        }
+
+        const ne_plus_veiller = () =>
+        {
+            document.removeEventListener('keydown', echap)
+            veilleur?.destroy()
+            veilleur = null
+        }
+
+        tiroir.addEventListener('ouverture-tiroir', veiller)
+
+        // Un clic sur le fond grisé (d un tiroir modal) a pour cible le tiroir lui-même, hors de
+        // son rectangle ; l appui doit aussi y avoir commencé (et non dans le tiroir, en
+        // sélectionnant du texte)
         const dehors = (x, y) =>
         {
-            const rectangle = boite.getBoundingClientRect()
+            const rectangle = tiroir.getBoundingClientRect()
             return x < rectangle.left || x > rectangle.right || y < rectangle.top || y > rectangle.bottom
         }
 
-        const hors_boite = (evenement) =>
-            evenement.target === boite && dehors(evenement.clientX, evenement.clientY)
+        const hors_tiroir = (evenement) =>
+            evenement.target === tiroir && dehors(evenement.clientX, evenement.clientY)
 
         let appui_sur_fond = false
 
-        boite.addEventListener('pointerdown', (evenement) =>
+        tiroir.addEventListener('pointerdown', (evenement) =>
         {
-            appui_sur_fond = hors_boite(evenement)
+            appui_sur_fond = hors_tiroir(evenement)
         })
 
-        boite.addEventListener('click', (evenement) =>
+        tiroir.addEventListener('click', (evenement) =>
         {
-            if (appui_sur_fond && hors_boite(evenement))
+            if (appui_sur_fond && hors_tiroir(evenement))
                 fermer()
             appui_sur_fond = false
         })
 
-        // Un lien vers la page affichée ne navigue pas (navigateur) : il ferme la boîte
-        boite.addEventListener('click', (evenement) =>
+        // Un lien vers la page affichée ne navigue pas (navigateur) : il ferme le tiroir
+        tiroir.addEventListener('click', (evenement) =>
         {
             const lien = evenement.target.closest?.('a[href]')
-            if (!lien || !boite.contains(lien) || lien.target === '_blank')
+            if (!lien || !tiroir.contains(lien) || lien.target === '_blank')
                 return
 
             const adresse = new URL(lien.href, location.href)
@@ -289,29 +391,28 @@
 
         // ─── Glissement ──────────────────────────────────────────────────────
 
-        // La position du geste est la hauteur visible de la boîte. Au-dessus de sa hauteur de
-        // base (75 % de l écran au plus), la boîte grandit, si son contenu déborde ou si elle
-        // est déjà agrandie ; en dessous, elle descend
+        // La position du geste est la hauteur visible du tiroir. Au-dessus de sa hauteur de
+        // base, il grandit jusqu à geste.max (sa hauteur agrandie, pour un tiroir extensible
+        // tenu par sa barre), puis résiste ; en dessous, il descend
         const placer = (visible) =>
         {
             const base = hauteur_base
-            const max  = geste.extensible ? Math.max(base, hauteur_max()) : base
+            const max  = geste.max
 
             if (visible >= base)
             {
-                // Au-delà de la hauteur permise, la boîte résiste
                 const hauteur = visible > max ? max + (visible - max) / 4 : visible
 
-                boite.style.height = `${hauteur}px`
-                boite.style.removeProperty('transform')
-                boite.style.removeProperty('--retrait-boite')
+                tiroir.style.height = `${hauteur}px`
+                tiroir.style.removeProperty('transform')
+                tiroir.style.removeProperty('--retrait-tiroir')
                 return
             }
 
             const descente = base - visible
-            boite.style.height    = `${base}px`
-            boite.style.transform = `translateY(${descente}px)`
-            boite.style.setProperty('--retrait-boite', Math.min(1, descente / base).toFixed(3))
+            tiroir.style.height    = `${base}px`
+            tiroir.style.transform = `translateY(${descente}px)`
+            tiroir.style.setProperty('--retrait-tiroir', Math.min(1, descente / base).toFixed(3))
         }
 
         // Vitesse des 100 dernières millisecondes, en pixels par milliseconde (positive vers le
@@ -325,15 +426,15 @@
             return temps > 0 ? (dernier.y - premier.y) / temps : 0
         }
 
-        // Retour à la hauteur de base ou agrandie, puis la hauteur revient à celle du style
-        // (75 % de l écran au plus, ou agrandie), qui suit la taille de l écran
-        const revenir = (hauteur, agrandie) =>
+        // Retour à la hauteur de base ou agrandie, puis la hauteur revient à celle du style,
+        // qui suit la taille de l écran et du contenu
+        const revenir = (hauteur, agrandi) =>
         {
-            boite.style.removeProperty('transform')
-            boite.style.removeProperty('--retrait-boite')
-            boite.style.maxHeight = 'none'
-            boite.style.height    = `${hauteur}px`
-            boite.classList.toggle('agrandie', agrandie)
+            tiroir.style.removeProperty('transform')
+            tiroir.style.removeProperty('--retrait-tiroir')
+            tiroir.style.maxHeight = 'none'
+            tiroir.style.height    = `${hauteur}px`
+            tiroir.classList.toggle('agrandi', agrandi)
 
             clearTimeout(retour)
             retour = setTimeout(() =>
@@ -346,11 +447,11 @@
         const relacher = () =>
         {
             const base    = hauteur_base
-            const max     = hauteur_max()
+            const max     = geste.max
             const visible = geste.visible
             const elan    = vitesse()
 
-            boite.classList.remove('glissement')
+            tiroir.classList.remove('glissement')
 
             if (visible < base)
             {
@@ -360,34 +461,46 @@
             }
 
             const vers_le_haut = elan < -0.5 || (elan <= 0.5 && visible - base > (max - base) / 2)
-            if (geste.extensible && max > base && vers_le_haut)
+            if (max > base + 1 && vers_le_haut)
                 return revenir(max, true)
             revenir(base, false)
         }
 
-        // Un geste commence sur la boîte (marges comprises), jamais sur le fond grisé
+        // Un geste commence sur le tiroir (marges comprises), jamais sur le fond grisé
         const debuter = (x, y, cible) =>
         {
             if (!en_feuille() || fermeture || dehors(x, y))
                 return
 
             clearTimeout(retour)
-            if (!boite.classList.contains('agrandie') || hauteur_base === null)
-                hauteur_base = boite.getBoundingClientRect().height
+
+            const hauteur = tiroir.getBoundingClientRect().height
+            const poignee = !!cible.closest('.entete-tiroir')
+            const agrandi = tiroir.classList.contains('agrandi')
+
+            hauteur_base = agrandi ? (hauteur_positionnee() ?? hauteur) : hauteur
+
+            // Hauteur agrandie d un tiroir extensible, mesurée à chaque geste d après l écran et
+            // le contenu du moment : celle où il est positionné si tout le contenu y tient, sinon
+            // celle où tout le contenu tient, sinon tout l écran. Sinon, le tiroir peut seulement
+            // revenir à sa hauteur de départ
+            const max = extensible() && poignee
+                ? Math.max(hauteur_base, Math.min(hauteur_entiere(), window.innerHeight))
+                : Math.max(hauteur_base, hauteur)
 
             geste = {
-                depart     : y,
-                hauteur    : boite.getBoundingClientRect().height,
-                visible    : null,
-                poignee    : !!cible.closest('.entete-boite'),
-                extensible : boite.classList.contains('agrandie') || deborde(),
-                mode       : null,
-                points     : [ { y, temps: performance.now() } ]
+                depart  : y,
+                hauteur,
+                visible : null,
+                poignee,
+                max,
+                mode    : null,
+                points  : [ { y, temps: performance.now() } ]
             }
         }
 
-        // La boîte suit le doigt partout : vers le bas quand son contenu est tout en haut, vers
-        // le haut tant qu elle peut s agrandir. Sinon, le contenu défile normalement
+        // Par la barre, le tiroir suit le doigt dans les deux sens ; depuis le contenu, vers le
+        // bas quand il est tout en haut. Sinon, le contenu défile normalement
         const choisir_mode = (deplacement) =>
         {
             if (geste.poignee)
@@ -396,11 +509,7 @@
             const element = defilant()
             const en_haut = !element || element.scrollTop <= 0
 
-            if (deplacement > 0 && en_haut)
-                return 'glissement'
-            if (deplacement < 0 && !boite.classList.contains('agrandie') && deborde())
-                return 'glissement'
-            return 'defilement'
+            return deplacement > 0 && en_haut ? 'glissement' : 'defilement'
         }
 
         const deplacer = (y) =>
@@ -430,7 +539,7 @@
                 geste.mode = evenement.cancelable === false ? 'defilement' : choisir_mode(deplacement)
                 if (geste.mode === 'glissement')
                 {
-                    boite.classList.add('glissement')
+                    tiroir.classList.add('glissement')
                     geste.depart = y
                 }
             }
@@ -447,13 +556,13 @@
             if (geste?.mode === 'glissement' && geste.visible !== null)
                 relacher()
             else
-                boite.classList.remove('glissement')
+                tiroir.classList.remove('glissement')
             geste = null
         }
 
         // Toucher : touchmove, contrairement aux évènements de pointeur, peut empêcher le
         // défilement une fois le geste commencé
-        boite.addEventListener('touchstart', (evenement) =>
+        tiroir.addEventListener('touchstart', (evenement) =>
         {
             if (evenement.touches.length !== 1)
             {
@@ -463,14 +572,14 @@
             debuter(evenement.touches[0].clientX, evenement.touches[0].clientY, evenement.target)
         }, { passive: true })
 
-        boite.addEventListener('touchmove', (evenement) =>
+        tiroir.addEventListener('touchmove', (evenement) =>
         {
             if (evenement.touches.length === 1)
                 bouger(evenement.touches[0].clientY, evenement)
         }, { passive: false })
 
-        boite.addEventListener('touchend',    finir)
-        boite.addEventListener('touchcancel', finir)
+        tiroir.addEventListener('touchend',    finir)
+        tiroir.addEventListener('touchcancel', finir)
 
         // Souris : seulement par l en-tête (la barre)
         const souris_bougee = (evenement) => bouger(evenement.clientY, evenement)
@@ -482,9 +591,9 @@
             finir()
         }
 
-        boite.addEventListener('pointerdown', (evenement) =>
+        tiroir.addEventListener('pointerdown', (evenement) =>
         {
-            if (evenement.pointerType !== 'mouse' || evenement.button !== 0 || !evenement.target.closest('.entete-boite'))
+            if (evenement.pointerType !== 'mouse' || evenement.button !== 0 || !evenement.target.closest('.entete-tiroir'))
                 return
             if (evenement.target.closest('button'))
                 return
@@ -494,7 +603,7 @@
                 return
 
             geste.mode = 'glissement'
-            boite.classList.add('glissement')
+            tiroir.classList.add('glissement')
             evenement.preventDefault()
             document.addEventListener('pointermove', souris_bougee)
             document.addEventListener('pointerup',   souris_relachee)
@@ -504,8 +613,8 @@
         $vars.souris_relachee = souris_relachee
     }
 
-    // Une boîte retirée (page quittée) se ferme avec elle
-    $demonter_boite_dialogue = () =>
+    // Un tiroir retiré (page quittée) se ferme avec lui
+    $demonter_tiroir = () =>
     {
         document.removeEventListener('pointermove', $vars.souris_bougee)
         document.removeEventListener('pointerup',   $vars.souris_relachee)
@@ -515,14 +624,17 @@
 ]
 
 @style [
-    /* Boîte de dialogue modale : au centre de l écran, avec une croix, pour un pointeur précis
-       sur grand écran ; au bas de l écran, en format petit ou au toucher, avec une barre au
-       toucher. Le fond grisé (::backdrop) s éclaircit quand la boîte descend */
-    .boite-dialogue {
+    /* Tiroir : boîte de dialogue modale, au centre de l écran, avec une croix, pour un
+       pointeur précis sur grand écran ; au bas de l écran, en format petit ou au toucher, avec
+       une barre au toucher. Le fond grisé (::backdrop) s éclaircit quand le tiroir descend.
+       Il se place dans la page sans le menu de gauche (--l-tete), qu il ne couvre jamais : il
+       est centré sur ce qui reste, sans dépasser sa largeur */
+    .tiroir {
+        inset: 0 0 0 var(--l-tete);
         margin: auto;
-        width: min(var(--l-boite), 100% - 2rem);
+        width: min(var(--l-tiroir), 100% - var(--l-tete) - 2rem);
         max-width: none;
-        max-height: 75dvh;
+        max-height: calc(100dvh - 2rem);
 
         overflow: hidden;
         border-radius: 1.5rem;
@@ -532,12 +644,12 @@
         transform: none;
         opacity: 1;
 
-        transition: transform var(--d-boite) ease,
-                    opacity   var(--d-boite) ease,
-                    height    var(--d-boite) ease;
+        transition: transform var(--d-tiroir) ease,
+                    opacity   var(--d-tiroir) ease,
+                    height    var(--d-tiroir) ease;
 
-        --d-boite: var(--d-animation-page);
-        --l-boite: 32rem;
+        --d-tiroir: var(--d-animation-page);
+        --l-tiroir: 32rem;
 
         --l-fonte: 1rem;
         --l-ecart: 1rem;
@@ -546,92 +658,128 @@
         --c-flux:  var(--c-inverse);
     }
 
-    .boite-dialogue[open] {
+    .tiroir[open] {
         display: flex;
         flex-flow: column nowrap;
     }
 
-    .boite-dialogue::backdrop {
+    .tiroir::backdrop {
         background: oklch(0 0 0 / 40%);
-        opacity: calc(1 - var(--retrait-boite, 0));
+        opacity: calc(1 - var(--retrait-tiroir, 0));
 
-        transition: opacity var(--d-boite) ease;
+        transition: opacity var(--d-tiroir) ease;
+    }
+
+    /* Extensible : non modal, il se place comme un tiroir modal, par-dessus la page */
+    .tiroir.extensible {
+        position: fixed;
+        z-index: 100;
     }
 
     @starting-style {
-        .boite-dialogue[open] {
+        .tiroir[open] {
             opacity: 0;
             transform: scale(0.95);
         }
 
-        .boite-dialogue[open]::backdrop {
+        .tiroir[open]::backdrop {
             opacity: 0;
         }
     }
 
-    .boite-dialogue.fermeture {
+    .tiroir.fermeture {
         opacity: 0;
         transform: scale(0.95);
     }
 
-    .boite-dialogue.fermeture::backdrop {
+    .tiroir.fermeture::backdrop {
         opacity: 0;
     }
 
-    .boite-dialogue.glissement,
-    .boite-dialogue.glissement::backdrop {
+    .tiroir.glissement,
+    .tiroir.glissement::backdrop {
         transition: none;
     }
 
-    .boite-dialogue.glissement {
+    .tiroir.glissement {
         max-height: none;
     }
 
     /* Au bas de l écran */
-    :is(.petit, .grossier) .boite-dialogue {
+    :is(.petit, .grossier) .tiroir {
         margin: auto auto 0;
-        width: min(var(--l-boite), 100%);
+        width: min(var(--l-tiroir), 100% - var(--l-tete));
 
         border-radius: 1.5rem 1.5rem 0 0;
     }
 
-    :is(.petit, .grossier) .boite-dialogue.agrandie {
-        height: calc(100dvh - 2rem);
-        max-height: none;
+    /* Sa hauteur est celle de son contenu, sans dépasser tout l écran ; positionné, son haut
+       est au moins à --haut-tiroir du haut de l écran (la moitié de l écran au plus), son
+       contenu en haut : si son contenu n y tient pas, il prend la hauteur où il tient, ou tout
+       l écran. fit-content, comme le style d origine du dialog : en auto, fixé en haut et en
+       bas de l écran, il le prendrait tout */
+    :is(.petit, .grossier) .tiroir {
+        max-height: 100dvh;
+    }
+
+    :is(.petit, .grossier) .tiroir.positionne {
+        height: fit-content;
+        min-height: calc(100dvh - min(var(--haut-tiroir), 50dvh));
+    }
+
+    /* Extensible et positionné : la hauteur où il est positionné (même petite), quel que soit
+       son contenu ; agrandi, celle où tout son contenu tient (au moins la précédente, au plus
+       tout l écran) */
+    :is(.petit, .grossier) .tiroir.positionne.extensible {
+        height: max(0px, 100dvh - var(--haut-tiroir));
+        min-height: 0;
+    }
+
+    :is(.petit, .grossier) .tiroir.positionne.extensible.agrandi {
+        height: fit-content;
+        min-height: max(0px, 100dvh - var(--haut-tiroir));
     }
 
     @starting-style {
-        :is(.petit, .grossier) .boite-dialogue[open] {
+        :is(.petit, .grossier) .tiroir[open] {
             opacity: 1;
             transform: translateY(100%);
         }
     }
 
-    :is(.petit, .grossier) .boite-dialogue.fermeture {
+    :is(.petit, .grossier) .tiroir.fermeture {
         opacity: 1;
         transform: translateY(100%);
     }
 
     /* En-tête : la croix pour un pointeur précis, la barre au toucher */
-    .boite-dialogue > .entete-boite {
+    .tiroir > .entete-tiroir {
         flex: none;
         flex-direction: row;
         justify-content: flex-end;
         align-items: center;
     }
 
-    .grossier .boite-dialogue > .entete-boite {
+    /* La barre s attrape sur tout le haut du tiroir, de son bord jusqu au contenu : l en-tête
+       couvre les marges du tiroir et l écart qui le suit (marge négative et padding de 1rem,
+       sans rien changer à la mise en page), par-dessus le défilement du contenu */
+    .grossier .tiroir > .entete-tiroir {
+        position: relative;
+        z-index: 1;
         justify-content: center;
+
+        margin: -1rem;
+        padding: 1rem;
 
         cursor: grab;
         touch-action: none;
     }
 
-    .grossier .boite-dialogue.glissement > .entete-boite {
+    .grossier .tiroir.glissement > .entete-tiroir {
         cursor: grabbing;
     }
 
-    .boite-dialogue .barre-boite {
+    .tiroir .barre-tiroir {
         width: 6rem;
         height: 0.25rem;
 
@@ -640,7 +788,7 @@
         --f-fond: var(--c-gris);
     }
 
-    .boite-dialogue .croix-boite {
+    .tiroir .croix-tiroir {
         display: flex;
 
         border-radius: 0.125rem;
@@ -648,33 +796,39 @@
         --c-flux: var(--c-gris);
     }
 
-    .grossier .boite-dialogue .croix-boite,
-    .precis .boite-dialogue .barre-boite {
+    .grossier .tiroir .croix-tiroir,
+    .precis .tiroir .barre-tiroir {
         display: none;
     }
 
     /* La piste du menu principal s estompe avec lui pendant la transition (règle plus précise
        que celle du survol, dans defilement) */
-    :root dialog.boite-dialogue > .defilement.contenu-boite.transition-sous-menu > .piste {
+    :root dialog.tiroir > .defilement.contenu-tiroir.transition-sous-menu > .piste {
         opacity: 0;
     }
 
+    /* Le menu principal ne défile pas pendant la transition : le sous-menu superposé est posé
+       devant sa partie visible */
+    :root dialog.tiroir > .defilement.contenu-tiroir.transition-sous-menu {
+        overflow-y: hidden;
+    }
+
     /* Lien vers la page affichée (boite-ancre active), en gras */
-    .boite-dialogue .boite-ancre.actif {
+    .tiroir .boite-ancre.actif {
         --e-fonte: var(--e-gras);
     }
 
     /* Menu principal caché derrière un sous-menu ouvert */
-    .boite-dialogue > .contenu-boite > .masque-sous-menu {
+    .tiroir > .contenu-tiroir > .masque-sous-menu {
         display: none;
     }
 
-    .boite-dialogue > .contenu-boite {
+    .tiroir > .contenu-tiroir {
         flex: 1 1 auto;
         min-height: 0;
 
         /* Les vues d un sous-menu glissent sur les côtés sans faire défiler le contenu, coupées
-           au bord de la boîte */
+           au bord du tiroir */
         overflow-x: hidden;
 
         /* none plutôt que contain : pas de rebond du trackpad quand rien ne déborde */
@@ -682,25 +836,29 @@
     }
 ]
 
-# Boîte de dialogue, ouverte par $ouvrir_boite($nom) et fermée par $fermer_boite() (base.avec) :
-# une seule à la fois. Elle se ferme aussi par la croix, par la barre ou en la glissant vers le
-# bas, par un clic sur le fond grisé, par Échap ou le retour d'Android, et à la navigation vers
-# une autre page. Son contenu peut défiler ; au bas de l'écran, elle s'agrandit en la tirant
-# vers le haut
-@args [$nom]
+# Tiroir (boîte de dialogue), ouvert par $ouvrir_tiroir($nom) (ou $ouvrir_tiroir($nom, $haut),
+# pour placer son haut, au bas de l'écran, à $haut pixels du haut de l'écran) et fermé par
+# $fermer_tiroir() (base.avec) : un seul à la fois. Il se ferme aussi par la croix, par la barre
+# ou en le glissant vers le bas, par un clic sur le fond grisé, par Échap ou le retour
+# d'Android, et à la navigation vers une autre page. Son contenu peut défiler.
+# Extensible ($extensible) : non modal, la page restant utilisable (sans fond grisé) ; au bas de
+# l'écran, il garde la hauteur où il est positionné (même petite) quel que soit son contenu, et
+# sa barre seule l'agrandit jusqu'à montrer tout son contenu (ou tout l'écran), puis le ramène
+@args [$nom, $extensible : :(]
 
-$navigation_boite_dialogue = $suivre_navigation_boite($path)
+$navigation_tiroir = $suivre_navigation_tiroir($path)
 
 <dialog
-    .boite-dialogue
-    data-boite="$nom"
-    @mount="$monter_boite_dialogue()"
-    @unmount="$demonter_boite_dialogue()"
+    .tiroir
+    [$extensible] ? .extensible
+    data-tiroir="$nom"
+    @mount="$monter_tiroir()"
+    @unmount="$demonter_tiroir()"
 >
-    <div .entete-boite>
-        <div .barre-boite>
-        <button .croix-boite type="button" aria-label="Fermer" @click="$fermer_boite()">
+    <div .entete-tiroir>
+        <div .barre-tiroir>
+        <button .croix-tiroir type="button" aria-label="Fermer" @click="$fermer_tiroir()">
             icone-croix
 
-    defilement.contenu-boite
+    defilement.contenu-tiroir
         @stud

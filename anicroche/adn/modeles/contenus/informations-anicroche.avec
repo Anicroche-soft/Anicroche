@@ -7,10 +7,17 @@
     $separateur_anciennete  = texte_avant ? '· ' : ''
     $date_lisible_anicroche = $formater_date($date, true)
 
+    // Le menu s ouvre au bas de l écran avec son haut 1rem sous le bouton
+    $ouvrir_menu_anicroche = (bouton) =>
+    {
+        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+        $ouvrir_tiroir('menu-anicroche', bouton.getBoundingClientRect().bottom + rem)
+    }
+
     $copier_lien_anicroche = async () =>
     {
         await navigator.clipboard?.writeText(`${location.origin}${$path}`)
-        $fermer_boite()
+        $fermer_tiroir()
     }
 ]
 
@@ -147,10 +154,10 @@
                 <span .long>
                     "$separateur_anciennete$anciennete_anicroche.long"
 
-        <button .bouton-menu-anicroche type="button" aria-label="Menu" @click="$ouvrir_boite('menu-anicroche')">
+        <button .bouton-menu-anicroche type="button" aria-label="Menu" @click="$ouvrir_menu_anicroche($node)">
             icone-points
 
-        boite-dialogue [menu-anicroche]
+        tiroir [menu-anicroche]
             boite-action [$copier_lien_anicroche]
                 icone-chaine
                 <span>

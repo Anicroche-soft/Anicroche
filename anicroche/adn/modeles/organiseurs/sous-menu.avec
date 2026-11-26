@@ -1,6 +1,6 @@
 @style [
-    /* Le sous-menu n apparaît qu ouvert (boite-dialogue), à la place du menu principal, sur
-       tout le contenu de la boîte (marges comprises) : il y défile lui-même, et sa piste part
+    /* Le sous-menu n apparaît qu ouvert (tiroir), à la place du menu principal, sur
+       tout le contenu du tiroir (marges comprises) : il y défile lui-même, et sa piste part
        avec lui. Pendant sa transition, il est posé par-dessus le menu principal */
     .sous-menu {
         display: none;
@@ -15,7 +15,7 @@
         margin: calc(0rem - var(--l-marge));
     }
 
-    /* Sa hauteur, celle de sa vue ouverte, est fixée par boite-dialogue */
+    /* Sa hauteur, celle de sa vue ouverte, est fixée par tiroir */
     .sous-menu.superpose {
         position: absolute;
         top: 0;
@@ -44,7 +44,7 @@
     }
 ]
 
-# Sous-menu d'une boîte de dialogue, placé dans son contenu (boite-dialogue) et ouvert par
+# Sous-menu d'un tiroir, placé dans son contenu (tiroir) et ouvert par
 # $ouvrir_sous_menu($nom) : il commence par le retour au menu principal ($fermer_sous_menu), avec
 # son titre ; un seul niveau de sous-menu
 @args [$nom, $titre]

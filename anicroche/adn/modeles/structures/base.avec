@@ -449,53 +449,65 @@
         }
     }
 
-    // ─── Boîtes de dialogue ──────────────────────────────────────────────────
+    // ─── Tiroirs ─────────────────────────────────────────────────────────────
 
-    // Une seule boîte de dialogue (boite-dialogue) est ouverte à la fois
-    const boite_ouverte = () => document.querySelector('dialog.boite-dialogue[open]')
+    // Un seul tiroir (boîte de dialogue, modèle tiroir) est ouvert à la fois
+    const tiroir_ouvert = () => document.querySelector('dialog.tiroir[open]')
 
-    // Ouvre la boîte de ce nom ; renvoie false si une boîte est déjà ouverte ou si aucune ne
-    // porte ce nom dans la page
-    $ouvrir_boite = (nom) =>
+    // Ouvre le tiroir de ce nom ; renvoie false si un tiroir est déjà ouvert ou si aucun ne
+    // porte ce nom dans la page. Avec haut (en pixels), le tiroir, quand il s ouvre au bas de
+    // l écran, a son haut à cette distance du haut de l écran (la moitié de l écran au plus),
+    // même s il est plus grand que son contenu
+    $ouvrir_tiroir = (nom, haut = null) =>
     {
-        if (boite_ouverte())
+        if (tiroir_ouvert())
             return false
 
-        const boite = [ ...document.querySelectorAll('dialog.boite-dialogue') ]
-            .find(element => element.dataset.boite === nom)
-        if (!boite)
+        const tiroir = [ ...document.querySelectorAll('dialog.tiroir') ]
+            .find(element => element.dataset.tiroir === nom)
+        if (!tiroir)
             return false
 
-        boite.dataset.chemin = location.pathname
-        boite.showModal()
+        tiroir.dataset.chemin = location.pathname
+        if (Number.isFinite(haut))
+        {
+            tiroir.classList.add('positionne')
+            tiroir.style.setProperty('--haut-tiroir', `${Math.max(0, haut)}px`)
+        }
+        // Un tiroir extensible laisse la page utilisable : il n est pas modal
+        if (tiroir.classList.contains('extensible'))
+            tiroir.show()
+        else
+            tiroir.showModal()
+        tiroir.dispatchEvent(new Event('ouverture-tiroir'))
         return true
     }
 
-    // Ferme la boîte ouverte, avec son animation
-    $fermer_boite = () =>
+    // Ferme le tiroir ouvert, avec son animation
+    $fermer_tiroir = () =>
     {
-        boite_ouverte()?.dispatchEvent(new Event('fermer-boite'))
+        tiroir_ouvert()?.dispatchEvent(new Event('fermer-tiroir'))
     }
 
-    // Ouvre le sous-menu de ce nom (modèle sous-menu) dans la boîte ouverte, et revient à son
+    // Ouvre le sous-menu de ce nom (modèle sous-menu) dans le tiroir ouvert, et revient à son
     // menu principal
     $ouvrir_sous_menu = (nom) =>
     {
-        boite_ouverte()?.dispatchEvent(new CustomEvent('ouvrir-sous-menu', { detail: nom }))
+        tiroir_ouvert()?.dispatchEvent(new CustomEvent('ouvrir-sous-menu', { detail: nom }))
     }
 
     $fermer_sous_menu = () =>
     {
-        boite_ouverte()?.dispatchEvent(new Event('fermer-sous-menu'))
+        tiroir_ouvert()?.dispatchEvent(new Event('fermer-sous-menu'))
     }
 
-    // Appelée par chaque boîte à chaque changement de $path : une navigation vers une autre
-    // page ferme la boîte ouverte
-    $suivre_navigation_boite = (chemin) =>
+    // Appelée par chaque tiroir à chaque changement de $path : une navigation vers une autre
+    // page ferme le tiroir ouvert
+    $suivre_navigation_tiroir = (chemin) =>
     {
-        const boite = boite_ouverte()
-        if (boite && boite.dataset.chemin !== chemin)
-            $fermer_boite()
+        const tiroir = tiroir_ouvert()
+        if (tiroir && tiroir.dataset.chemin !== chemin)
+            $fermer_tiroir()
     }
 
     // ─── Démarrage ───────────────────────────────────────────────────────────
