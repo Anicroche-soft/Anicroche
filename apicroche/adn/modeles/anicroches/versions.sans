@@ -36,31 +36,42 @@
     }
 
     # PATCH /version/<$id_anicroche>/<$numero> { acces }, parue ou non :
-    # - prive   : seuls les gérants de l anicroche la voient (voir anicroches.sans) ;
-    # - partage : visible de quiconque demande l anicroche, mais absente des listes ;
-    # - public  : visible de tous, et listée.
-    # Une version datée (parue ou programmée) d une anicroche légale est toujours publique :
-    # la version en vigueur et celle qui est annoncée doivent pouvoir être lues
+    # - prive     : seuls les gérants de l anicroche la voient (voir anicroches.sans) ;
+    # - partage   : visible de quiconque demande l anicroche, mais absente des listes ;
+    # - programme : privée jusqu à sa date de parution, publique ensuite (seulement pour une
+    #               version programmée ; lu public une fois la version parue, et remplacé par
+    #               public en base, voir parution.sans) ;
+    # - public    : visible de tous, et listée.
+    # Un changement de date de parution fixe l accès, qui peut ensuite être modifié : public à
+    # la parution immédiate, programme à la programmation, prive à l annulation d une parution
+    # programmée. Une version datée (parue ou programmée) d une anicroche légale est toujours
+    # publique : la version en vigueur et celle qui est annoncée doivent pouvoir être lues
     {
         name       : acces
-        type       : prive/partage/public
+        type       : prive/partage/programme/public
         default    : prive
         can_update : ':)'
         can_search : ':)'
+        read       : {
+            when  : "$acces = programme & $date_parution <= now"
+            value : public
+        }
     }
 ]
 
 # Les gérants de l anicroche (voir anicroches.sans) voient toutes ses versions, les autres ses
-# versions datées selon leur accès (une version partagée seulement pour une anicroche demandée
-# seule). DELETE /version/<$id_anicroche>/<$numero> supprime un brouillon non programmé et ses
-# sources
+# versions (brouillon compris : public, il est à l essai) selon leur accès et celui de l anicroche (partagée seulement pour une
+# anicroche demandée seule, programmée une fois parue). DELETE /version/<$id_anicroche>/<$numero>
+# supprime un brouillon non programmé et ses sources
 @rules [
     restrict_search : "
         #is_version_of_anicroche.type -{ $context.types_administres
       | #is_version_of_anicroche.auteurs.id = $context.profil.id
-      | ( #date_parution != null
+      | ( ( #is_version_of_anicroche.acces = public
+          | ( #is_version_of_anicroche.acces = partage & ( $request.params.id != null | $request.params.id_anicroche != null ) ) )
         & ( #acces = public
-          | ( #acces = partage & ( $request.params.id != '' | $request.params.id_anicroche != '' ) ) ) )
+          | ( #acces = programme & #date_parution <= now )
+          | ( #acces = partage & ( $request.params.id != null | $request.params.id_anicroche != null ) ) ) )
     "
     prior_update    : "$verifier_modification_version($values, $request)"
     can_delete      : "$context.compte"
@@ -112,21 +123,38 @@
         $add_to_data('numero', $values.numero)
     }
 
-    // L état de la version après la modification est vérifié : la date et l accès peuvent
-    // changer ensemble
+    // Un changement de date fixe l accès (la date elle-même est vérifiée par
+    // $verifier_parution) ; une version d une anicroche légale ou soumise au préavis est publique
+    // dès sa programmation, pour être lue pendant son annonce
+    const acces_apres_parution = (anicroche, version, date_parution) =>
+    {
+        if (date_parution === null)
+            return version?.acces === 'programme' ? 'prive' : version?.acces
+        if (date_parution === 'now' || $est_legale(anicroche) || $soumise_au_preavis(anicroche))
+            return 'public'
+        return 'programme'
+    }
+
+    // L état de la version après la modification est vérifié
     $verifier_modification_version = async ($values, $request) =>
     {
         const anicroche = await $exiger_administration_anicroche($request.params.id_anicroche)
-        if (!$est_legale(anicroche))
-            return
-
-        const version = await $search_one('version',
+        const version   = await $search_one('version',
             `
             #id_anicroche = $id
           & #numero       = $numero
             `,
             { $id: anicroche.id, $numero: Number($request.params.numero) }
         )
+
+        if ('date_parution' in $values)
+            $values.acces = acces_apres_parution(anicroche, version, $values.date_parution)
+        else if ($values.acces === 'programme' && !(version?.date_parution && !$est_parue(version)))
+            return $indicate(422, "Seule une version dont la parution est programmée peut avoir l'accès programmé")
+
+        if (!$est_legale(anicroche))
+            return
+
         const date  = 'date_parution' in $values ? $values.date_parution : version?.date_parution
         const acces = $values.acces ?? version?.acces
 

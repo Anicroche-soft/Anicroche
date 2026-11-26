@@ -35,6 +35,14 @@
         outline-color: var(--c-focus);
     }
 
+    /* Variante discrète (choix-option.discret) : sans cadre ; le contour du focus prend la
+       couleur du texte */
+    .choix-option.discret > div {
+        border-color: transparent;
+
+        --c-focus: var(--c-flux);
+    }
+
     .choix-option > div::before {
         content: attr(data-prefixe);
     }
@@ -69,7 +77,8 @@
     }
 ]
 
-@args [$etiquette, $nom, $choix, $desactive : :(, $prefixe : :(, $valeur : :o]
+# $action, appelée à chaque changement de choix
+@args [$etiquette, $nom, $choix, $desactive : :(, $prefixe : :(, $valeur : :o, $action : :(]
 
 <label
     .champ
@@ -86,6 +95,7 @@
             #choix-$nom
             name="$nom"
             [$desactive] ? disabled
+            [$action] ? @change="$action()"
         >
             @for-each [$i, $ch] of [$choix]
                 <option

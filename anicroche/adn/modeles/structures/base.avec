@@ -135,19 +135,22 @@
     }
 
     // Une anicroche avec la version demandée (sinon celle en vigueur) et ses sources :
-    // { code, type, data } ; data reçoit en plus de id, type, langue et region :
-    // - version, date_parution, acces, sources et titre de la version affichée (null si aucune) ;
+    // { code, type, data } ; data reçoit en plus de id, type, langue, region et acces (celui de
+    // l anicroche) :
+    // - version, date_parution, acces_version, sources et titre de la version affichée (null si
+    //   aucune) ;
     // - en_vigueur : numéro de la version en vigueur ;
-    // - a_venir    : { numero, date_parution } de la version programmée ;
+    // - a_venir    : { numero, date_parution, acces } de la version programmée ;
     // - a_l_essai  : { numero } de la version à l essai (dernière version, non datée et publique) ;
-    // - versions   : versions parues, de la plus récente à la plus ancienne ({ numero, date_parution }) ;
+    // - versions   : versions parues, de la plus récente à la plus ancienne ({ numero,
+    //                date_parution, acces }) ;
     // - legale, preavis : spécificités de l anicroche ;
     // - brouillon  : pour les gérants, la dernière version si elle n est pas parue
     //                ({ numero, date_parution, acces, sources }), ou null.
     // L API ne donne que les versions visibles : les gérants les voient toutes
     $charger_anicroche = async (id, demandee = null) =>
     {
-        const reponse = await $search(adresse_anicroche(id), { projection: 'id;type;langue;region;versions' })
+        const reponse = await $search(adresse_anicroche(id), { projection: 'id;type;langue;region;acces;versions' })
         const type    = reponse.code === 200 ? await $obtenir_type_anicroche(reponse.data?.type) : null
         if (!type)
             return { code: reponse.code === 200 ? 404 : reponse.code, error: reponse.error, type: null, data: null }
@@ -168,13 +171,13 @@
 
         anicroche.version       = affichee?.numero ?? null
         anicroche.date_parution = affichee?.date_parution ?? null
-        anicroche.acces         = affichee?.acces ?? null
+        anicroche.acces_version = affichee?.acces ?? null
         anicroche.sources       = sources
         anicroche.titre         = $titre_anicroche(anicroche, sources)
         anicroche.en_vigueur    = en_vigueur?.numero ?? null
-        anicroche.a_venir       = programmee ? { numero: programmee.numero, date_parution: programmee.date_parution } : null
+        anicroche.a_venir       = programmee ? { numero: programmee.numero, date_parution: programmee.date_parution, acces: programmee.acces } : null
         anicroche.a_l_essai     = essai ? { numero: essai.numero } : null
-        anicroche.versions      = rangees.filter(est_parue).map(({ numero, date_parution }) => ({ numero, date_parution }))
+        anicroche.versions      = rangees.filter(est_parue).map(({ numero, date_parution, acces }) => ({ numero, date_parution, acces }))
         anicroche.legale        = $est_legale(anicroche)
         anicroche.preavis       = $soumise_au_preavis(anicroche)
         anicroche.brouillon     = gere && derniere && !est_parue(derniere)
@@ -337,7 +340,8 @@
     // Date lisible (« 19 novembre 2026 », ou « 19 novembre 2026 à 14:05 » avec l heure) : une
     // date seule AAAA-MM-JJ est lue telle quelle, une date et heure de l API (en UTC) dans le
     // fuseau du visiteur
-    $formater_date = (date, avec_heure = false) =>
+    // abrege : mois abrégé (« 26 nov. 2026 »)
+    $formater_date = (date, avec_heure = false, abrege = false) =>
     {
         if (!date)
             return ''
@@ -346,7 +350,7 @@
         const valeur    = new Date(date)
         const jour      = valeur.toLocaleDateString('fr-FR', {
             day      : 'numeric',
-            month    : 'long',
+            month    : abrege ? 'short' : 'long',
             year     : 'numeric',
             timeZone : jour_seul ? 'UTC' : undefined
         })

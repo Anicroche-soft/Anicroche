@@ -36,7 +36,9 @@
         --p-fonte: var(--p-bouton);
     }
 
-    .bouton-action:has(> .icone):not(:has(> .icone ~ .icone)):not(:has(> :not(.icone):not(.alt):not(.attente))) {
+    /* Un bouton fait d une seule icône partage la place avec les autres, sauf en variante
+       discrète, qui garde sa largeur */
+    .bouton-action:not(.discret):has(> .icone):not(:has(> .icone ~ .icone)):not(:has(> :not(.icone):not(.alt):not(.attente))) {
         flex: 1;
     }
 
@@ -51,6 +53,26 @@
     .bouton-action .icone {
         margin: -0.25rem;
         flex-shrink: 0;
+    }
+
+    /* Variante discrète (bouton-action.discret) : ni cadre ni fond, la couleur du texte autour,
+       sans effet au survol ; le focus garde son contour */
+    .bouton-action.discret,
+    .bouton-action.discret:hover,
+    .bouton-action.discret:focus,
+    .bouton-action.discret.en-attente {
+        flex: 0 0 auto;
+
+        border-color: transparent;
+
+        --f-fond:  transparent;
+        --c-fond:  transparent;
+        --c-flux:  inherit;
+        --c-focus: var(--c-flux);
+    }
+
+    .bouton-action.discret > .attente > rect {
+        stroke: var(--c-vif);
     }
 
     /* Deux traits de 10 sur un tour de 100, à un demi-tour l un de l autre : centrés au départ

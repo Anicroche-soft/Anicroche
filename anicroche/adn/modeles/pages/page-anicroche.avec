@@ -18,6 +18,11 @@
     $date_anicroche       = null
     $versions_anicroche   = []
 
+    // Une version partagée se lit par son lien sans être proposée (menu des versions, lien vers
+    // la version à paraître), sauf aux gérants et quand elle est affichée
+    const proposee = (anicroche, version, affichee) =>
+        version.acces !== 'partage' || version.numero === affichee || $administre_type(anicroche.type)
+
     // /<id> montre la version en vigueur, /<id>/<numero> une version précise : le lien mène à
     // la version en vigueur depuis une version qui ne l est pas, et sinon à la version à
     // paraître ou à l essai (brouillon public). Les gérants de l anicroche (auteurs, ou profils
@@ -25,6 +30,8 @@
     // qu aucune version n est parue
     const preparer_lien_version = (anicroche, affichee, chemin) =>
     {
+        const a_venir = anicroche.a_venir && proposee(anicroche, anicroche.a_venir, affichee) ? anicroche.a_venir : null
+
         const lien = (texte, adresse) =>
         {
             $texte_lien_version = texte
@@ -35,8 +42,8 @@
 
         if (affichee !== null && affichee !== anicroche.en_vigueur && anicroche.en_vigueur !== null)
             lien("Voir la version en vigueur", chemin)
-        else if (anicroche.a_venir && anicroche.a_venir.numero !== affichee)
-            lien(`Voir la version à paraître le ${$formater_date(anicroche.a_venir.date_parution)}`, `${chemin}/${anicroche.a_venir.numero}`)
+        else if (a_venir && a_venir.numero !== affichee)
+            lien(`Voir la version à paraître le ${$formater_date(a_venir.date_parution)}`, `${chemin}/${a_venir.numero}`)
         else if (anicroche.a_l_essai && anicroche.a_l_essai.numero !== affichee)
             lien("Voir la version à l'essai", `${chemin}/${anicroche.a_l_essai.numero}`)
     }
@@ -44,7 +51,7 @@
     // Versions du menu de la barre d informations, de la plus récente à la plus ancienne :
     // { etat (brouillon, a_paraitre, en_vigueur ou ancienne), texte, lien, date, affichee }. Le
     // brouillon n est connu que des gérants, sauf à l essai (brouillon public) ; un brouillon
-    // programmé est la version à paraître
+    // programmé est la version à paraître. Une version partagée n est proposée qu aux gérants
     const preparer_versions = (anicroche, affichee, chemin) =>
     {
         const entrees = []
@@ -62,13 +69,13 @@
         if (brouillon)
             entree('brouillon', brouillon.numero, anicroche.a_l_essai?.numero === brouillon.numero ? "Brouillon à l'essai" : "Brouillon")
 
-        if (anicroche.a_venir)
+        if (anicroche.a_venir && proposee(anicroche, anicroche.a_venir, affichee))
             entree('a_paraitre', anicroche.a_venir.numero, `À paraître le ${$formater_date(anicroche.a_venir.date_parution, true)}`, anicroche.a_venir.date_parution)
 
         for (const version of anicroche.versions ?? [])
             if (version.numero === anicroche.en_vigueur)
                 entree('en_vigueur', version.numero, "Version en vigueur", version.date_parution)
-            else
+            else if (proposee(anicroche, version, affichee))
                 entree('ancienne', version.numero, `Version du ${$formater_date(version.date_parution)}`, version.date_parution)
 
         $versions_anicroche = entrees

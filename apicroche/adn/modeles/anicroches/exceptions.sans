@@ -37,6 +37,10 @@
                     continue
                 }
 
+                // Une anicroche légale est toujours publique, même créée avant cette règle
+                if ($est_legale({ id, type }) && existante?.acces !== 'public')
+                    await $update_one('anicroche', `#id = $id`, { acces: 'public' }, { $id: id })
+
                 // Aussi pour une anicroche créée avant cette règle
                 await $initialiser_anicroche({ id, type })
             }

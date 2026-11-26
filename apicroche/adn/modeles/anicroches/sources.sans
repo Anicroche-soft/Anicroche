@@ -84,7 +84,8 @@
     }
 ]
 
-# Une source est visible quand la version demandée l est (voir versions.sans) : c est la
+# Une source est visible quand la version demandée l est (voir versions.sans), selon son
+# accès et celui de l anicroche : c est la
 # version que l on lit, la source pouvant venir d une version précédente. Sans version
 # demandée, seuls les gérants de l anicroche voient ses sources
 @rules [
@@ -92,9 +93,11 @@
         #is_source_of_anicroche.type -{ $context.types_administres
       | #is_source_of_anicroche.auteurs.id = $context.profil.id
       | ( #is_source_of_anicroche.versions.numero = $fallback.version
-        & #is_source_of_anicroche.versions.date_parution != null
+        & ( #is_source_of_anicroche.acces = public
+          | ( #is_source_of_anicroche.acces = partage & ( $request.params.id != null | $request.params.id_anicroche != null ) ) )
         & ( #is_source_of_anicroche.versions.acces = public
-          | ( #is_source_of_anicroche.versions.acces = partage & ( $request.params.id != '' | $request.params.id_anicroche != '' ) ) ) )
+          | ( #is_source_of_anicroche.versions.acces = programme & #is_source_of_anicroche.versions.date_parution <= now )
+          | ( #is_source_of_anicroche.versions.acces = partage & ( $request.params.id != null | $request.params.id_anicroche != null ) ) ) )
     "
     post_create : $retourner_position($values)
 ]

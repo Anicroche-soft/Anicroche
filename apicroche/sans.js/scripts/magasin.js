@@ -128,8 +128,10 @@ const traiter_ecriture = async (champ, valeur) =>
     }
 }
 
-// Décrypter les champs AES d'une ligne (les hash sont irréversibles)
-const decrypter_ligne = (modele, ligne) =>
+// Préparer une ligne lue en base : déchiffrer les champs AES (les hash sont irréversibles),
+// puis remplacer la valeur des champs avec read dont l'expression est vraie. Les expressions
+// voient toutes les valeurs déchiffrées, avant remplacement ; un champ non lu vaut :x
+const traiter_lecture = (modele, ligne) =>
 {
     const res = { ...ligne }
     for (const champ of modele.fields)
@@ -140,6 +142,16 @@ const decrypter_ligne = (modele, ligne) =>
             catch { res[champ.name] = null }
         }
     }
+
+    const champs_lus = modele.fields.filter(champ => champ.read && champ.name in res)
+    if (!champs_lus.length)
+        return res
+
+    const contexte = Object.fromEntries(modele.fields
+        .map(champ => [ `$${champ.name}`, champ.name in res ? res[champ.name] : ERREUR_AUGURE ]))
+    for (const champ of champs_lus)
+        if (evaluer(champ.read.when, contexte))
+            res[champ.name] = champ.read.value
     return res
 }
 
@@ -161,7 +173,7 @@ const lire_lignes_par_in = async (modele, champ, valeurs) =>
 
     const comparer = comparer_lignes(tri)
     return lignes
-        .map(brute => ({ brute, ligne: decrypter_ligne(modele, brute) }))
+        .map(brute => ({ brute, ligne: traiter_lecture(modele, brute) }))
         .sort((a, b) => comparer(a.ligne, b.ligne))
         .map(({ brute }) => brute)
 }
@@ -476,7 +488,7 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
 
             const lignes_relatives = await lire_liees(modele_enfant, cle_enfant, ids_relatifs)
             // Plusieurs lignes par clef quand la relation vise un groupe
-            const relatives = lignes_relatives.map(ligne_rel => decrypter_ligne(modele_enfant, ligne_rel))
+            const relatives = lignes_relatives.map(ligne_rel => traiter_lecture(modele_enfant, ligne_rel))
 
             // Les entrées liées gardent l'ordre de leur modèle, pas celui de la jonction
             for (let i = 0; i < lignes.length; i++)
@@ -527,7 +539,7 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
                 for (let i = 0; i < lignes.length; i++)
                 {
                     const id_ligne = lignes[i][cle_source]
-                    const lignes_rel = (index_rows.get(id_ligne) ?? []).map(ligne_rel => decrypter_ligne(table_cible, ligne_rel))
+                    const lignes_rel = (index_rows.get(id_ligne) ?? []).map(ligne_rel => traiter_lecture(table_cible, ligne_rel))
                     resultats[i][token] = spec.select ? await projection_enfant(lignes_rel) : lignes_rel
                 }
 
@@ -545,7 +557,7 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
             }
 
             const rows_inverse = await lire_liees(table_source, pk_source.name, valeurs_fk)
-            const map_rows = new Map(rows_inverse.map(ligne_rel => [ligne_rel[pk_source.name], decrypter_ligne(table_source, ligne_rel)]))
+            const map_rows = new Map(rows_inverse.map(ligne_rel => [ligne_rel[pk_source.name], traiter_lecture(table_source, ligne_rel)]))
 
             for (let i = 0; i < lignes.length; i++)
             {
@@ -573,7 +585,7 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
             {
                 const valeurs_fk = [...new Set(lignes.map(ligne => ligne[cle_locale]).filter(v => v !== undefined && v !== null))]
                 const rows = await lire_liees(table_cible, pk_cible_nom, valeurs_fk)
-                const map_rows = new Map(rows.map(ligne_rel => [ligne_rel[pk_cible_nom], decrypter_ligne(table_cible, ligne_rel)]))
+                const map_rows = new Map(rows.map(ligne_rel => [ligne_rel[pk_cible_nom], traiter_lecture(table_cible, ligne_rel)]))
 
                 for (let i = 0; i < lignes.length; i++)
                 {
@@ -590,7 +602,7 @@ const projeter_lignes_select = async (schemas, modele, lignes, select, contexte_
 
             for (let i = 0; i < lignes.length; i++)
             {
-                const lignes_rel = (index_rows.get(lignes[i][pk_cible_nom]) ?? []).map(ligne_rel => decrypter_ligne(table_source, ligne_rel))
+                const lignes_rel = (index_rows.get(lignes[i][pk_cible_nom]) ?? []).map(ligne_rel => traiter_lecture(table_source, ligne_rel))
                 resultats[i][token] = spec.select ? await projection_enfant(lignes_rel) : lignes_rel
             }
             continue
@@ -787,7 +799,7 @@ const lire_entrees = async (schemas, modele, condition, contexte_condition, etiq
         limite : en_sql && !replis ? { limit: options_norm.limit, offset: options_norm.offset } : null
     })
 
-    let entrees = lignes.map(brute => ({ brute, ligne: decrypter_ligne(modele, brute) }))
+    let entrees = lignes.map(brute => ({ brute, ligne: traiter_lecture(modele, brute) }))
 
     if (replis)
     {
@@ -917,7 +929,7 @@ const valider_update = (modele, ligne_brute, donnees) =>
             verifier_valeur_champ(champ, valeur)
     }
 
-    const ligne = decrypter_ligne(modele, ligne_brute)
+    const ligne = traiter_lecture(modele, ligne_brute)
     const contexte = {}
     for (const champ of modele.fields)
     {

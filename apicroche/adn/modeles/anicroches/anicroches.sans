@@ -44,6 +44,20 @@
         can_search : ':)'
     }
 
+    # PATCH /anicroche/<id> { acces } :
+    # - prive   : seuls ses gérants la voient ;
+    # - partage : visible de quiconque la demande seule (par son lien), mais absente des listes ;
+    # - public  : visible de tous, et listée.
+    # Une anicroche légale est toujours publique (voir exceptions.sans)
+    {
+        name         : acces
+        type         : prive/partage/public
+        default      : prive
+        can_update   : ':)'
+        can_search   : ':)'
+        prior_update : "$verifier_acces_anicroche($values, $request)"
+    }
+
     # Une relation projetée ne montre que les entrées visibles (voir le restrict_search de
     # versions.sans et de sources.sans)
     {
@@ -74,16 +88,19 @@
 ]
 
 # Une anicroche supprimée n est jamais visible. Les autres le sont pour leurs gérants (les
-# profils qui administrent son type, et ses auteurs), et pour tous dès qu une de leurs versions datées (parue ou programmée) est
-# publique, ou partagée quand l anicroche est demandée seule
+# profils qui administrent son type, et ses auteurs), et pour tous selon leur accès (partagée :
+# seulement demandée seule), dès qu une de leurs versions est visible (voir versions.sans) :
+# parue, programmée, ou brouillon à l essai
 @rules [
     restrict_search : "
         ( !(#type -{ $context.types_avec_auteurs) | #auteurs.id != null )
       & ( #type -{ $context.types_administres
         | #auteurs.id = $context.profil.id
-        | ( #versions.date_parution != null
+        | ( ( #acces = public
+            | ( #acces = partage & $request.params.id != null ) )
           & ( #versions.acces = public
-            | ( #versions.acces = partage & $request.params.id != '' ) ) ) )
+            | ( #versions.acces = programme & #versions.date_parution <= now )
+            | ( #versions.acces = partage & $request.params.id != null ) ) ) )
     "
 ]
 
@@ -95,6 +112,14 @@
 
         await $exiger_administration($values.type)
         await $preparer_identifiant($values)
+    }
+
+    $verifier_acces_anicroche = async ($values, $request) =>
+    {
+        const anicroche = await $exiger_administration_anicroche($request.params.id)
+
+        if ($est_legale(anicroche) && $values.acces !== 'public')
+            return $indicate(422, "Cette page est légale : elle doit rester publique")
     }
 
     $ouvrir_premier_brouillon = async ($values) =>

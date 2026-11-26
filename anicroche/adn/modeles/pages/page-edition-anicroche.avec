@@ -3,24 +3,15 @@
     $etat_edition           = 'introuvable'
     $anicroche_edition      = null
     $type_edition           = null
-    $sources_publiees       = []
     $sources_brouillon      = []
     $ajouts_edition         = []
-    $acces_edition          = 'prive'
     $date_parution_edition  = ''
     $lien_brouillon_edition = ''
-    $annee_edition          = new Date().getFullYear()
-    $annee_suivante_edition = $annee_edition + 1
+    $lien_gestion_edition   = ''
     $succes_edition         = false
     $erreur_edition         = false
 
     const SUFFIXE = '/edition'
-
-    $choix_acces_edition = [
-        { nom: 'prive',   etiquette: "Privé" },
-        { nom: 'partage', etiquette: "Partagé" },
-        { nom: 'public',  etiquette: "Public" }
-    ]
 
     const lire_id = () => $lire_identifiant_anicroche($path.slice(1, -SUFFIXE.length))
 
@@ -72,7 +63,6 @@
 
         $anicroche_edition      = reponse.data
         $type_edition           = type
-        $sources_publiees       = $lister_sources_anicroche(type, reponse.data.sources)
         $sources_brouillon      = $lister_sources_anicroche(type, brouillon?.sources)
             .map(source => ({
                 ...source,
@@ -82,9 +72,9 @@
         $ajouts_edition         = type.sources
             .filter(source => source.max === null || $sources_brouillon.filter(element => element.role === source.role).length < source.max)
             .map(source => ({ role: source.role, etiquette: `Ajouter : ${source.libelle}` }))
-        $acces_edition          = (brouillon ?? reponse.data).acces ?? 'prive'
         $date_parution_edition  = brouillon?.date_parution ? $formater_date(brouillon.date_parution, true) : ''
         $lien_brouillon_edition = brouillon ? `${chemin.slice(0, -SUFFIXE.length)}/${brouillon.numero}` : ''
+        $lien_gestion_edition   = `${chemin.slice(0, -SUFFIXE.length)}/gestion`
         $etat_edition           = 'prete'
     }
 
@@ -148,7 +138,6 @@
     const lire_champs = () =>
     {
         const carte = $node.closest('.carte')
-        const lire  = (selecteur) => carte?.querySelector(selecteur)?.value ?? ''
 
         const contenus = {}
         for (const source of $sources_brouillon)
@@ -158,119 +147,17 @@
                 contenus[source.nom] = champ.value
         }
 
-        return {
-            contenus,
-            acces : lire('select[name=acces]'),
-            date  : lire('input[name=date_parution]')
-        }
-    }
-
-    const adresse_version = (numero) => `version/${encodeURIComponent($anicroche_edition.id)}/${numero}`
-
-    // Version visée par les réglages : le brouillon, ou à défaut la version en vigueur
-    const numero_edite = () => $anicroche_edition.brouillon?.numero ?? $anicroche_edition.version
-
-    // L accès n est envoyé que s il a changé
-    const enregistrer_acces = async (acces) =>
-    {
-        if (!acces || acces === $acces_edition)
-            return {}
-        return await $update(adresse_version(numero_edite()), { acces })
-    }
-
-    $modifier_acces = async () =>
-    {
-        const reponse = await enregistrer_acces(lire_champs().acces)
-        if (reponse.error)
-            return afficher_erreur(reponse)
-
-        await $charger_edition()
-        afficher_succes("Accès enregistré")
-    }
-
-    $creer_brouillon = async () =>
-    {
-        const reponse = await $create('version', { id_anicroche: $anicroche_edition.id })
-        if (reponse.error)
-            return afficher_erreur(reponse)
-
-        await $charger_edition()
-        afficher_succes(`Brouillon de la version ${reponse.data.numero} créé`)
+        return { contenus }
     }
 
     $enregistrer_brouillon = async () =>
     {
-        const champs = lire_champs()
-
-        let reponse = await enregistrer(champs.contenus)
-        if (reponse.error)
-            return afficher_erreur(reponse)
-
-        reponse = await enregistrer_acces(champs.acces)
+        const reponse = await enregistrer(lire_champs().contenus)
         if (reponse.error)
             return afficher_erreur(reponse)
 
         await $charger_edition()
         afficher_succes("Brouillon enregistré")
-    }
-
-    // Le contenu et l accès affichés sont enregistrés avant la parution, pour ne rien perdre.
-    // date : "now", ou une date AAAA-MM-JJ, la parution ayant lieu à minuit dans le fuseau
-    // du visiteur
-    const faire_paraitre = async (champs, date) =>
-    {
-        const numero = $anicroche_edition.brouillon.numero
-
-        let reponse = await enregistrer(champs.contenus)
-        if (reponse.error)
-            return afficher_erreur(reponse)
-
-        // La date et l accès sont envoyés ensemble : une page légale ne paraît que
-        // publique
-        const date_parution = date === 'now' ? 'now' : new Date(`${date}T00:00`).toISOString()
-        const acces         = champs.acces || $acces_edition
-
-        reponse = await $update(adresse_version(numero), { date_parution, acces })
-        await $charger_edition()
-        if (reponse.error)
-            return afficher_erreur(reponse)
-
-        afficher_succes(date === 'now'
-            ? `Version ${numero} publiée`
-            : `Parution de la version ${numero} programmée le ${$formater_date(date)}`)
-    }
-
-    $publier_brouillon = async () =>
-    {
-        await faire_paraitre(lire_champs(), 'now')
-    }
-
-    $programmer_brouillon = async () =>
-    {
-        const champs = lire_champs()
-        const date   = champs.date
-        if (!date)
-            return afficher_erreur({ error: "Choisissez la date de parution" })
-
-        if (new Date(`${date}T00:00`) <= new Date())
-            return afficher_erreur({ error: "La date de parution doit être à venir" })
-
-        await faire_paraitre(champs, date)
-    }
-
-    // Le brouillon redevient modifiable ; ce n est pas possible pour une page soumise au préavis
-    $annuler_parution = async () =>
-    {
-        const numero = $anicroche_edition.brouillon.numero
-        if (!confirm(`Annuler la parution programmée de la version ${numero} ?`))
-            return
-
-        const reponse = await $update(adresse_version(numero), { date_parution: null })
-        await $charger_edition()
-        if (reponse.error)
-            return afficher_erreur(reponse)
-
-        afficher_succes("Parution annulée : la version est de nouveau modifiable")
     }
 
     // Les sources affichées sont enregistrées, puis une source vide est ajoutée à la suite de
@@ -296,20 +183,6 @@
             return afficher_erreur(reponse)
 
         afficher_succes("Source ajoutée")
-    }
-
-    $supprimer_brouillon = async () =>
-    {
-        const numero = $anicroche_edition.brouillon.numero
-        if (!confirm(`Supprimer le brouillon de la version ${numero} ?`))
-            return
-
-        const reponse = await $delete(adresse_version(numero))
-        if (reponse.error)
-            return afficher_erreur(reponse)
-
-        await $charger_edition()
-        afficher_succes("Brouillon supprimé")
     }
 
     // La page n est affichée qu une fois l anicroche chargée : le routeur montre d ici là son
@@ -344,36 +217,23 @@ page [$authentification : requise_sans_profil]
                     "Contenu introuvable !"
 
         @else-if [$anicroche_edition.brouillon.date_parution]
-            section [edition]
+            section [edition, centree]
                 titre [centre]
                     "Version $anicroche_edition.brouillon.numero programmée"
                 carte
-                    @if [$succes_edition]
-                        succes-formulaire
-                            "$succes_edition"
-                    @if [$erreur_edition]
-                        erreur-formulaire
-                            "$erreur_edition"
                     information-formulaire
                         @if [$anicroche_edition.preavis]
-                            "Cette version paraîtra le $date_parution_edition. Cette page est soumise au préavis : sa parution ne peut être ni annulée ni déplacée."
+                            "Cette version paraîtra le $date_parution_edition et ne peut plus être modifiée : cette page est soumise au préavis."
                         @else
-                            "Cette version paraîtra le $date_parution_edition. Pour la modifier, annulez d'abord sa parution."
-                    sources-anicroche [$sources_brouillon]
-                    lien-ancre [$lien_brouillon_edition]
-                        "Voir la page de cette version"
-                    choix-option ["Accès", acces, $choix : $choix_acces_edition, $valeur : $acces_edition]
+                            "Cette version paraîtra le $date_parution_edition. Pour la modifier, annulez d'abord sa parution depuis la gestion."
                     ligne
-                        @if [! $anicroche_edition.preavis]
-                            bouton-action [$annuler_parution]
-                                "Annuler la parution"
-                        bouton-action [$modifier_acces]
-                            "Enregistrer l'accès"
+                        bouton-ancre [$lien_brouillon_edition]
+                            "Visualiser"
+                        bouton-ancre [$lien_gestion_edition]
+                            "Gérer"
 
         @else-if [$anicroche_edition.brouillon]
             section [edition]
-                titre [centre]
-                    "Brouillon de la version $anicroche_edition.brouillon.numero"
                 carte
                     formulaire [$enregistrer_brouillon]
                         @if [$succes_edition]
@@ -392,52 +252,21 @@ page [$authentification : requise_sans_profil]
                                 @for-each [$ajout] of [$ajouts_edition]
                                     bouton-action [$ajouter_source($ajout.role)]
                                         "$ajout.etiquette"
-                        lien-ancre [$lien_brouillon_edition]
-                            "Voir la page de cette version (contenu enregistré)"
-                        choix-option ["Accès", acces, $choix : $choix_acces_edition, $valeur : $acces_edition]
                         ligne
-                            bouton-action [$supprimer_brouillon]
-                                "Supprimer le brouillon"
+                            bouton-ancre [$lien_brouillon_edition]
+                                "Visualiser"
+                            bouton-ancre [$lien_gestion_edition]
+                                "Gérer"
                             bouton-soumission
                                 "Enregistrer"
-                            bouton-action [$publier_brouillon]
-                                "Publier maintenant"
-                        @if [$anicroche_edition.preavis]
-                            information-formulaire
-                                "Cette page est soumise au préavis : publiez-la maintenant pour une correction mineure, ou programmez sa parution pour une modification de fond, au moins 30 jours après l'envoi des annonces par courriel (l'API indique la date minimale)."
-                        @if [$anicroche_edition.legale]
-                            information-formulaire
-                                "Cette page est légale : elle ne peut paraître, ou être programmée, qu'avec l'accès public."
-                        champ-date [
-                            "Date de parution", date_parution
-                            $requis : :(
-                            $annee_min : $annee_edition
-                            $annee_max : $annee_suivante_edition
-                        ]
-                        ligne
-                            bouton-action [$programmer_brouillon]
-                                "Programmer la parution"
 
         @else
-            section [edition]
+            section [edition, centree]
                 titre [centre]
-                    @if [$anicroche_edition.version]
-                        "Version $anicroche_edition.version en ligne"
-                    @else
-                        "Aucune version publiée"
+                    "Aucun brouillon en cours"
                 carte
-                    @if [$succes_edition]
-                        succes-formulaire
-                            "$succes_edition"
-                    @if [$erreur_edition]
-                        erreur-formulaire
-                            "$erreur_edition"
-                    sources-anicroche [$sources_publiees]
-                    @if [$anicroche_edition.version]
-                        choix-option ["Accès", acces, $choix : $choix_acces_edition, $valeur : $acces_edition]
+                    information-formulaire
+                        "Pour modifier ce contenu, créez d'abord un brouillon depuis la gestion."
                     ligne
-                        @if [$anicroche_edition.version]
-                            bouton-action [$modifier_acces]
-                                "Enregistrer l'accès"
-                        bouton-action [$creer_brouillon]
-                            "Créer un brouillon"
+                        bouton-ancre [$lien_gestion_edition]
+                            "Gérer"

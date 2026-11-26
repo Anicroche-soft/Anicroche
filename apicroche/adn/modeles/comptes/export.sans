@@ -87,6 +87,7 @@
             anicroches.push({
                 id       : anicroche.id,
                 type     : anicroche.type,
+                acces    : anicroche.acces,
                 versions : versions.map(version => ({
                     numero        : version.numero,
                     date_parution : version.date_parution,

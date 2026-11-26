@@ -105,6 +105,7 @@ Déclare la liste des champs de la table. Chaque champ est un dictionnaire `{ }`
 | `length` | Longueur générée par `default : auto` |
 | `rule` | [Règle de validation](#rule) de la valeur |
 | `alt` | [Nom alternatif](#alt) du champ dans les corps de requête et les résultats de création |
+| `read` | [Valeur lue](#read) à la place de la valeur stockée, sous condition |
 | `fallback`, `fallback_default` | [Repli](#fallback--replis) d'un champ de la clef primaire dans les recherches |
 | `ref`, `entry` | Table cible et nom d'entrée d'une [relation](#relations) |
 | `key`, `fields` | Colonne visée et colonnes supplémentaires de la table de jonction d'une relation `N-N` (voir [Tables de jonction](#tables-de-jonction-relation-n-n)) |
@@ -316,6 +317,24 @@ Nom sous lequel le champ est lu dans le corps des requêtes `POST` et `PATCH` au
 ```
 
 `$create_one('session', { … })` renvoie alors `jeton` (la valeur générée, en clair) en plus de `hachage_jeton` (la valeur stockée).
+
+### `read`
+
+Valeur renvoyée à la place de la valeur stockée quand une expression [augure](magasin.md#expressions-augure) est vraie : `when` donne l'expression, `value` la valeur. Le remplacement a lieu à chaque lecture par le magasin (`$search_one`, `$search_all`, routes `GET`, relations projetées), sans écrire en base. L'expression voit les valeurs de la ligne sous la forme `$<nom_du_champ>` (déchiffrées, avant tout remplacement) ; un champ non lu vaut `:x`.
+
+```
+{
+    name    : acces
+    type    : prive/partage/programme/public
+    default : prive
+    read    : {
+        when  : "$acces = programme & $date_parution <= now"
+        value : public
+    }
+}
+```
+
+Les conditions, traduites en SQL, portent sur la valeur stockée : `#acces = public` ne trouve pas une ligne lue `public` par `read`. Une condition qui doit en tenir compte reprend l'expression (`#acces = public | ( #acces = programme & #date_parution <= now )`).
 
 ---
 

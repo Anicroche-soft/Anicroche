@@ -25,7 +25,9 @@
         --p-fonte: var(--p-bouton);
     }
 
-    .bouton-ancre:has(> .icone):not(:has(> .icone ~ .icone)):not(:has(> :not(.icone):not(.alt))) {
+    /* Un bouton fait d une seule icône partage la place avec les autres, sauf en variante
+       discrète, qui garde sa largeur */
+    .bouton-ancre:not(.discret):has(> .icone):not(:has(> .icone ~ .icone)):not(:has(> :not(.icone):not(.alt))) {
         flex: 1;
     }
 
@@ -40,6 +42,21 @@
     .bouton-ancre .icone {
         margin: -0.25rem;
         flex-shrink: 0;
+    }
+
+    /* Variante discrète (bouton-ancre.discret) : ni cadre ni fond, la couleur du texte autour,
+       sans effet au survol ; le focus garde son contour */
+    .bouton-ancre.discret,
+    .bouton-ancre.discret:hover,
+    .bouton-ancre.discret:focus {
+        flex: 0 0 auto;
+
+        border-color: transparent;
+
+        --f-fond:  transparent;
+        --c-fond:  transparent;
+        --c-flux:  inherit;
+        --c-focus: var(--c-flux);
     }
 ]
 

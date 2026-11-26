@@ -434,7 +434,19 @@ const transformer_champ = (champ_brut, champs_dans_unique) =>
     }
     else if (champ_brut.fallback_default !== undefined)
         champ.fallback_default = 'sans fallback'
+    if (champ_brut.read !== undefined)
+        champ.read = lire_lecture(champ_brut)
     return champ
+}
+
+// read : { when : "<expression augure>", value : <valeur> } remplace la valeur lue
+const lire_lecture = (champ_brut) =>
+{
+    const read = champ_brut.read
+    if (!read || typeof read !== 'object' || Array.isArray(read)
+     || typeof read.when !== 'string' || read.when.trim() === '' || read.value === undefined)
+        throw new Error(`@fields : read de \`${champ_brut.name}\` : { when : "<expression>", value : <valeur> } attendu`)
+    return { when: read.when, value: read.value }
 }
 
 const transformer_modele = (annotations) =>
