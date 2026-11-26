@@ -46,10 +46,12 @@
         const { acces } = $changement_acces
         const reponse = await $update(`anicroche/${encodeURIComponent($anicroche_gestion.id)}`, { acces })
         if (!reponse.error)
+        {
             retablir_acces = null
+            $acces_gestion = acces
+        }
 
-        await $fermer_boite()
-        await $charger_gestion()
+        await $fermer_et_recharger_gestion()
         if (reponse.error)
             return afficher_erreur(reponse)
 

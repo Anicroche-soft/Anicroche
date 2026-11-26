@@ -164,14 +164,15 @@
 
         $anicroche_gestion           = reponse.data
         $type_gestion                = reponse.type
-        $date_parution_gestion       = brouillon?.date_parution ? $formater_date(brouillon.date_parution, true) : ''
         $adresse_brouillon_anicroche = brouillon ? `${racine}/${brouillon.numero}` : ''
 
+        // La boîte de déprogrammation affiche la date jusqu à sa fermeture
         const mettre_a_jour_gestion = () =>
         {
-            $acces_gestion     = reponse.data.acces ?? 'prive'
-            $brouillon_gestion = brouillon
-            $versions_gestion  = lister_versions(reponse.data, racine)
+            $date_parution_gestion = brouillon?.date_parution ? $formater_date(brouillon.date_parution, true) : ''
+            $acces_gestion         = reponse.data.acces ?? 'prive'
+            $brouillon_gestion     = brouillon
+            $versions_gestion      = lister_versions(reponse.data, racine)
         }
 
         if (attente)
@@ -180,6 +181,27 @@
             mettre_a_jour_gestion()
 
         $etat_gestion = 'prete'
+    }
+
+    // Accès enregistré par l API, affiché sans attendre le rechargement
+    $appliquer_acces_version = (numero, acces) =>
+    {
+        const modifier  = (version) => version?.numero === numero ? { ...version, acces } : version
+        const anicroche = {
+            ...$anicroche_gestion,
+            brouillon : modifier($anicroche_gestion.brouillon),
+            versions  : ($anicroche_gestion.versions ?? []).map(modifier)
+        }
+        $versions_gestion = lister_versions(anicroche, `/${lire_segment()}`)
+    }
+
+    // Ferme la boîte ouverte en rechargeant pendant sa fermeture : l onglet Gestion n est mis
+    // à jour qu une fois la boîte fermée, sans attendre ensuite le rechargement
+    $fermer_et_recharger_gestion = async () =>
+    {
+        const fermeture = $fermer_boite()
+        await $charger_gestion(fermeture)
+        await fermeture
     }
 
     // La page n est affichée qu une fois l anicroche chargée : le routeur montre d ici là son

@@ -236,10 +236,12 @@
         const { numero, etat, acces } = $changement_acces_version
         const reponse = await $update(adresse_version(numero), { acces })
         if (!reponse.error)
+        {
             retablir_acces_version = null
+            $appliquer_acces_version(numero, acces)
+        }
 
-        await $fermer_boite()
-        await $charger_gestion()
+        await $fermer_et_recharger_gestion()
         if (reponse.error)
             return afficher_erreur(reponse)
 
@@ -269,8 +271,8 @@
         finir_transition()
     }
 
-    // Les actions du brouillon sont confirmées dans leur boîte de dialogue, fermée avant le
-    // rechargement (sauf la suppression) : son texte ne change pas pendant qu elle disparaît
+    // Les actions du brouillon sont confirmées dans leur boîte de dialogue, rechargées pendant sa
+    // fermeture ($fermer_et_recharger_gestion) : son texte ne change pas pendant qu elle disparaît
     // ─── Publication ─────────────────────────────────────────────────────────
 
     // immediate ou differee (avec préavis : correction ou mise à jour)
@@ -317,8 +319,7 @@
         if (reponse.error)
             return $erreur_publication = reponse.error
 
-        await $fermer_boite()
-        await $charger_gestion()
+        await $fermer_et_recharger_gestion()
         afficher_succes(differee
             ? `Parution programmée le ${$formater_date($brouillon_gestion?.date_parution ?? date, true)}`
             : "Mise à jour publiée")
@@ -329,8 +330,7 @@
     {
         const numero  = $brouillon_gestion.numero
         const reponse = await $update(adresse_version(numero), { date_parution: null })
-        await $fermer_boite()
-        await $charger_gestion()
+        await $fermer_et_recharger_gestion()
         if (reponse.error)
             return afficher_erreur(reponse)
 
@@ -342,19 +342,17 @@
     $supprimer_brouillon = async () =>
     {
         const reponse = await $delete(adresse_version($brouillon_gestion.numero))
-        $fermer_boite()
-
-        if (reponse.error)
+        if (!reponse.error)
         {
-            await $charger_gestion()
-            return afficher_erreur(reponse)
+            $brouillon_gestion = null
+            $versions_gestion  = $versions_gestion.filter(version => version.etat !== 'brouillon')
         }
 
-        $brouillon_gestion = null
-        $versions_gestion  = $versions_gestion.filter(version => version.etat !== 'brouillon')
-        afficher_succes("Brouillon supprimé")
+        await $fermer_et_recharger_gestion()
+        if (reponse.error)
+            return afficher_erreur(reponse)
 
-        await $charger_gestion()
+        afficher_succes("Brouillon supprimé")
     }
 ]
 
