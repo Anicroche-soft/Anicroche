@@ -17,10 +17,12 @@
 #                    chacune avec son identifiant, le contenu de ses sources obligatoires à
 #                    leur création ({ <rôle> : <contenu> }, par défaut aucun) et ses
 #                    spécificités (par défaut aucune) ; par défaut aucune exception :
-#     - legalite    : une version parue ou programmée est toujours publique ;
+#     - legalite    : l anicroche et ses versions parues sont toujours publiques (une version
+#                     programmée peut rester privée jusqu à sa parution) ;
 #     - preavis     : l anicroche paraît immédiatement (correction mineure) ou au moins 30
-#                     jours plus tard (modification de fond), et sa parution programmée ne peut
-#                     être ni annulée ni déplacée ;
+#                     jours plus tard (modification de fond) ; sa version programmée est
+#                     publique, pour être lue pendant son annonce, et sa parution ne peut être
+#                     ni annulée ni déplacée ;
 #     - acceptation : avec preavis, sa version en vigueur s accepte par une case à cocher à la
 #                     restauration d un compte ; les autres versions inconnues du compte y
 #                     sont seulement présentées.

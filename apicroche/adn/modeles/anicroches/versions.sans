@@ -25,7 +25,9 @@
 
     # PATCH /version/<$id_anicroche>/<$numero> { date_parution } fait paraître le brouillon
     # maintenant ("now") ou le programme à une date future ; null annule une parution
-    # programmée, sauf pour une anicroche soumise au préavis (voir types.sans)
+    # programmée. Une anicroche soumise au préavis (voir types.sans) paraît maintenant ("now",
+    # correction mineure) ou après le préavis (modification de fond) : "differee" la programme au
+    # plus tôt, une date doit tenir le délai ; sa parution programmée ne s annule pas
     {
         name         : date_parution
         type         : datetime
@@ -44,8 +46,9 @@
     # - public    : visible de tous, et listée.
     # Un changement de date de parution fixe l accès, qui peut ensuite être modifié : public à
     # la parution immédiate, programme à la programmation, prive à l annulation d une parution
-    # programmée. Une version datée (parue ou programmée) d une anicroche légale est toujours
-    # publique : la version en vigueur et celle qui est annoncée doivent pouvoir être lues
+    # programmée, sauf pour une anicroche soumise au préavis, dont la version programmée est
+    # toujours publique : celle qui est annoncée doit pouvoir être lue. Une version parue d une
+    # anicroche légale est toujours publique ; programmée, elle est publique ou programmée
     {
         name       : acces
         type       : prive/partage/programme/public
@@ -81,7 +84,21 @@
 
 @script [
     const MARGE         = 60 * 1000
+    const JOUR          = 24 * 60 * 60 * 1000
     const JOURS_PREAVIS = 30
+
+    // Minuit, heure de Paris, au début du jour qui suit celui de date (à Paris) : minuit UTC de
+    // ce jour, moins le décalage de Paris (une ou deux heures) à cet instant
+    const minuit_paris_suivant = (date) =>
+    {
+        const [ annee, mois, jour ] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' })
+            .format(date)
+            .split('-')
+            .map(Number)
+        const minuit_utc = Date.UTC(annee, mois - 1, jour + 1)
+        const decalage   = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', hour: '2-digit', hourCycle: 'h23' }).format(minuit_utc))
+        return new Date(minuit_utc - decalage * 60 * 60 * 1000)
+    }
 
     $preparer_brouillon = async ($values) =>
     {
@@ -124,13 +141,13 @@
     }
 
     // Un changement de date fixe l accès (la date elle-même est vérifiée par
-    // $verifier_parution) ; une version d une anicroche légale ou soumise au préavis est publique
-    // dès sa programmation, pour être lue pendant son annonce
+    // $verifier_parution) ; une version d une anicroche soumise au préavis est publique dès sa
+    // programmation, pour être lue pendant son annonce
     const acces_apres_parution = (anicroche, version, date_parution) =>
     {
         if (date_parution === null)
             return version?.acces === 'programme' ? 'prive' : version?.acces
-        if (date_parution === 'now' || $est_legale(anicroche) || $soumise_au_preavis(anicroche))
+        if (date_parution === 'now' || $soumise_au_preavis(anicroche))
             return 'public'
         return 'programme'
     }
@@ -152,14 +169,27 @@
         else if ($values.acces === 'programme' && !(version?.date_parution && !$est_parue(version)))
             return $indicate(422, "Seule une version dont la parution est programmée peut avoir l'accès programmé")
 
+        // Une version programmée d une anicroche soumise au préavis est publique : elle est
+        // annoncée. Une version parue d une anicroche légale est publique ; programmée, elle peut
+        // aussi rester privée jusqu à sa parution ("programme"). "differee" (préavis) n est pas
+        // encore remplacée par sa date, à venir
+        const date  = 'date_parution' in $values ? $values.date_parution : version?.date_parution
+        const acces = $values.acces ?? version?.acces
+        if (!date)
+            return
+
+        const parue = date === 'now' || (date !== 'differee' && new Date(date) <= new Date())
+
+        if (!parue && $soumise_au_preavis(anicroche) && acces !== 'public')
+            return $indicate(422, "Cette page est soumise au préavis : sa version programmée est publique, pour être lue pendant son annonce")
+
         if (!$est_legale(anicroche))
             return
 
-        const date  = 'date_parution' in $values ? $values.date_parution : version?.date_parution
-        const acces = $values.acces ?? version?.acces
-
-        if (date && acces !== 'public')
-            return $indicate(422, "Cette page est légale : une version parue ou programmée doit être publique")
+        if (parue && acces !== 'public')
+            return $indicate(422, "Cette page est légale : une version parue doit être publique")
+        if (!parue && acces !== 'public' && acces !== 'programme')
+            return $indicate(422, "Cette page est légale : une version programmée est publique, ou privée jusqu'à sa parution")
     }
 
     $verifier_parution = async ($values, $request) =>
@@ -186,8 +216,25 @@
         if ($values.date_parution === null)
             return
 
+        // Une page soumise au préavis paraît immédiatement ("now", correction mineure) ou après un
+        // préavis de 30 jours (modification de fond), compté à partir du dernier courriel
+        // d annonce : les jours d envoi, selon le quota, s y ajoutent. "differee" la programme au
+        // plus tôt, dès le début du jour suivant, heure de Paris, puisque l annonce donne la
+        // date sans l heure ; une date choisie doit tenir ce délai
+        const preavis = $soumise_au_preavis(anicroche)
+        const minimum = async () =>
+            new Date(Date.now() + (JOURS_PREAVIS + await $jours_envoi_annonces()) * JOUR)
+
+        if ($values.date_parution === 'differee')
+        {
+            if (!preavis)
+                return $indicate(422, "Seule une page soumise au préavis a une parution différée sans date")
+
+            $values.date_parution = minuit_paris_suivant(await minimum())
+        }
+
         // Une minute de marge couvre le délai de la requête ; "now" fait paraître immédiatement
-        if ($values.date_parution !== 'now')
+        else if ($values.date_parution !== 'now')
         {
             const date = new Date($values.date_parution)
 
@@ -197,18 +244,13 @@
             if (date < new Date(Date.now() - MARGE))
                 return $indicate(422, "La date de parution ne peut pas être passée")
 
-            // Une page soumise au préavis paraît immédiatement (correction mineure) ou après un
-            // préavis d au moins 30 jours (modification de fond), compté à partir du dernier
-            // courriel d annonce : les jours d envoi, selon le quota, s y ajoutent
-            if ($soumise_au_preavis(anicroche))
+            if (preavis)
             {
-                const jours   = JOURS_PREAVIS + await $jours_envoi_annonces()
-                const minimum = new Date(Date.now() + jours * 24 * 60 * 60 * 1000)
-
-                if (date < new Date(minimum.getTime() - MARGE))
+                const date_minimale = await minimum()
+                if (date < new Date(date_minimale.getTime() - MARGE))
                     return $indicate(422,
-                        `Cette page est soumise au préavis : elle paraît immédiatement (correction mineure) ou au plus tôt le ${minimum.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' })} (modification de fond : ${JOURS_PREAVIS} jours de préavis après l'envoi des annonces)`,
-                        { date_minimale: minimum }
+                        `Cette page est soumise au préavis : elle paraît immédiatement (correction mineure) ou au plus tôt le ${date_minimale.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' })} (modification de fond : ${JOURS_PREAVIS} jours de préavis après l'envoi des annonces)`,
+                        { date_minimale }
                     )
             }
 
