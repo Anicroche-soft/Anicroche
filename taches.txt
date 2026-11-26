@@ -1,5 +1,4 @@
 Tâches :
-- voir ce qui doit encore être intégré au pied de page (structures/pied-de-page.avec : pour l'instant les liens vers les pages légales, tirés de GET /types)
 - relire et compléter les premières versions des pages légales (juridique/conditions-generales-d-utilisation.md, juridique/politique-de-confidentialite.md, juridique/mentions-legales.md : passages « À compléter », adresse d'Infomaniak à vérifier), et les publier avant le lancement (les liens du pied de page y mènent déjà)
 - compléter juridique/RGPD.md :
     - référence et date du contrat de sous-traitance (DPA) d'Infomaniak, couvrant serveur, base et courriels (§ 3)
@@ -16,6 +15,7 @@ Tâches :
 Tâches dépendantes :
 - quand des anicroches d'utilisateurs seront publiées (types avec auteurs) :
     - masquer les profils des comptes dont l'effacement est en cours et afficher les profils anonymisés sans nom
+    - ajouter un moyen de signaler un contenu (lien dans page-anicroche.avec ou dans le pied de page), et compléter en conséquence le § « Signaler un contenu » de juridique/mentions-legales.md et l'article des contenus illicites de juridique/conditions-generales-d-utilisation.md
     - ouvrir la relation auteurs des anicroches à la projection (can_search, avec un restrict_search sur les profils), et en tenir compte dans $charger_anicroche (base.avec), qui ne considère pour l'instant comme gérants que les profils qui administrent le type (l'API, elle, compte déjà les auteurs), puis passer les auteurs à la barre d'informations de page-anicroche.avec ($auteurs_anicroche, aujourd'hui toujours vide) et aux boutons Gestion et Édition
 - quand la création d'anicroches existera : choisir la langue et la région d'origine de l'anicroche (champs langue et region d'anicroches.sans, fr et FR par défaut pour l'instant), et peut-être permettre de les modifier ; les sources ajoutées dans l'édition prennent déjà cette langue
 - quand les tables auront beaucoup d'entrées : réfléchir à une pagination presque obligatoire des routes GET automatiques de sans.js (paramètres limit et offset, ou curseur ; limite par défaut et maximale, par table dans @rules), aujourd'hui sans aucune limite
