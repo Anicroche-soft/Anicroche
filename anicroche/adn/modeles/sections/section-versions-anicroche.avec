@@ -1,0 +1,503 @@
+@style [
+    /* Tableau des versions : une ligne par version, bordures autour et entre les lignes. La
+       case de l accès prend la largeur de sa sélection, celle de la version le reste (max-width
+       nul : son contenu peut rétrécir au lieu d élargir le tableau) */
+    .tableau-versions {
+        width: 100%;
+
+        border: 0.125rem solid var(--c-vif);
+        border-radius: 0.5rem;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .tableau-versions tr + tr > td {
+        border-top: 0.125rem solid var(--c-vif);
+    }
+
+    .tableau-versions td {
+        padding: 0;
+
+        vertical-align: middle;
+    }
+
+    .tableau-versions .version {
+        width: 100%;
+        max-width: 0;
+    }
+
+    .tableau-versions .acces-version {
+        width: 0;
+
+        white-space: nowrap;
+    }
+
+    /* Case de la version : le lien garde la largeur de son contenu et rétrécit si besoin
+       (texte coupé par « … ») ; les boutons, à leur taille, sont poussés à droite */
+    .tableau-versions .contenu-version {
+        flex-flow: row nowrap;
+        align-items: center;
+
+        --l-ecart: 0;
+    }
+
+    /* Lignes de 2rem entre les traits ; chaque contenu est en retrait de 0.25rem de tous côtés,
+       bordure transparente comprise (icônes de 1.5rem) */
+    .tableau-versions .contenu-version > .boite-ancre {
+        flex: 0 1 auto;
+        min-width: 0;
+        height: 2rem;
+        padding: 0.25rem;
+
+        --l-ecart: 0.5rem;
+    }
+
+    .tableau-versions .contenu-version > .boite-ancre + * {
+        margin-left: auto;
+    }
+
+    .tableau-versions .contenu-version > .boite-ancre > .icone {
+        flex-shrink: 0;
+    }
+
+    .tableau-versions .contenu-version > .boite-ancre > span:not(.alt) {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .tableau-versions :is(.bouton-action, .bouton-ancre) {
+        flex: 0 0 auto;
+        width: 2rem;
+        height: 2rem;
+        padding: 0.125rem;
+    }
+
+    .tableau-versions :is(.bouton-action, .bouton-ancre) .icone {
+        margin: 0;
+    }
+
+    .tableau-versions .choix-option > div {
+        height: 2rem;
+        padding: 0.125rem;
+    }
+
+    /* Sélection à la largeur de sa plus longue option ; à droite, la place de la flèche
+       (1.5rem, en retrait de 0.25rem) et un écart de 0.25rem avec le texte */
+    .tableau-versions .choix-option > div > select {
+        width: auto;
+        flex-grow: 0;
+        padding-right: 1.75rem;
+    }
+
+    /* L étiquette du choix d accès reste lue par les lecteurs d écran */
+    .tableau-versions .choix-option > .etiquette {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    /* Date au mois abrégé en petit format */
+    .tableau-versions .date-courte,
+    .petit .tableau-versions .date-longue {
+        display: none;
+    }
+
+    .petit .tableau-versions .date-courte {
+        display: inline;
+    }
+
+    /* Le contour du focus (0.125rem, sans décalage) se pose sur les traits du tableau : coins
+       droits, sauf aux coins du tableau, où son arrondi extérieur suit celui du tableau */
+    .tableau-versions :is(.boite-ancre, .bouton-action, .bouton-ancre, .choix-option > div) {
+        border-radius: 0;
+        outline-offset: 0;
+    }
+
+    /* Au premier plan, le contour passe au-dessus des traits des lignes suivantes */
+    .tableau-versions :is(.boite-ancre, .bouton-action, .bouton-ancre):focus-visible,
+    .tableau-versions .choix-option > div:focus-within {
+        position: relative;
+        z-index: 1;
+    }
+
+    .tableau-versions tr:first-child .contenu-version > .boite-ancre {
+        border-top-left-radius: 0.375rem;
+    }
+
+    .tableau-versions tr:last-child .contenu-version > .boite-ancre {
+        border-bottom-left-radius: 0.375rem;
+    }
+
+    .tableau-versions tr:first-child .choix-option > div {
+        border-top-right-radius: 0.375rem;
+    }
+
+    .tableau-versions tr:last-child .choix-option > div {
+        border-bottom-right-radius: 0.375rem;
+    }
+
+    /* Bouton de création du brouillon, sur toute la largeur de sa ligne, avec le retrait et
+       l icône d un bouton ordinaire (et non ceux des boutons à icône du tableau) */
+    .tableau-versions .creation-brouillon > .bouton-action {
+        width: 100%;
+        padding: 0.375rem;
+    }
+
+    /* Sur le fond vif du bouton, collé aux traits vifs du tableau, le contour du focus passe à
+       l intérieur, dans la couleur du texte */
+    .tableau-versions .creation-brouillon > .bouton-action:focus-visible {
+        outline-offset: -0.25rem;
+
+        --c-focus: var(--c-flux);
+    }
+
+    .tableau-versions .creation-brouillon > .bouton-action > .icone {
+        margin: -0.25rem;
+    }
+
+    .tableau-versions tr:first-child .creation-brouillon > .bouton-action {
+        border-top-left-radius: 0.375rem;
+        border-top-right-radius: 0.375rem;
+    }
+
+    .tableau-versions tr:last-child .creation-brouillon > .bouton-action {
+        border-bottom-left-radius: 0.375rem;
+        border-bottom-right-radius: 0.375rem;
+    }
+]
+
+@script [
+    $succes_versions = false
+    $erreur_versions = false
+
+    const afficher_erreur = (reponse) =>
+    {
+        $succes_versions = false
+        $erreur_versions = reponse.error ?? "Erreur serveur"
+    }
+
+    const afficher_succes = (message) =>
+    {
+        $erreur_versions = false
+        $succes_versions = message
+    }
+
+    const adresse_version = (numero) => `version/${encodeURIComponent($anicroche_gestion.id)}/${numero}`
+
+    // ─── Anicroche ───────────────────────────────────────────────────────────
+
+    // ─── Versions ────────────────────────────────────────────────────────────
+
+    // ─── Accès d une version ─────────────────────────────────────────────────
+
+    // Changement en attente de confirmation : { numero, etat, acces, ancien, nouveau }, et titre
+    // de sa boîte, selon qu il s agit du brouillon ou d une version datée
+    $changement_acces_version = null
+    $titre_acces_version      = "Changer l'accès de la version"
+
+    // Le choix revient à l accès enregistré si la boîte se ferme sans confirmation réussie
+    let retablir_acces_version = null
+
+    const etiquette_acces = (version, acces) => version.choix.find(choix => choix.nom === acces)?.etiquette ?? acces
+
+    // Appelée au changement de la sélection : $node est son élément (voir choix-option)
+    $modifier_acces_version = (numero) =>
+    {
+        const version   = $versions_gestion.find(entree => entree.numero === numero)
+        const selection = $node.closest('.choix-option')?.querySelector('select')
+        const acces     = selection?.value ?? ''
+        if (!version || !acces || acces === version.acces)
+            return
+
+        $titre_acces_version      = version.etat === 'brouillon' ? "Changer l'accès du brouillon" : "Changer l'accès de la version"
+        $changement_acces_version = {
+            numero,
+            etat    : version.etat,
+            acces,
+            ancien  : etiquette_acces(version, version.acces),
+            nouveau : etiquette_acces(version, acces)
+        }
+
+        retablir_acces_version = () => selection.value = version.acces
+        const ouverte = $ouvrir_boite('acces-version', () =>
+        {
+            retablir_acces_version?.()
+            retablir_acces_version = null
+        })
+        if (!ouverte)
+            retablir_acces_version()
+    }
+
+    $confirmer_acces_version = async () =>
+    {
+        const { numero, etat, acces } = $changement_acces_version
+        const reponse = await $update(adresse_version(numero), { acces })
+        if (!reponse.error)
+            retablir_acces_version = null
+
+        await $fermer_boite()
+        await $charger_gestion()
+        if (reponse.error)
+            return afficher_erreur(reponse)
+
+        afficher_succes(etat === 'brouillon' ? "Accès du brouillon enregistré" : "Accès de la version enregistré")
+    }
+
+    // ─── Brouillon ───────────────────────────────────────────────────────────
+
+    // Le brouillon créé s ouvre dans l onglet Édition ; l onglet Gestion ne change qu à la fin
+    // de la transition, pour ne pas bouger pendant qu on le quitte
+    $creer_brouillon = async () =>
+    {
+        const noeud   = $node
+        const reponse = await $create('version', { id_anicroche: $anicroche_gestion.id })
+        if (reponse.error)
+            return afficher_erreur(reponse)
+
+        let finir_transition
+        const transition = new Promise(resolve => finir_transition = resolve)
+
+        await $charger_gestion(transition)
+        await $basculer_vers_onglet(2, noeud)
+
+        $succes_versions = false
+        $erreur_versions = false
+        finir_transition()
+    }
+
+    // Les actions du brouillon sont confirmées dans leur boîte de dialogue, fermée avant le
+    // rechargement (sauf la suppression) : son texte ne change pas pendant qu elle disparaît
+    // ─── Publication ─────────────────────────────────────────────────────────
+
+    // immediate ou differee (avec préavis : correction ou mise à jour)
+    $type_parution              = 'immediate'
+    $erreur_publication         = false
+    $annee_publication          = new Date().getFullYear()
+    $annee_suivante_publication = $annee_publication + 1
+
+    $choisir_parution = () =>
+    {
+        $type_parution = $node.value
+    }
+
+    $ouvrir_publication = () =>
+    {
+        $erreur_publication = false
+        $ouvrir_boite('publication-brouillon')
+    }
+
+    // L API fixe l accès : public à la parution, programmé à la programmation (public dès la
+    // programmation pour une page soumise au préavis). Une parution différée a lieu à la date et
+    // à l heure choisies, dans le fuseau du visiteur ; celle d une page soumise au préavis
+    // ("differee") est datée par l API, au plus tôt après le préavis. Une erreur s affiche dans
+    // la boîte, qui reste ouverte
+    $publier_brouillon = async () =>
+    {
+        const numero   = $brouillon_gestion.numero
+        const differee = $type_parution === 'differee'
+        const datee    = differee && !$anicroche_gestion.preavis
+        const boite    = $node.closest('.boite-dialogue')
+        const jour     = datee ? boite?.querySelector('input[name=date_parution]')?.value ?? '' : ''
+        const heure    = datee ? boite?.querySelector('input[name=heure_parution]')?.value ?? '' : ''
+        const date     = jour && heure ? `${jour}T${heure}` : ''
+
+        if (datee && !jour)
+            return $erreur_publication = "Choisissez la date de parution"
+        if (datee && !heure)
+            return $erreur_publication = "Choisissez l'heure de parution"
+        if (datee && new Date(date) <= new Date())
+            return $erreur_publication = "La date de parution doit être à venir"
+
+        const date_parution = !differee ? 'now' : datee ? new Date(date).toISOString() : 'differee'
+        const reponse       = await $update(adresse_version(numero), { date_parution })
+        if (reponse.error)
+            return $erreur_publication = reponse.error
+
+        await $fermer_boite()
+        await $charger_gestion()
+        afficher_succes(differee
+            ? `Parution programmée le ${$formater_date($brouillon_gestion?.date_parution ?? date, true)}`
+            : "Mise à jour publiée")
+    }
+
+    // Le brouillon redevient modifiable ; ce n est pas possible pour une page soumise au préavis
+    $annuler_parution = async () =>
+    {
+        const numero  = $brouillon_gestion.numero
+        const reponse = await $update(adresse_version(numero), { date_parution: null })
+        await $fermer_boite()
+        await $charger_gestion()
+        if (reponse.error)
+            return afficher_erreur(reponse)
+
+        afficher_succes("Parution annulée : la version est de nouveau modifiable")
+    }
+
+    // Le brouillon quitte le tableau dès la réponse, pendant la fermeture de la boîte (dont le
+    // texte ne dépend pas de lui), sans attendre le rechargement, qui met à jour le reste
+    $supprimer_brouillon = async () =>
+    {
+        const reponse = await $delete(adresse_version($brouillon_gestion.numero))
+        $fermer_boite()
+
+        if (reponse.error)
+        {
+            await $charger_gestion()
+            return afficher_erreur(reponse)
+        }
+
+        $brouillon_gestion = null
+        $versions_gestion  = $versions_gestion.filter(version => version.etat !== 'brouillon')
+        afficher_succes("Brouillon supprimé")
+
+        await $charger_gestion()
+    }
+]
+
+# Tableau des versions (avec, sans brouillon, la création d'un brouillon en première ligne), dans
+# l'onglet Gestion de page-gestion-anicroche, qui charge l'anicroche
+section [versions-anicroche]
+    titre
+        "Versions"
+    carte
+        @if [$succes_versions]
+            succes-formulaire
+                "$succes_versions"
+        @if [$erreur_versions]
+            erreur-formulaire
+                "$erreur_versions"
+        <table .tableau-versions>
+            <tbody>
+                @if [! $brouillon_gestion]
+                    <tr>
+                        <td .creation-brouillon colspan="2">
+                            bouton-action [$creer_brouillon]
+                                icone-baguette
+                                <span>
+                                    "Créer un brouillon"
+                @for-each [$version] of [$versions_gestion]
+                    <tr>
+                        <td .version>
+                            <div .contenu-version>
+                                boite-ancre [$version.lien, $alt : $version.alt]
+                                    @if [$version.etat = brouillon]
+                                        icone-feuille
+                                    @else-if [$version.etat = a_paraitre]
+                                        icone-horloge [$horaire : $version.date]
+                                    @else-if [$version.etat = en_vigueur]
+                                        icone-parchemin
+                                    @else
+                                        icone-pochette
+                                    <span .date-longue>
+                                        "$version.texte"
+                                    <span .date-courte>
+                                        "$version.texte_court"
+                                @if [$version.etat = brouillon]
+                                    bouton-ancre.discret [$adresse_edition_anicroche]
+                                        icone-baguette
+                                        alt
+                                            "Modifier"
+                                    bouton-action.discret [$ouvrir_boite('suppression-brouillon')]
+                                        icone-gomme
+                                        alt
+                                            "Supprimer"
+                                    bouton-action.discret [$ouvrir_publication()]
+                                        icone-enveloppe
+                                        alt
+                                            "Publier"
+                                @if [$version.deprogrammable]
+                                    bouton-action.discret [$ouvrir_boite('deprogrammation-brouillon')]
+                                        icone-interdiction
+                                        alt
+                                            "Déprogrammer"
+                        <td .acces-version>
+                            choix-option.discret [
+                                $version.etiquette, $version.nom
+                                $choix  : $version.choix
+                                $valeur : $version.acces
+                                $action : $modifier_acces_version($version.numero)
+                                $desactive : $version.verrouille
+                            ]
+
+    boite-dialogue [publication-brouillon, "Publier la mise à jour"]
+        @if [$erreur_publication]
+            erreur-formulaire
+                "$erreur_publication"
+        @if [$anicroche_gestion.preavis]
+            choix-unique [
+                "Type de modification", parution
+                $choix : [
+                    {etiquette : "Correction", nom : immediate}
+                    {etiquette : "Mise à jour", nom : differee}
+                ]
+                $action : $choisir_parution()
+            ]
+        @else
+            choix-unique [
+                "Type de parution", parution
+                $choix : [
+                    {etiquette : "Immédiate", nom : immediate}
+                    {etiquette : "Différée", nom : differee}
+                ]
+                $action : $choisir_parution()
+            ]
+        @if [$type_parution = differee & ! $anicroche_gestion.preavis]
+            champ-date [
+                "Date de parution", date_parution
+                $requis : :(
+                $annee_min : $annee_publication
+                $annee_max : $annee_suivante_publication
+            ]
+            champ-heure [
+                "Heure de parution", heure_parution
+                $requis : :(
+            ]
+        information-formulaire
+            @if [$anicroche_gestion.preavis & $type_parution = immediate]
+                "Une correction mineure paraît immédiatement."
+            @else-if [$anicroche_gestion.preavis]
+                "Une mise à jour paraît après la durée du préavis."
+            @else-if [$type_parution = immediate]
+                "La mise à jour paraît immédiatement."
+            @else
+                "La mise à jour paraît à la date et à l'heure choisies."
+        ligne
+            bouton-action [$fermer_boite()]
+                "Annuler"
+            bouton-action [$publier_brouillon]
+                @if [$type_parution = differee]
+                    "Programmer"
+                @else
+                    "Publier"
+
+    boite-dialogue [deprogrammation-brouillon, "Déprogrammer la mise à jour"]
+        <p>
+            "Sa parution du $date_parution_gestion sera annulée : elle redeviendra un brouillon modifiable."
+        ligne
+            bouton-action [$fermer_boite()]
+                "Annuler"
+            bouton-action [$annuler_parution]
+                "Déprogrammer"
+
+    boite-dialogue [suppression-brouillon, "Supprimer le brouillon"]
+        <p>
+            "Le brouillon et toutes ses modifications seront définitivement supprimés."
+        ligne
+            bouton-action [$fermer_boite()]
+                "Annuler"
+            bouton-action [$supprimer_brouillon]
+                "Supprimer"
+
+    boite-dialogue [acces-version, $titre_acces_version]
+        <p>
+            "L'accès passera de « $changement_acces_version.ancien » à « $changement_acces_version.nouveau »."
+        ligne
+            bouton-action [$fermer_boite()]
+                "Annuler"
+            bouton-action [$confirmer_acces_version]
+                "Changer l'accès"

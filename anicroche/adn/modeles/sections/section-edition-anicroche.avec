@@ -1,0 +1,172 @@
+@script [
+    $succes_edition = false
+    $erreur_edition = false
+
+    // Une valeur vide s écrit - dans une adresse de l API
+    const segment = (valeur) => valeur === '' ? '-' : encodeURIComponent(valeur)
+
+    const afficher_erreur = (reponse) =>
+    {
+        $succes_edition = false
+        $erreur_edition = reponse.error ?? "Erreur serveur"
+    }
+
+    const afficher_succes = (message) =>
+    {
+        $erreur_edition = false
+        $succes_edition = message
+    }
+
+    // Enregistre une source modifiée dans le brouillon : elle est corrigée si le brouillon a
+    // déjà la sienne, sinon elle est créée à la même position et dans la même langue que la
+    // source héritée. Une source inchangée reste héritée
+    const enregistrer_source = async (source, contenu) =>
+    {
+        const id     = $anicroche_gestion.id
+        const numero = $anicroche_gestion.brouillon.numero
+
+        if (contenu === (source.contenu ?? ''))
+            return {}
+
+        if (source.version === numero)
+            return await $update(
+                `source/${encodeURIComponent(id)}/${encodeURIComponent(source.role)}/${source.position}/${numero}/${segment(source.langue)}/${segment(source.region)}`,
+                { contenu }
+            )
+
+        return await $create('source', {
+            id_anicroche : id,
+            role         : source.role,
+            position     : source.position,
+            version      : numero,
+            langue       : source.langue,
+            region       : source.region,
+            contenu
+        })
+    }
+
+    // Enregistre toutes les sources affichées, et s arrête à la première erreur
+    const enregistrer = async (contenus) =>
+    {
+        for (const source of $sources_brouillon)
+        {
+            if (!(source.nom in contenus))
+                continue
+
+            const reponse = await enregistrer_source(source, contenus[source.nom])
+            if (reponse.error)
+                return reponse
+        }
+        return {}
+    }
+
+    // $node ne désigne l élément de l action que jusqu au premier await : les champs sont donc
+    // tous lus au début de l action
+    const lire_champs = () =>
+    {
+        const carte = $node.closest('.carte')
+
+        const contenus = {}
+        for (const source of $sources_brouillon)
+        {
+            const champ = carte?.querySelector(`[name="${source.nom}"]`)
+            if (champ)
+                contenus[source.nom] = champ.value
+        }
+
+        return { contenus }
+    }
+
+    $enregistrer_brouillon = async () =>
+    {
+        const reponse = await enregistrer(lire_champs().contenus)
+        if (reponse.error)
+            return afficher_erreur(reponse)
+
+        await $charger_gestion()
+        afficher_succes("Brouillon enregistré")
+    }
+
+    // Les sources affichées sont enregistrées, puis une source vide est ajoutée à la suite de
+    // son rôle, dans la langue d origine de l anicroche
+    $ajouter_source = async (role) =>
+    {
+        const champs = lire_champs()
+
+        let reponse = await enregistrer(champs.contenus)
+        if (reponse.error)
+            return afficher_erreur(reponse)
+
+        reponse = await $create('source', {
+            id_anicroche : $anicroche_gestion.id,
+            role,
+            version      : $anicroche_gestion.brouillon.numero,
+            langue       : $anicroche_gestion.langue,
+            region       : $anicroche_gestion.region,
+            contenu      : ''
+        })
+        await $charger_gestion()
+        if (reponse.error)
+            return afficher_erreur(reponse)
+
+        afficher_succes("Source ajoutée")
+    }
+]
+
+# Onglet Édition de page-gestion-anicroche, qui charge l'anicroche
+@if [$anicroche_gestion.brouillon.date_parution]
+    section [edition, centree]
+        titre [centre]
+            "Mise à jour programmée"
+        carte
+            information-formulaire
+                @if [$anicroche_gestion.preavis]
+                    "Cette version paraîtra le $date_parution_gestion et ne peut plus être modifiée : cette page est soumise au préavis."
+                @else
+                    "Cette version paraîtra le $date_parution_gestion. Pour la modifier, annulez d'abord sa parution depuis la gestion."
+            ligne
+                bouton-ancre [$adresse_brouillon_anicroche]
+                    "Visualiser"
+                bouton-ancre [$adresse_gestion_anicroche]
+                    "Gérer"
+
+@else-if [$anicroche_gestion.brouillon]
+    section [edition]
+        titre
+            "Brouillon"
+        carte
+            formulaire [$enregistrer_brouillon]
+                @if [$succes_edition]
+                    succes-formulaire
+                        "$succes_edition"
+                @if [$erreur_edition]
+                    erreur-formulaire
+                        "$erreur_edition"
+                @for-each [$source] of [$sources_brouillon]
+                    @if [$source.format = 'titre']
+                        champ-texte [$source.etiquette, $source.nom, $valeur : $source.contenu, $requis : :(]
+                    @else
+                        champ-texte-long [$source.etiquette, $source.nom, $valeur : $source.contenu]
+                @if [_ $ajouts_edition > 0]
+                    ligne
+                        @for-each [$ajout] of [$ajouts_edition]
+                            bouton-action [$ajouter_source($ajout.role)]
+                                "$ajout.etiquette"
+                ligne
+                    bouton-ancre [$adresse_brouillon_anicroche]
+                        "Visualiser"
+                    bouton-ancre [$adresse_gestion_anicroche]
+                        "Gérer"
+                    bouton-soumission
+                        "Enregistrer"
+
+@else
+    section [edition, centree]
+        titre [centre]
+            "Aucun brouillon en cours"
+        carte
+            information-formulaire
+                "Pour modifier ce contenu, créez d'abord un brouillon depuis la gestion."
+            ligne
+                bouton-ancre [$adresse_gestion_anicroche]
+                    "Gérer"

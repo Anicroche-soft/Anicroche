@@ -1,6 +1,6 @@
 @script [
-    // Deux formes d adresse pour une anicroche (motifs des routes anicroche, gestion_anicroche et
-    // edition_anicroche, dans app.adn) :
+    // Deux formes d adresse pour une anicroche (motifs des routes anicroche et gestion_anicroche,
+    // dans app.adn) :
     // - un identifiant lisible en minuscules, tel quel : /conditions-generales-d-utilisation
     // - un identifiant en majuscules et chiffres, découpé en groupes de trois : /AB1-C2D
     // Renvoie l identifiant, ou null si le chemin ne correspond à aucune des deux formes

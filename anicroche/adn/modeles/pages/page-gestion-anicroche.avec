@@ -1,163 +1,17 @@
-@style [
-    /* Tableau des versions : une ligne par version, bordures autour et entre les lignes. La
-       case de l accès prend la largeur de sa sélection, celle de la version le reste (max-width
-       nul : son contenu peut rétrécir au lieu d élargir le tableau) */
-    .tableau-versions {
-        width: 100%;
-
-        border: 0.125rem solid var(--c-vif);
-        border-radius: 0.5rem;
-        border-collapse: separate;
-        border-spacing: 0;
-    }
-
-    .tableau-versions tr + tr > td {
-        border-top: 0.125rem solid var(--c-vif);
-    }
-
-    .tableau-versions td {
-        padding: 0;
-
-        vertical-align: middle;
-    }
-
-    .tableau-versions .version {
-        width: 100%;
-        max-width: 0;
-    }
-
-    .tableau-versions .acces-version {
-        width: 0;
-
-        white-space: nowrap;
-    }
-
-    /* Case de la version : le lien garde la largeur de son contenu et rétrécit si besoin
-       (texte coupé par « … ») ; les boutons, à leur taille, sont poussés à droite */
-    .tableau-versions .contenu-version {
-        flex-flow: row nowrap;
-        align-items: center;
-
-        --l-ecart: 0;
-    }
-
-    /* Lignes de 2rem entre les traits ; chaque contenu est en retrait de 0.25rem de tous côtés,
-       bordure transparente comprise (icônes de 1.5rem) */
-    .tableau-versions .contenu-version > .boite-ancre {
-        flex: 0 1 auto;
-        min-width: 0;
-        height: 2rem;
-        padding: 0.25rem;
-
-        --l-ecart: 0.5rem;
-    }
-
-    .tableau-versions .contenu-version > .boite-ancre + * {
-        margin-left: auto;
-    }
-
-    .tableau-versions .contenu-version > .boite-ancre > .icone {
-        flex-shrink: 0;
-    }
-
-    .tableau-versions .contenu-version > .boite-ancre > span:not(.alt) {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .tableau-versions :is(.bouton-action, .bouton-ancre) {
-        flex: 0 0 auto;
-        width: 2rem;
-        height: 2rem;
-        padding: 0.125rem;
-    }
-
-    .tableau-versions :is(.bouton-action, .bouton-ancre) .icone {
-        margin: 0;
-    }
-
-    .tableau-versions .choix-option > div {
-        height: 2rem;
-        padding: 0.125rem;
-    }
-
-    /* Sélection à la largeur de sa plus longue option ; à droite, la place de la flèche
-       (1.5rem, en retrait de 0.25rem) et un écart de 0.25rem avec le texte */
-    .tableau-versions .choix-option > div > select {
-        width: auto;
-        flex-grow: 0;
-        padding-right: 1.75rem;
-    }
-
-    /* L étiquette du choix d accès reste lue par les lecteurs d écran */
-    .tableau-versions .choix-option > .etiquette {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
-    }
-
-    /* Date au mois abrégé en petit format */
-    .tableau-versions .date-courte,
-    .petit .tableau-versions .date-longue {
-        display: none;
-    }
-
-    .petit .tableau-versions .date-courte {
-        display: inline;
-    }
-
-    /* Le contour du focus (0.125rem, sans décalage) se pose sur les traits du tableau : coins
-       droits, sauf aux coins du tableau, où son arrondi extérieur suit celui du tableau */
-    .tableau-versions :is(.boite-ancre, .bouton-action, .bouton-ancre, .choix-option > div) {
-        border-radius: 0;
-        outline-offset: 0;
-    }
-
-    /* Au premier plan, le contour passe au-dessus des traits des lignes suivantes */
-    .tableau-versions :is(.boite-ancre, .bouton-action, .bouton-ancre):focus-visible,
-    .tableau-versions .choix-option > div:focus-within {
-        position: relative;
-        z-index: 1;
-    }
-
-    .tableau-versions tr:first-child .contenu-version > .boite-ancre {
-        border-top-left-radius: 0.375rem;
-    }
-
-    .tableau-versions tr:last-child .contenu-version > .boite-ancre {
-        border-bottom-left-radius: 0.375rem;
-    }
-
-    .tableau-versions tr:first-child .choix-option > div {
-        border-top-right-radius: 0.375rem;
-    }
-
-    .tableau-versions tr:last-child .choix-option > div {
-        border-bottom-right-radius: 0.375rem;
-    }
-]
-
 @script [
     // interdite, introuvable ou prete
-    $etat_gestion           = 'introuvable'
-    $anicroche_gestion      = null
-    $type_gestion           = null
-    $acces_gestion          = 'prive'
-    $brouillon_gestion      = null
-    $versions_gestion       = []
-    $date_parution_gestion  = ''
-    $lien_edition_gestion   = ''
-    $annee_gestion          = new Date().getFullYear()
-    $annee_suivante_gestion = $annee_gestion + 1
-    $succes_gestion         = false
-    $erreur_gestion         = false
-
-    const SUFFIXE = '/gestion'
+    $etat_gestion                = 'introuvable'
+    $anicroche_gestion           = null
+    $type_gestion                = null
+    $acces_gestion               = 'prive'
+    $brouillon_gestion           = null
+    $versions_gestion            = []
+    $date_parution_gestion       = ''
+    $sources_brouillon           = []
+    $ajouts_edition              = []
+    $adresse_gestion_anicroche   = ''
+    $adresse_edition_anicroche   = ''
+    $adresse_brouillon_anicroche = ''
 
     // Accès de l anicroche entière
     $choix_acces_gestion = [
@@ -178,50 +32,95 @@
         { nom: 'programme', etiquette: "Programmée" }
     ]
 
-    const lire_id = () => $lire_identifiant_anicroche($path.slice(1, -SUFFIXE.length))
+    // Choix permis par l API (voir versions.sans), en lecture seule s il n y en a qu un : une
+    // version parue d une page légale est publique, une version programmée d une page soumise
+    // au préavis aussi (elle est annoncée), celle d une autre page légale publique ou programmée
+    const choix_acces = (anicroche, etat) =>
+    {
+        if (etat === 'a_paraitre' && anicroche.preavis)
+            return CHOIX_ACCES_VERSION.filter(choix => choix.nom === 'public')
+        if (etat === 'a_paraitre' && anicroche.legale)
+            return CHOIX_ACCES_PROGRAMME.filter(choix => choix.nom === 'public' || choix.nom === 'programme')
+        if (etat === 'a_paraitre')
+            return CHOIX_ACCES_PROGRAMME
+        if (etat !== 'brouillon' && anicroche.legale)
+            return CHOIX_ACCES_VERSION.filter(choix => choix.nom === 'public')
+        return CHOIX_ACCES_VERSION
+    }
+
+    // Premier segment de l adresse, commun aux onglets (/<id>/gestion, /<id>/edition)
+    const lire_segment = () => $path.split('/')[1] ?? ''
 
     // Lignes du tableau des versions, de la plus récente à la plus ancienne : le brouillon
     // (programmé ou non), puis les versions parues. Chacune a son état (brouillon, a_paraitre,
     // en_vigueur ou ancienne, comme le menu des versions de page-anicroche), son lien, sa date
-    // (seul texte affiché, « Brouillon » pour le brouillon ; alt la précise pour les lecteurs
-    // d écran)
-    // et le nom de son choix d accès ; une parution programmée se déprogramme, sauf pour une
-    // page soumise au préavis
+    // (seul texte affiché, « Brouillon » ou « À l essai » pour le brouillon ; alt la précise
+    // pour les lecteurs d écran) et son choix d accès ; une parution programmée se déprogramme,
+    // sauf pour une page soumise au préavis
     const lister_versions = (anicroche, chemin) =>
     {
-        const entree = (version, etat, alt, choix) => ({
+        // Un brouillon public est à l essai : lisible de tous avant sa parution
+        const sans_date = (version) => version.acces === 'public' ? "À l'essai" : "Brouillon"
+
+        const entree = (version, etat, alt) => ({
             numero         : version.numero,
             etat,
-            texte          : version.date_parution ? $formater_date(version.date_parution) : "Brouillon",
-            texte_court    : version.date_parution ? $formater_date(version.date_parution, false, true) : "Brouillon",
+            texte          : version.date_parution ? $formater_date(version.date_parution) : sans_date(version),
+            texte_court    : version.date_parution ? $formater_date(version.date_parution, false, true) : sans_date(version),
             date           : version.date_parution ?? null,
             acces          : version.acces,
-            choix,
+            choix          : choix_acces(anicroche, etat),
+            verrouille     : choix_acces(anicroche, etat).length === 1,
             nom            : `acces-${version.numero}`,
             lien           : version.numero === anicroche.en_vigueur ? chemin : `${chemin}/${version.numero}`,
-            alt            : alt ? `Version ${version.numero}, ${alt}` : `Version ${version.numero} :`,
+            alt            : alt ? `Version ${alt}` : '',
+            etiquette      : alt
+                ? `Accès de la version ${alt} ${$formater_date(version.date_parution)}`
+                : "Accès du brouillon",
             deprogrammable : etat === 'a_paraitre' && !anicroche.preavis
         })
 
         const entrees   = []
         const brouillon = anicroche.brouillon
         if (brouillon && brouillon.date_parution)
-            entrees.push(entree(brouillon, 'a_paraitre', "à paraître le", CHOIX_ACCES_PROGRAMME))
+            entrees.push(entree(brouillon, 'a_paraitre', "à paraître le"))
         else if (brouillon)
-            entrees.push(entree(brouillon, 'brouillon', '', CHOIX_ACCES_VERSION))
+            entrees.push(entree(brouillon, 'brouillon', ''))
 
         for (const version of anicroche.versions ?? [])
             entrees.push(version.numero === anicroche.en_vigueur
-                ? entree(version, 'en_vigueur', "en vigueur depuis le", CHOIX_ACCES_VERSION)
-                : entree(version, 'ancienne', "du", CHOIX_ACCES_VERSION))
+                ? entree(version, 'en_vigueur', "en vigueur depuis le")
+                : entree(version, 'ancienne', "du"))
 
         return entrees
     }
 
-    // Chargée avant l affichage de la page, puis rechargée après chaque action
-    $charger_gestion = async () =>
+    // Sources du brouillon, avec le nom et l étiquette de leur champ, et boutons d ajout des
+    // rôles qui n ont pas atteint leur maximum
+    const preparer_edition = (type, brouillon) =>
     {
-        const chemin = $path
+        $sources_brouillon = $lister_sources_anicroche(type, brouillon?.sources)
+            .map(source => ({
+                ...source,
+                nom       : `source-${source.role}-${source.position}`,
+                etiquette : source.max === 1 ? source.libelle : `${source.libelle} ${source.position}`
+            }))
+        $ajouts_edition    = type.sources
+            .filter(source => source.max === null || $sources_brouillon.filter(element => element.role === source.role).length < source.max)
+            .map(source => ({ role: source.role, etiquette: `Ajouter : ${source.libelle}` }))
+    }
+
+    // Chargée avant l affichage de la page, puis rechargée après chaque action de l un ou
+    // l autre onglet. Avec attente, une promesse, l onglet Gestion n est mis à jour qu une fois
+    // celle-ci tenue (voir $creer_brouillon)
+    $charger_gestion = async (attente = null) =>
+    {
+        const segment = lire_segment()
+        const racine  = `/${segment}`
+
+        // Les boutons des onglets ont leur adresse quel que soit l état de la page
+        $adresse_gestion_anicroche = `${racine}/gestion`
+        $adresse_edition_anicroche = `${racine}/edition`
 
         // Sans profil, aucun type ne peut être administré
         if (!$profil)
@@ -230,17 +129,20 @@
             return
         }
 
-        const id = lire_id()
+        const id = $lire_identifiant_anicroche(segment)
         if (!id)
         {
             $etat_gestion = 'introuvable'
             return
         }
 
+        // Un type inconnu fait recharger les types de l API, et reste introuvable s il en est
+        // toujours absent
         const reponse = await $charger_anicroche(id)
 
-        // Une réponse arrivée après une nouvelle navigation est ignorée
-        if ($path !== chemin)
+        // Une réponse arrivée après une navigation vers une autre adresse que les onglets de
+        // cette anicroche est ignorée
+        if (lire_segment() !== segment)
             return
 
         if (reponse.code !== 200)
@@ -256,149 +158,28 @@
             return
         }
 
-        const racine    = chemin.slice(0, -SUFFIXE.length)
         const brouillon = reponse.data.brouillon
 
-        $anicroche_gestion      = reponse.data
-        $type_gestion           = reponse.type
-        $acces_gestion          = reponse.data.acces ?? 'prive'
-        $brouillon_gestion      = brouillon
-        $versions_gestion       = lister_versions(reponse.data, racine)
-        $date_parution_gestion  = brouillon?.date_parution ? $formater_date(brouillon.date_parution, true) : ''
-        $lien_edition_gestion   = `${racine}/edition`
-        $etat_gestion           = 'prete'
-    }
+        preparer_edition(reponse.type, brouillon)
 
-    const afficher_erreur = (reponse) =>
-    {
-        $succes_gestion = false
-        $erreur_gestion = reponse.error ?? "Erreur serveur"
-    }
+        $anicroche_gestion           = reponse.data
+        $type_gestion                = reponse.type
+        $date_parution_gestion       = brouillon?.date_parution ? $formater_date(brouillon.date_parution, true) : ''
+        $adresse_brouillon_anicroche = brouillon ? `${racine}/${brouillon.numero}` : ''
 
-    const afficher_succes = (message) =>
-    {
-        $erreur_gestion = false
-        $succes_gestion = message
-    }
+        const mettre_a_jour_gestion = () =>
+        {
+            $acces_gestion     = reponse.data.acces ?? 'prive'
+            $brouillon_gestion = brouillon
+            $versions_gestion  = lister_versions(reponse.data, racine)
+        }
 
-    // $node ne désigne l élément de l action que jusqu au premier await : les champs sont donc
-    // lus au début de l action
-    const lire_champ = (selecteur) => $node.closest('.carte')?.querySelector(selecteur)?.value ?? ''
+        if (attente)
+            attente.then(mettre_a_jour_gestion)
+        else
+            mettre_a_jour_gestion()
 
-    const adresse_version = (numero) => `version/${encodeURIComponent($anicroche_gestion.id)}/${numero}`
-
-    // ─── Anicroche ───────────────────────────────────────────────────────────
-
-    // L accès n est envoyé que s il a changé
-    $modifier_acces_gestion = async () =>
-    {
-        const acces = lire_champ('select[name=acces]')
-        if (!acces || acces === $acces_gestion)
-            return
-
-        const reponse = await $update(`anicroche/${encodeURIComponent($anicroche_gestion.id)}`, { acces })
-        if (reponse.error)
-            return afficher_erreur(reponse)
-
-        await $charger_gestion()
-        afficher_succes("Accès de l'anicroche enregistré")
-    }
-
-    // ─── Versions ────────────────────────────────────────────────────────────
-
-    // Appelée au changement de la sélection : $node est son élément (voir choix-option)
-    $modifier_acces_version = async (numero) =>
-    {
-        const version = $versions_gestion.find(entree => entree.numero === numero)
-        const acces   = $node.closest('.choix-option')?.querySelector('select')?.value ?? ''
-        if (!version || !acces || acces === version.acces)
-            return
-
-        const reponse = await $update(adresse_version(numero), { acces })
-        if (reponse.error)
-            return afficher_erreur(reponse)
-
-        await $charger_gestion()
-        afficher_succes(`Accès de la version ${numero} enregistré`)
-    }
-
-    // ─── Brouillon ───────────────────────────────────────────────────────────
-
-    $creer_brouillon = async () =>
-    {
-        const reponse = await $create('version', { id_anicroche: $anicroche_gestion.id })
-        if (reponse.error)
-            return afficher_erreur(reponse)
-
-        await $charger_gestion()
-        afficher_succes(`Brouillon de la version ${reponse.data.numero} créé`)
-    }
-
-    // L API fixe l accès : public à la parution, programmé à la programmation (public dès la
-    // programmation pour une page légale ou soumise au préavis). date : "now", ou une date
-    // AAAA-MM-JJ, la parution ayant lieu à minuit dans le fuseau du visiteur
-    const faire_paraitre = async (date) =>
-    {
-        const numero        = $brouillon_gestion.numero
-        const date_parution = date === 'now' ? 'now' : new Date(`${date}T00:00`).toISOString()
-
-        const reponse = await $update(adresse_version(numero), { date_parution })
-        await $charger_gestion()
-        if (reponse.error)
-            return afficher_erreur(reponse)
-
-        afficher_succes(date === 'now'
-            ? `Version ${numero} publiée`
-            : `Parution de la version ${numero} programmée le ${$formater_date(date)}`)
-    }
-
-    $publier_brouillon = async () =>
-    {
-        if (!confirm(`Publier maintenant la version ${$brouillon_gestion.numero} ?`))
-            return
-
-        await faire_paraitre('now')
-    }
-
-    $programmer_brouillon = async () =>
-    {
-        const date = lire_champ('input[name=date_parution]')
-        if (!date)
-            return afficher_erreur({ error: "Choisissez la date de parution" })
-
-        if (new Date(`${date}T00:00`) <= new Date())
-            return afficher_erreur({ error: "La date de parution doit être à venir" })
-
-        await faire_paraitre(date)
-    }
-
-    // Le brouillon redevient modifiable ; ce n est pas possible pour une page soumise au préavis
-    $annuler_parution = async () =>
-    {
-        const numero = $brouillon_gestion.numero
-        if (!confirm(`Annuler la parution programmée de la version ${numero} ?`))
-            return
-
-        const reponse = await $update(adresse_version(numero), { date_parution: null })
-        await $charger_gestion()
-        if (reponse.error)
-            return afficher_erreur(reponse)
-
-        afficher_succes("Parution annulée : la version est de nouveau modifiable")
-    }
-
-    $supprimer_brouillon = async () =>
-    {
-        const numero = $brouillon_gestion.numero
-        if (!confirm(`Supprimer le brouillon de la version ${numero} ?`))
-            return
-
-        const reponse = await $delete(adresse_version(numero))
-        if (reponse.error)
-            return afficher_erreur(reponse)
-
-        await $charger_gestion()
-        afficher_succes("Brouillon supprimé")
+        $etat_gestion = 'prete'
     }
 
     // La page n est affichée qu une fois l anicroche chargée : le routeur montre d ici là son
@@ -406,8 +187,11 @@
     await $charger_gestion()
 ]
 
-$titre = [$type_gestion] ? "Gestion : $type_gestion.libelle" : "Gestion"
-$puce  = creer
+@if [$type_gestion]
+    $titre = [$path = $adresse_edition_anicroche] ? "Édition : $type_gestion.libelle" : "Gestion : $type_gestion.libelle"
+@else
+    $titre = [$path = $adresse_edition_anicroche] ? "Édition" : "Gestion"
+$puce = creer
 
 page [$authentification : requise_sans_profil]
     navigation
@@ -415,11 +199,13 @@ page [$authentification : requise_sans_profil]
             fleche-retour
 
         <div .centre>
-            <span>
-                @if [$type_gestion]
-                    "Gestion : $type_gestion.libelle"
-                @else
-                    "Gestion"
+            barre-onglets
+                bouton-onglet [$adresse_gestion_anicroche]
+                    <span>
+                        "Gestion"
+                bouton-onglet [$adresse_edition_anicroche]
+                    <span>
+                        "Édition"
 
     onglet
         @if [$etat_gestion = interdite]
@@ -433,113 +219,19 @@ page [$authentification : requise_sans_profil]
                     "Contenu introuvable !"
 
         @else
-            section [gestion]
-                titre
-                    "$anicroche_gestion.titre"
-                carte
-                    @if [$succes_gestion]
-                        succes-formulaire
-                            "$succes_gestion"
-                    @if [$erreur_gestion]
-                        erreur-formulaire
-                            "$erreur_gestion"
-                    @if [$anicroche_gestion.legale]
-                        information-formulaire
-                            "Cette page est légale : elle reste publique."
-                    @else
-                        choix-option ["Accès", acces, $choix : $choix_acces_gestion, $valeur : $acces_gestion]
-                        ligne
-                            bouton-action [$modifier_acces_gestion]
-                                "Enregistrer l'accès"
+            section-versions-anicroche
+            section-acces-anicroche
 
-            section [gestion-brouillon]
-                titre
-                    @if [$brouillon_gestion.date_parution]
-                        "Version $brouillon_gestion.numero programmée"
-                    @else-if [$brouillon_gestion]
-                        "Brouillon de la version $brouillon_gestion.numero"
-                    @else
-                        "Aucun brouillon"
-                carte
-                    @if [$brouillon_gestion.date_parution]
-                        information-formulaire
-                            @if [$anicroche_gestion.preavis]
-                                "Cette version paraîtra le $date_parution_gestion. Cette page est soumise au préavis : sa parution ne peut être ni annulée ni déplacée."
-                            @else
-                                "Cette version paraîtra le $date_parution_gestion. Pour la modifier, déprogrammez-la d'abord."
+    onglet
+        @if [$etat_gestion = interdite]
+            section [edition-interdite, centree]
+                titre [centre]
+                    "Vous ne pouvez pas modifier ce contenu"
 
-                    @else-if [$brouillon_gestion]
-                        @if [$anicroche_gestion.preavis]
-                            information-formulaire
-                                "Cette page est soumise au préavis : publiez-la maintenant pour une correction mineure, ou programmez sa parution pour une modification de fond, au moins 30 jours après l'envoi des annonces par courriel (l'API indique la date minimale)."
-                        @if [$anicroche_gestion.legale]
-                            information-formulaire
-                                "Cette page est légale : elle devient publique dès qu'elle paraît ou est programmée."
-                        champ-date [
-                            "Date de parution", date_parution
-                            $requis : :(
-                            $annee_min : $annee_gestion
-                            $annee_max : $annee_suivante_gestion
-                        ]
-                        ligne
-                            bouton-ancre [$lien_edition_gestion]
-                                "Modifier"
-                            bouton-action [$programmer_brouillon]
-                                "Programmer la parution"
+        @else-if [$etat_gestion = introuvable]
+            section [edition-introuvable, centree]
+                titre [centre]
+                    "Contenu introuvable !"
 
-                    @else
-                        information-formulaire
-                            "Créez un brouillon pour préparer la prochaine version : il reprend le contenu de la dernière version."
-                        ligne
-                            bouton-action [$creer_brouillon]
-                                "Créer un brouillon"
-
-            @if [_ $versions_gestion > 0]
-                section [gestion-versions]
-                    titre
-                        "Versions"
-                    carte
-                        <table .tableau-versions>
-                            <tbody>
-                                @for-each [$version] of [$versions_gestion]
-                                    <tr>
-                                        <td .version>
-                                            <div .contenu-version>
-                                                boite-ancre [$version.lien, $alt : $version.alt]
-                                                    @if [$version.etat = brouillon]
-                                                        icone-feuille
-                                                    @else-if [$version.etat = a_paraitre]
-                                                        icone-horloge [$horaire : $version.date]
-                                                    @else-if [$version.etat = en_vigueur]
-                                                        icone-parchemin
-                                                    @else
-                                                        icone-pochette
-                                                    <span .date-longue>
-                                                        "$version.texte"
-                                                    <span .date-courte>
-                                                        "$version.texte_court"
-                                                @if [$version.etat = brouillon]
-                                                    bouton-ancre.discret [$lien_edition_gestion]
-                                                        icone-baguette
-                                                        alt
-                                                            "Modifier"
-                                                    bouton-action.discret [$supprimer_brouillon]
-                                                        icone-gomme
-                                                        alt
-                                                            "Supprimer"
-                                                    bouton-action.discret [$publier_brouillon]
-                                                        icone-enveloppe
-                                                        alt
-                                                            "Publier"
-                                                @if [$version.deprogrammable]
-                                                    bouton-action.discret [$annuler_parution]
-                                                        icone-interdiction
-                                                        alt
-                                                            "Déprogrammer"
-                                        <td .acces-version>
-                                            choix-option.discret [
-                                                "Accès de la version $version.numero", $version.nom
-                                                $choix  : $version.choix
-                                                $valeur : $version.acces
-                                                $action : $modifier_acces_version($version.numero)
-                                            ]
+        @else
+            section-edition-anicroche

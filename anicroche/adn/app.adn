@@ -27,8 +27,13 @@ routes : {
     export_donnees      : { path : /compte/export,        model : page-export-donnees }
     restauration_compte : { path : /compte/restauration,  model : page-restauration-compte }
     chargement          : { path : /chargement,           model : page-chargement }
-    gestion_anicroche   : { path : "/<$anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->/gestion", model : page-gestion-anicroche }
-    edition_anicroche   : { path : "/<$anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->/edition", model : page-edition-anicroche }
+    gestion_anicroche   : {
+        path  : [
+            "/<$anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->/gestion"
+            "/<$anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->/edition"
+        ]
+        model : page-gestion-anicroche
+    }
     anicroche           : {
         path  : [
             "/<$anicroche :+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789->"

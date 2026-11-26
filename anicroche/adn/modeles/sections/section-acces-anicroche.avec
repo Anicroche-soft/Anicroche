@@ -1,0 +1,92 @@
+@script [
+    $succes_acces = false
+    $erreur_acces = false
+
+    const afficher_erreur = (reponse) =>
+    {
+        $succes_acces = false
+        $erreur_acces = reponse.error ?? "Erreur serveur"
+    }
+
+    const afficher_succes = (message) =>
+    {
+        $erreur_acces = false
+        $succes_acces = message
+    }
+
+    // Changement en attente de confirmation : { acces, ancien, nouveau }
+    $changement_acces = null
+
+    // Le choix revient à l accès enregistré si la boîte se ferme sans confirmation réussie
+    let retablir_acces = null
+
+    const etiquette_acces = (acces) => $choix_acces_gestion.find(choix => choix.nom === acces)?.etiquette ?? acces
+
+    // Appelée au changement de la sélection : $node est son élément (voir choix-option)
+    $modifier_acces_gestion = () =>
+    {
+        const selection = $node.closest('.choix-option')?.querySelector('select')
+        const acces     = selection?.value ?? ''
+        if (!acces || acces === $acces_gestion)
+            return
+
+        const precedent   = $acces_gestion
+        $changement_acces = { acces, ancien: etiquette_acces(precedent), nouveau: etiquette_acces(acces) }
+
+        retablir_acces = () => selection.value = precedent
+        const ouverte = $ouvrir_boite('acces-anicroche', () =>
+        {
+            retablir_acces?.()
+            retablir_acces = null
+        })
+        if (!ouverte)
+            retablir_acces()
+    }
+
+    $confirmer_acces = async () =>
+    {
+        const { acces } = $changement_acces
+        const reponse = await $update(`anicroche/${encodeURIComponent($anicroche_gestion.id)}`, { acces })
+        if (!reponse.error)
+            retablir_acces = null
+
+        await $fermer_boite()
+        await $charger_gestion()
+        if (reponse.error)
+            return afficher_erreur(reponse)
+
+        afficher_succes("Accès de l'anicroche enregistré")
+    }
+]
+
+# Accès de l'anicroche, dans l'onglet Gestion de page-gestion-anicroche, qui la charge
+section [acces-anicroche]
+    titre
+        "Accessibilité"
+    carte
+        @if [$succes_acces]
+            succes-formulaire
+                "$succes_acces"
+        @if [$erreur_acces]
+            erreur-formulaire
+                "$erreur_acces"
+        # Une page légale est toujours publique : son accès est en lecture seule
+        choix-option [
+            "Accès", acces
+            $choix     : $choix_acces_gestion
+            $valeur    : $acces_gestion
+            $action    : $modifier_acces_gestion()
+            $desactive : $anicroche_gestion.legale
+        ]
+        @if [$anicroche_gestion.legale]
+            information-formulaire
+                "Cette page ne peut pas être passée en privé"
+
+    boite-dialogue [acces-anicroche, "Changer l'accès de l'anicroche"]
+        <p>
+            "L'accès passera de « $changement_acces.ancien » à « $changement_acces.nouveau »."
+        ligne
+            bouton-action [$fermer_boite()]
+                "Annuler"
+            bouton-action [$confirmer_acces]
+                "Changer l'accès"

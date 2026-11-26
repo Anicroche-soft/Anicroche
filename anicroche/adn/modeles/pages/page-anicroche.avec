@@ -154,6 +154,20 @@
         $etat_anicroche = reponse.data.version === null && !apercu ? 'non_publiee' : 'trouvee'
     }
 
+    // Éditer (menu de la barre d informations) mène à l onglet Édition, après avoir créé le
+    // brouillon s il n y en a pas. En cas d échec, l onglet indique qu il n y a pas de brouillon
+    $editer_anicroche = async () =>
+    {
+        const adresse = $path
+
+        $fermer_tiroir()
+        if (!$anicroche.brouillon)
+            await $create('version', { id_anicroche: $anicroche.id })
+
+        if ($path === adresse)
+            $navigate_to($lien_edition_anicroche)
+    }
+
     // La page n est affichée qu une fois l anicroche chargée : le routeur montre d ici là son
     // modèle d attente
     await charger_anicroche()
@@ -188,7 +202,7 @@
                         $date       : $date_anicroche
                         $versions   : $versions_anicroche
                         $gestion    : [$gerant_anicroche] ? $lien_gestion_anicroche : ''
-                        $edition    : [$gerant_anicroche] ? $lien_edition_anicroche : ''
+                        $editer     : [$gerant_anicroche] ? $editer_anicroche() : :o
                     ]
                     @if [$etat_anicroche = non_publiee]
                         <p>

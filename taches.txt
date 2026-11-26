@@ -1,9 +1,6 @@
 Tâches :
-- revoir l'organisation des pages d'anicroches : /<id> est faite (versions listées dans le menu de sa barre d'informations), /<id>/edition aussi (contenu du brouillon seulement), il ne reste que des finitions sur /<id>/gestion (accès de l'anicroche, tableau des versions avec leur accès et les actions du brouillon)
 - voir ce qui doit encore être intégré au pied de page (structures/pied-de-page.avec : pour l'instant les liens vers les pages légales, tirés de GET /types)
 - relire et compléter les premières versions des pages légales (juridique/conditions-generales-d-utilisation.md, juridique/politique-de-confidentialite.md, juridique/mentions-legales.md : passages « À compléter », adresse d'Infomaniak à vérifier), et les publier avant le lancement (les liens du pied de page y mènent déjà)
-- finir le préavis des pages légales (voir juridique/RGPD.md § 11, l'essentiel est fait) :
-    - zone de publication propre aux pages soumises au préavis, avec un bouton « Enregistrer en tant que correction » et un bouton « Enregistrer en tant que mise à jour »
 - compléter juridique/RGPD.md :
     - référence et date du contrat de sous-traitance (DPA) d'Infomaniak, couvrant serveur, base et courriels (§ 3)
     - type de compte Outlook utilisé pour royaume@, localisation de ses données et document de Microsoft qui s'applique (§ 3)

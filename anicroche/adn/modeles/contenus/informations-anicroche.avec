@@ -119,8 +119,8 @@
 # Barre d'informations d'une anicroche : $auteurs, profils auteurs (pour un type avec auteurs),
 # $lien et $texte_lien, lien vers une autre version, $date, date de parution de la version
 # affichée, $versions, versions listées dans le sous-menu Versions du menu (page-anicroche),
-# $gestion et $edition, adresses des pages de gestion et d'édition, vides pour qui n'est pas
-# gérant de l'anicroche
+# $gestion, adresse de la page de gestion, vide pour qui n'est pas gérant de l'anicroche, et
+# $editer, fonction du bouton Éditer, :o pour qui n'est pas gérant
 @args [
     $auteurs    : []
     $lien       : ''
@@ -128,7 +128,7 @@
     $date       : :o
     $versions   : []
     $gestion    : ''
-    $edition    : ''
+    $editer     : :o
 ]
 
 <div .informations-anicroche>
@@ -162,8 +162,8 @@
                 icone-chaine
                 <span>
                     "Copier le lien"
-            @if [$edition]
-                boite-ancre [$edition]
+            @if [$editer]
+                boite-action [$editer]
                     icone-baguette
                     <span>
                         "Éditer"

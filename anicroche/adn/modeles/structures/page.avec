@@ -96,19 +96,35 @@
         await new Promise(r => setTimeout(r, maxTime))
     }
 
+    // Renvoie une promesse tenue à la fin du défilement vers l onglet, ou au bout d une seconde
+    // (navigateur sans scrollend, onglet déjà affiché)
     $basculer_vers_onglet = (n, noeud = $node) =>
     {
         const page = noeud.closest('.page')
-        if (!page) return
+        if (!page) return Promise.resolve()
 
         const onglets = page.querySelectorAll(':scope > .onglet')
         const cible = onglets[n - 1]
-        if (!cible) return
+        if (!cible) return Promise.resolve()
+
+        const fin = new Promise(resolve =>
+        {
+            const terminer = () =>
+            {
+                clearTimeout(minuteur)
+                page.removeEventListener('scrollend', terminer)
+                resolve()
+            }
+            const minuteur = setTimeout(terminer, 1000)
+            page.addEventListener('scrollend', terminer)
+        })
 
         cible.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
 
         marquer_onglet_actif(page, n)
         synchroniser_adresse(page)
+
+        return fin
     }
 
     $basculer_vers_onglet_suivant = (noeud = $node) =>

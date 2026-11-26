@@ -1,0 +1,221 @@
+@script [
+    // Les listes ne dépendent que des arguments : elles sont calculées une fois par instance
+    const deux_chiffres = (nombre) => String(nombre).padStart(2, '0')
+
+    // Heures par moment de la journée, minutes par quart d heure
+    const options = (debut, fin) =>
+        Array.from({ length: fin - debut + 1 }, (_, i) => ({ valeur: debut + i, texte: deux_chiffres(debut + i) }))
+
+    $heures_champ_heure = [
+        { nom: "Nuit",       options: options(0, 5) },
+        { nom: "Matin",      options: options(6, 11) },
+        { nom: "Après-midi", options: options(12, 17) },
+        { nom: "Soir",       options: options(18, 23) }
+    ]
+
+    $minutes_champ_heure = [
+        { nom: "Premier quart",   options: options(0, 14) },
+        { nom: "Deuxième quart",  options: options(15, 29) },
+        { nom: "Troisième quart", options: options(30, 44) },
+        { nom: "Quatrième quart",   options: options(45, 59) }
+    ]
+
+    // Valeur HH:MM (comme un champ time)
+    const FORMAT = /^(\d{2}):(\d{2})/
+
+    // Non modifiable, l heure est écrite dans un champ de texte
+    const morceaux_initiaux = FORMAT.exec(String($valeur ?? ''))
+    $heure_lisible_champ_heure = morceaux_initiaux ? `${morceaux_initiaux[1]}:${morceaux_initiaux[2]}` : ''
+
+    const lire_parties = (conteneur) =>
+        ['heure', 'minute'].map(partie => conteneur.querySelector(`select[data-partie="${partie}"]`))
+
+    // Recopie le choix des deux listes dans le vrai champ time
+    $mettre_a_jour_champ_heure = () =>
+    {
+        const conteneur         = $node.closest('.champ-heure')
+        const [ heure, minute ] = lire_parties(conteneur)
+        const champ             = conteneur.querySelector('input[type="time"]')
+
+        champ.value = heure.value && minute.value
+            ? `${deux_chiffres(heure.value)}:${deux_chiffres(minute.value)}`
+            : ''
+    }
+
+    $monter_champ_heure = () =>
+    {
+        const morceaux = FORMAT.exec(String($valeur ?? ''))
+        if (!morceaux)
+            return
+
+        const [ heure, minute ] = lire_parties($node)
+        heure.value  = String(Number(morceaux[1]))
+        minute.value = String(Number(morceaux[2]))
+        $mettre_a_jour_champ_heure()
+    }
+]
+
+@style [
+    .champ-heure {
+        flex: 1024;
+
+        --l-ecart: 0.5rem;
+    }
+
+    .champ-heure > legend {
+        display: contents;
+        cursor: default;
+    }
+
+    .champ-heure > .parties {
+        width: 100%;
+
+        flex-direction: row;
+
+        --l-ecart: 0.5rem;
+    }
+
+    .champ-heure .partie {
+        position: relative;
+
+        height: 2rem;
+
+        border: 0.125rem var(--c-vif);
+        border-style: dashed solid;
+        border-radius: 0.5rem;
+        padding: 0.375rem;
+
+        flex: 1;
+        flex-direction: row;
+        align-items: center;
+
+        cursor: pointer;
+
+        --c-focus: var(--c-vif);
+        --p-fonte: var(--p-champ);
+        --l-ecart: 0;
+    }
+
+    .champ-heure .partie::after {
+        content: "";
+        pointer-events: none;
+
+        position: absolute;
+        inset: -0.125rem;
+
+        border: 0.125rem solid var(--c-vif);
+        border-radius: 0.5rem;
+
+        transition: opacity var(--d-animation);
+    }
+
+    .champ-heure .partie:has(> select:invalid)::after {
+        opacity: 0;
+    }
+
+    .champ-heure .partie:focus-within {
+        outline-color: var(--c-focus);
+    }
+
+    .champ-heure .partie > select {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+
+        outline: none;
+        width: 0rem;
+        flex-grow: 1;
+
+        cursor: pointer;
+    }
+
+    .champ-heure .partie > select:has(> option[value=""]:checked) {
+        color: var(--c-plus);
+        font-style: italic;
+    }
+
+    .champ-heure .fleche {
+        position: absolute;
+        right: 0.25rem;
+        top: 0.25rem;
+        bottom: 0.25rem;
+
+        display: flex;
+
+        pointer-events: none;
+
+        --c-flux: var(--c-plus);
+    }
+]
+
+# Heure choisie dans deux listes (heures groupées par moment de la journée, minutes par quart
+# d'heure) et recopiée dans un champ time caché nommé $nom (valeur HH:MM, vide tant qu'une liste
+# n'est pas choisie). $valeur, au même format, préremplit les listes
+@args [
+    $etiquette, $nom
+    $requis : :)
+    $valeur : ''
+    $indice : :(
+    $modifiable : :)
+]
+
+@if [! $modifiable]
+    champ-texte [
+        $etiquette, $nom
+        $valeur : $heure_lisible_champ_heure
+        $modifiable : :(
+        $requis : :(
+        $indice : $indice
+    ]
+
+@else
+    <fieldset
+        .champ
+        .champ-heure
+        @mount="$monter_champ_heure()"
+    >
+        <legend .etiquette>
+            "$etiquette"
+        <div .parties>
+            <label .partie .heure>
+                <select
+                    data-partie="heure"
+                    aria-label="Heure"
+                    [$requis] ? required
+                    @change="$mettre_a_jour_champ_heure()"
+                >
+                    <option value="" selected disabled>
+                        "Heure"
+                    @for-each [$groupe] of [$heures_champ_heure]
+                        <optgroup label="$groupe.nom">
+                            @for-each [$heure] of [$groupe.options]
+                                <option value="$heure.valeur">
+                                    "$heure.texte"
+                <div .fleche>
+                    icone-fleche-depliable
+            <label .partie .minute>
+                <select
+                    data-partie="minute"
+                    aria-label="Minute"
+                    [$requis] ? required
+                    @change="$mettre_a_jour_champ_heure()"
+                >
+                    <option value="" selected disabled>
+                        "Minute"
+                    @for-each [$groupe] of [$minutes_champ_heure]
+                        <optgroup label="$groupe.nom">
+                            @for-each [$minute] of [$groupe.options]
+                                <option value="$minute.valeur">
+                                    "$minute.texte"
+                <div .fleche>
+                    icone-fleche-depliable
+        <input
+            name="$nom"
+            type="time"
+            tabindex="-1"
+            aria-hidden="true"
+            hidden
+        >
+        @if [$indice]
+            indication
+                "$indice"
