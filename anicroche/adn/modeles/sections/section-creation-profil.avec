@@ -32,10 +32,9 @@
             pseudonyme : pseudonyme
         })
 
-        console.log(reponse)
-
         if (!reponse.error)
         {
+            $notifier("Profil créé")
             const reponse_compte = await $search('moi')
             if (!reponse_compte.error)
             {

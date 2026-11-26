@@ -172,19 +172,17 @@
 ]
 
 @script [
-    $succes_versions = false
     $erreur_versions = false
 
     const afficher_erreur = (reponse) =>
     {
-        $succes_versions = false
         $erreur_versions = reponse.error ?? "Erreur serveur"
     }
 
     const afficher_succes = (message) =>
     {
         $erreur_versions = false
-        $succes_versions = message
+        $notifier(message)
     }
 
     const adresse_version = (numero) => `version/${encodeURIComponent($anicroche_gestion.id)}/${numero}`
@@ -245,7 +243,7 @@
         if (reponse.error)
             return afficher_erreur(reponse)
 
-        afficher_succes(etat === 'brouillon' ? "Accès du brouillon enregistré" : "Accès de la version enregistré")
+        afficher_succes(etat === 'brouillon' ? "Accès du brouillon modifié" : "Accès de la version modifié")
     }
 
     // ─── Brouillon ───────────────────────────────────────────────────────────
@@ -259,13 +257,14 @@
         if (reponse.error)
             return afficher_erreur(reponse)
 
+        $notifier("Brouillon créé")
+
         let finir_transition
         const transition = new Promise(resolve => finir_transition = resolve)
 
         await $charger_gestion(transition)
         await $basculer_vers_onglet(2, noeud)
 
-        $succes_versions = false
         $erreur_versions = false
         finir_transition()
     }
@@ -335,7 +334,7 @@
         if (reponse.error)
             return afficher_erreur(reponse)
 
-        afficher_succes("Parution annulée : la version est de nouveau modifiable")
+        afficher_succes("Parution annulée")
     }
 
     // Le brouillon quitte le tableau dès la réponse, pendant la fermeture de la boîte (dont le
@@ -365,9 +364,6 @@ section [versions-anicroche]
     titre
         "Versions"
     carte
-        @if [$succes_versions]
-            succes-formulaire
-                "$succes_versions"
         @if [$erreur_versions]
             erreur-formulaire
                 "$erreur_versions"

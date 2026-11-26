@@ -97,7 +97,6 @@
 
         $erreur_etape_edition = false
         $erreur_clef_edition  = false
-        $succes_clef_edition  = false
         $basculer_vers_onglet_suivant(noeud)
     }
 
@@ -105,14 +104,24 @@
     {
         const reponse = await envoyer_clef($mot_de_passe_edition)
 
-        $succes_clef_edition = reponse.error ? false : "Une nouvelle clef a été envoyée"
         $erreur_clef_edition = reponse.error ? lire_erreur(reponse) : false
+        if (!reponse.error)
+            $notifier("Nouvelle clef envoyée")
     }
 
     // ─── Fin des parcours ────────────────────────────────────────────────────
 
+    const NOTIFICATIONS = {
+        ajout        : "Adresse ajoutée",
+        retrait      : "Adresse retirée",
+        principale   : "Adresse principale modifiée",
+        naissance    : "Date de naissance modifiée",
+        mot_de_passe : "Mot de passe modifié"
+    }
+
     const terminer = async () =>
     {
+        $notifier(NOTIFICATIONS[$action_edition])
         await $obtenir_compte()
         $navigate_to('/compte')
     }
@@ -136,7 +145,6 @@
 
         if (reponse.error)
         {
-            $succes_clef_edition = false
             $erreur_clef_edition = lire_erreur(reponse)
             return
         }
@@ -217,7 +225,6 @@
     {
         $erreur_etape_edition = false
         $erreur_clef_edition  = false
-        $succes_clef_edition  = false
         $basculer_vers_onglet_precedant()
     }
 ]
@@ -423,9 +430,6 @@
             "Saisissez la clef de validation"
         carte
             formulaire [$envoyer_formulaire_clef_edition]
-                @if [$succes_clef_edition]
-                    succes-formulaire
-                        "$succes_clef_edition"
                 @if [$erreur_clef_edition]
                     erreur-formulaire
                         "$erreur_clef_edition"

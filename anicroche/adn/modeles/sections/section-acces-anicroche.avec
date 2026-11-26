@@ -1,17 +1,15 @@
 @script [
-    $succes_acces = false
     $erreur_acces = false
 
     const afficher_erreur = (reponse) =>
     {
-        $succes_acces = false
         $erreur_acces = reponse.error ?? "Erreur serveur"
     }
 
     const afficher_succes = (message) =>
     {
         $erreur_acces = false
-        $succes_acces = message
+        $notifier(message)
     }
 
     // Changement en attente de confirmation : { acces, ancien, nouveau }
@@ -55,7 +53,7 @@
         if (reponse.error)
             return afficher_erreur(reponse)
 
-        afficher_succes("Accès de l'anicroche enregistré")
+        afficher_succes("Accès de l'anicroche modifié")
     }
 ]
 
@@ -64,9 +62,6 @@ section [acces-anicroche]
     titre
         "Accessibilité"
     carte
-        @if [$succes_acces]
-            succes-formulaire
-                "$succes_acces"
         @if [$erreur_acces]
             erreur-formulaire
                 "$erreur_acces"

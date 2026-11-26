@@ -14,9 +14,19 @@
         $ouvrir_tiroir('menu-anicroche', bouton.getBoundingClientRect().bottom + rem)
     }
 
+    // Le presse-papiers n existe que sur une page sécurisée (HTTPS ou localhost), et l écriture
+    // peut être refusée par le navigateur
     $copier_lien_anicroche = async () =>
     {
-        await navigator.clipboard?.writeText(`${location.origin}${$path}`)
+        try
+        {
+            await navigator.clipboard.writeText(`${location.origin}${$path}`)
+            $notifier("Lien copié")
+        }
+        catch
+        {
+            $notifier("Copie du lien impossible", "erreur")
+        }
         $fermer_tiroir()
     }
 ]

@@ -60,6 +60,7 @@
                 ? "Trop de tentatives, veuillez réessayer plus tard"
                 : reponse.error ?? "La modification du profil a échoué"
 
+        $notifier("Profil modifié")
         const reponse_compte = await $search('moi')
         if (!reponse_compte.error)
         {

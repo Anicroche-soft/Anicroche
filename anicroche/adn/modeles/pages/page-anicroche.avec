@@ -161,8 +161,8 @@
         const adresse = $path
 
         $fermer_tiroir()
-        if (!$anicroche.brouillon)
-            await $create('version', { id_anicroche: $anicroche.id })
+        if (!$anicroche.brouillon && !(await $create('version', { id_anicroche: $anicroche.id })).error)
+            $notifier("Brouillon créé")
 
         if ($path === adresse)
             $navigate_to($lien_edition_anicroche)

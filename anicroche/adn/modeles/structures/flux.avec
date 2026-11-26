@@ -1,0 +1,315 @@
+@script [
+    const DUREE_NOTIFICATION = 5000
+    const NOMBRE_MAXIMUM     = 3
+
+    // Une notification glissée sur le côté part au-delà d un tiers de sa largeur (et d au moins
+    // 4rem, pour une notification étroite), ou lancée plus vite que cette vitesse (en pixels par
+    // milliseconde)
+    const PART_BALAYAGE     = 1 / 3
+    const DISTANCE_BALAYAGE = 4
+    const VITESSE_BALAYAGE  = 0.5
+
+    // Durée sur laquelle la vitesse est mesurée, à la fin du geste (en millisecondes)
+    const DUREE_VITESSE = 100
+
+    // Déplacement à partir duquel l appui devient un glissement, et non plus un clic
+    const SEUIL_GLISSEMENT = 5
+
+    // Les notifications sont construites ici et non par un @for-each, qui reconstruirait toute
+    // la liste (et rejouerait l entrée de chacune) à chaque ajout ou retrait
+    $monter_flux = () =>
+    {
+        const flux   = $node
+        const icones = flux.querySelector(':scope > .icones-flux')
+        const liste  = flux.querySelector(':scope > .liste-flux')
+        const delais = new WeakMap()
+
+        const duree_transition = (noeud) =>
+        {
+            const valeur = getComputedStyle(noeud).transitionDuration.split(',')[0].trim()
+            const nombre = parseFloat(valeur) || 0
+            return valeur.endsWith('ms') ? nombre : nombre * 1000
+        }
+
+        const retirer = (notification) =>
+        {
+            if (notification.classList.contains('sortie'))
+                return
+
+            clearTimeout(delais.get(notification))
+            notification.classList.add('sortie')
+            setTimeout(() => notification.remove(), duree_transition(notification))
+        }
+
+        const programmer = (notification) =>
+        {
+            clearTimeout(delais.get(notification))
+            delais.set(notification, setTimeout(() => retirer(notification), DUREE_NOTIFICATION))
+        }
+
+        // Part vers la gauche (sens -1) ou la droite (1), et non vers le haut, sans passer sur
+        // les notifications du dessus
+        const balayer = (notification, bulle, sens) =>
+        {
+            bulle.style.translate = `calc(${sens * 100}% + ${sens * 0.5}rem) 0`
+            bulle.style.opacity   = '0'
+            retirer(notification)
+        }
+
+        // La bulle suit le pointeur à l horizontale et s efface en s éloignant ; relâchée assez
+        // loin ou assez vite, elle part de ce côté, sinon elle revient. Un clic appelle la
+        // fonction de la notification (le lien s ouvre de lui-même) et la fait partir vers la
+        // gauche, du côté où le flux est aligné, sauf s il termine un glissement : il ne fait
+        // alors rien
+        const rendre_glissable = (notification, bulle, cible) =>
+        {
+            let appui   = null
+            let glissee = false
+
+            bulle.addEventListener('pointerdown', (evenement) =>
+            {
+                appui   = { x: evenement.clientX, ecart: 0, points: [ { ecart: 0, temps: evenement.timeStamp } ] }
+                glissee = false
+                bulle.setPointerCapture(evenement.pointerId)
+            })
+
+            bulle.addEventListener('pointermove', (evenement) =>
+            {
+                if (!appui)
+                    return
+
+                const ecart = evenement.clientX - appui.x
+                if (!glissee && Math.abs(ecart) < SEUIL_GLISSEMENT)
+                    return
+
+                appui.ecart  = ecart
+                appui.points = [ ...appui.points, { ecart, temps: evenement.timeStamp } ]
+                    .filter(point => evenement.timeStamp - point.temps <= DUREE_VITESSE)
+
+                glissee = true
+                bulle.classList.add('glissement')
+                bulle.style.translate = `${ecart}px 0`
+                bulle.style.opacity   = String(Math.max(0, 1 - Math.abs(ecart) / bulle.offsetWidth))
+            })
+
+            const relacher = () =>
+            {
+                if (!appui)
+                    return
+
+                const { ecart, points } = appui
+                const premier = points[0]
+                const dernier = points.at(-1)
+                const vitesse = dernier && dernier.temps > premier.temps
+                    ? (dernier.ecart - premier.ecart) / (dernier.temps - premier.temps)
+                    : 0
+                appui = null
+                if (!glissee)
+                    return
+
+                bulle.classList.remove('glissement')
+
+                const rem    = parseFloat(getComputedStyle(document.documentElement).fontSize)
+                const seuil  = Math.max(bulle.offsetWidth * PART_BALAYAGE, DISTANCE_BALAYAGE * rem)
+                const lancee = Math.abs(vitesse) > VITESSE_BALAYAGE && Math.sign(vitesse) === Math.sign(ecart)
+                if (Math.abs(ecart) > seuil || lancee)
+                    balayer(notification, bulle, Math.sign(ecart))
+                else
+                {
+                    bulle.style.translate = ''
+                    bulle.style.opacity   = ''
+                }
+            }
+
+            bulle.addEventListener('pointerup',     relacher)
+            bulle.addEventListener('pointercancel', relacher)
+
+            bulle.addEventListener('click', (evenement) =>
+            {
+                if (glissee)
+                    return evenement.preventDefault()
+
+                if (typeof cible === 'function')
+                    cible()
+                balayer(notification, bulle, -1)
+            })
+        }
+
+        flux.addEventListener('notifier', ({ detail: { texte, icone, cible } }) =>
+        {
+            const presentes = [ ...liste.children ].filter(notification => !notification.classList.contains('sortie'))
+
+            // Le même message répété remplace le précédent
+            presentes.filter(notification => notification.textContent === texte).forEach(retirer)
+
+            // Avec une adresse, la bulle est un lien ; avec une fonction, un bouton
+            const lien   = typeof cible === 'string'
+            const action = typeof cible === 'function'
+
+            const notification = document.createElement('div')
+            const contenu      = document.createElement('div')
+            const bulle        = document.createElement(lien ? 'a' : action ? 'button' : 'div')
+            const paragraphe   = document.createElement('p')
+
+            notification.className = 'notification'
+            contenu.className      = 'contenu-notification'
+            bulle.className        = lien || action ? 'bulle-notification actionnable' : 'bulle-notification'
+            paragraphe.textContent = texte
+
+            // Un lien glissé à la souris ne doit pas être emporté par le glisser-déposer du navigateur
+            if (lien)
+            {
+                bulle.href      = cible
+                bulle.draggable = false
+            }
+            if (action)
+                bulle.type = 'button'
+
+            const modele_icone = icones.querySelector(`:scope > .icone-${icone}`)
+            if (modele_icone)
+                bulle.append(modele_icone.cloneNode(true))
+            bulle.append(paragraphe)
+            contenu.append(bulle)
+            notification.append(contenu)
+            liste.append(notification)
+
+            presentes.filter(element => element.textContent !== texte).slice(0, 1 - NOMBRE_MAXIMUM).forEach(retirer)
+
+            // Une notification survolée reste affichée
+            bulle.addEventListener('pointerenter', () => clearTimeout(delais.get(notification)))
+            bulle.addEventListener('pointerleave', () => programmer(notification))
+            rendre_glissable(notification, bulle, cible)
+            programmer(notification)
+        })
+    }
+]
+
+@style [
+    /* En haut à gauche de la page, sous la navigation et hors du menu de gauche (--l-tete).
+       Comme la page, sous les fenêtres : tiroir non modal (z-index 100), tiroir modal et boîte
+       de dialogue (couche supérieure du navigateur) ; au-dessus des voiles de transition de
+       page (z-index 99, placés avant lui) */
+    .flux {
+        position: fixed;
+        z-index: 99;
+        top: var(--h-navigation);
+        right: 0;
+        bottom: 0;
+        left: var(--l-tete);
+
+        padding: 0.5rem;
+        align-items: flex-start;
+        gap: 0;
+
+        /* Une notification qui part disparaît sous la navigation ou sur le côté. La zone descend
+           jusqu au bas de l écran : à sa hauteur de contenu, elle couperait par le bas une
+           notification dont la ligne se replie en partant */
+        overflow: hidden;
+
+        pointer-events: none;
+    }
+
+    .flux > .liste-flux {
+        width: min(32rem, 100%);
+        gap: 0;
+    }
+
+    /* La hauteur de la ligne de grille se referme à la sortie : les notifications suivantes
+       remontent au lieu de sauter */
+    .flux .notification {
+        display: grid;
+        grid-template-rows: 1fr;
+
+        transition: grid-template-rows var(--d-animation) ease;
+    }
+
+    .flux .notification.sortie {
+        grid-template-rows: 0fr;
+    }
+
+    .flux .contenu-notification {
+        min-height: 0;
+
+        align-items: flex-start;
+    }
+
+    /* Fond du menu, translucide et flou. Le fondu se fait sur la bulle elle-même : une opacité
+       sur un ancêtre couperait le flou de l arrière-plan pendant l animation. L écart avec la
+       notification suivante est une marge de la bulle, et non une marge intérieure du contenu,
+       qui ne se replierait pas avec la ligne : les suivantes sauteraient d autant au retrait */
+    .flux .bulle-notification {
+        max-width: 100%;
+        margin-bottom: 0.5rem;
+
+        display: flex;
+        flex-flow: row nowrap;
+        align-items: center;
+        gap: 0.5rem;
+
+        border-radius: 1.5rem;
+        padding: 1rem;
+
+        backdrop-filter: blur(var(--l-blur));
+
+        opacity: 1;
+        translate: 0 0;
+
+        text-align: start;
+
+        pointer-events: auto;
+        user-select: none;
+
+        /* Le glissement horizontal revient à la bulle, et non au navigateur */
+        touch-action: none;
+
+        transition: opacity   var(--d-animation) ease,
+                    translate var(--d-animation) ease;
+
+        --f-fond: var(--c-analogue-trans);
+        --c-fond: var(--c-analogue);
+    }
+
+    /* Seule une notification qui mène à une adresse ou à une action se présente comme
+       cliquable */
+    .flux .bulle-notification.actionnable {
+        cursor: pointer;
+    }
+
+    /* Pendant le glissement, la bulle suit le pointeur sans délai */
+    .flux .bulle-notification.glissement {
+        transition: none;
+    }
+
+    @starting-style {
+        .flux .bulle-notification {
+            opacity: 0;
+            translate: 0 1rem;
+        }
+    }
+
+    /* Une notification apparaît en fondu en montant d un rem, et part en fondu en montant de sa
+       hauteur et de l écart avec le bord du flux, pendant que les suivantes prennent sa place */
+    .flux .notification.sortie .bulle-notification {
+        opacity: 0;
+        translate: 0 calc(-100% - 0.5rem);
+    }
+
+    /* L icône dépasse la hauteur du texte : elle déborde sur la marge plutôt que d agrandir la
+       bulle, autant vers le haut, le bas et la gauche (son cercle reste à égale distance des
+       bords), et garde l écart avec le texte */
+    .flux .bulle-notification > .icone {
+        flex-shrink: 0;
+        margin-block: -0.25rem;
+        margin-inline-start: -0.25rem;
+    }
+]
+
+# Notifications des actions réussies, ajoutées par $notifier(texte, icone, cible) (base.avec), et
+# retirées après quelques secondes, d'un clic ou en les faisant glisser sur le côté. Les icônes
+# sont des modèles : la page en garde un exemplaire caché, copié dans chaque notification
+<div .flux @mount="$monter_flux()">
+    <div .icones-flux aria-hidden="true" style="display: none">
+        icone-succes
+        icone-information
+        icone-erreur
+    <div .liste-flux role="status">

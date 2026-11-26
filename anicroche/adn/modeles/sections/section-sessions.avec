@@ -31,6 +31,8 @@
         const echec    = reponses.find(reponse => reponse.error && reponse.code !== 404)
 
         $erreur_sessions = echec ? echec.error ?? "Erreur serveur" : false
+        if (!echec)
+            $notifier(ids.length > 1 ? "Sessions fermées" : "Session fermée")
 
         await $obtenir_compte()
         lire_sessions()

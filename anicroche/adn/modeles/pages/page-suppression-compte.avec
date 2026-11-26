@@ -8,7 +8,6 @@
 
     $erreur_mot_de_passe_suppression = false
     $erreur_clef_suppression         = false
-    $succes_clef_suppression         = false
 
     // Profils proposés à la suppression, chargés avant l affichage de la page : le routeur
     // montre d ici là son modèle d attente

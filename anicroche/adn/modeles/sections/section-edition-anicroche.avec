@@ -1,5 +1,4 @@
 @script [
-    $succes_edition = false
     $erreur_edition = false
 
     // Une valeur vide s écrit - dans une adresse de l API
@@ -7,14 +6,13 @@
 
     const afficher_erreur = (reponse) =>
     {
-        $succes_edition = false
         $erreur_edition = reponse.error ?? "Erreur serveur"
     }
 
     const afficher_succes = (message) =>
     {
         $erreur_edition = false
-        $succes_edition = message
+        $notifier(message)
     }
 
     // Enregistre une source modifiée dans le brouillon : elle est corrigée si le brouillon a
@@ -136,9 +134,6 @@
             "Brouillon"
         carte
             formulaire [$enregistrer_brouillon]
-                @if [$succes_edition]
-                    succes-formulaire
-                        "$succes_edition"
                 @if [$erreur_edition]
                     erreur-formulaire
                         "$erreur_edition"

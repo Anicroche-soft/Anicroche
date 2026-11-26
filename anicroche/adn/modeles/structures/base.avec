@@ -258,6 +258,7 @@
             $jeton_acces = null
             localStorage.removeItem('id_profil')
             $oublier_onglets()
+            $notifier("Déconnecté")
         }
 
         if (data && data.est_connecte !== undefined)
@@ -562,6 +563,16 @@
             $fermer_boite()
     }
 
+    // ─── Notifications ───────────────────────────────────────────────────────
+
+    // Affiche un message dans le flux (modèle flux), sous la forme d un nom suivi d un participe
+    // (« Brouillon enregistré ») ; icone : succes, information ou erreur. cible, facultative :
+    // une adresse, ouverte par un clic sur la notification, ou une fonction, appelée par ce clic
+    $notifier = (texte, icone = 'succes', cible = null) =>
+    {
+        document.querySelector('.flux')?.dispatchEvent(new CustomEvent('notifier', { detail: { texte, icone, cible } }))
+    }
+
     // ─── Démarrage ───────────────────────────────────────────────────────────
 
     // Compte et types d anicroches, chargés au démarrage : le routeur attend leur chargement,
@@ -572,5 +583,7 @@
 tete
 
 corps
+
+flux
 
 fond

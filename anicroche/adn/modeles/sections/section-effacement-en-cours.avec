@@ -39,6 +39,7 @@
 
         // Les vérifications de page sont statiques : la page du compte est reconstruite
         // en passant par l accueil
+        $notifier("Compte restauré")
         await $obtenir_compte()
         $navigate_to('/')
     }

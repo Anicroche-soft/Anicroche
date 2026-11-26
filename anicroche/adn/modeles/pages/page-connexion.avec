@@ -12,7 +12,6 @@
 
     $erreur_courriel     = false
     $erreur_mot_de_passe = false
-    $succes_clef         = false
     $erreur_clef         = false
     $erreur_conditions   = false
 

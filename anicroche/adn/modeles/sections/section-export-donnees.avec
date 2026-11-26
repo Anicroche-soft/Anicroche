@@ -36,6 +36,7 @@
         telecharger(reponse.data.export)
 
         $erreur_export = false
+        $notifier("Données exportées")
         $navigate_to('/compte')
     }
 ]

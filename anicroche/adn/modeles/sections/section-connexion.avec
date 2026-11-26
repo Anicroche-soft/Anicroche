@@ -60,14 +60,11 @@
         {
             $ids.push(reponse.data.id)
             $courriels_clefs.set($courriel_formulaire, Date.now())
-            $succes_clef   = "Une nouvelle clef a été envoyée"
+            $notifier("Nouvelle clef envoyée")
             $erreur_clef = false
         }
         else
-        {
             $erreur_clef = "Veuillez réessayer dans trente secondes"
-            $succes_clef   = false
-        }
     }
 
     $depart_clef = () => $courriels_clefs.get($courriel_formulaire) ?? null
@@ -98,22 +95,13 @@
                     ids: $ids
                 })
                 if (reponse.error)
-                {
-                    $succes_clef = false
                     $erreur_clef = "Erreur serveur"
-                }
             }
             else
-            {
-                $succes_clef = false
                 $erreur_clef = "Réponse serveur invalide"
-            }
         }
         else
-        {
-            $succes_clef = false
             $erreur_clef = "La clef de validation est invalide"
-        }
     }
 
     // Même âge minimum que l API, qui vérifie aussi : voir age_minimum dans age.sans
@@ -175,6 +163,7 @@
             return
         }
 
+        $notifier("Compte créé")
         reponse = await $create('connexion', {
             coordonnee   : $courriel_formulaire,
             mot_de_passe : $mot_de_passe_formulaire
@@ -197,7 +186,6 @@
 
     $basculer_vers_section_clef = () =>
     {
-        $succes_clef = false
         $erreur_clef = false
         $basculer_vers_onglet_precedant()
     }
@@ -251,9 +239,6 @@
             "Saisissez la clef de validation"
         carte
             formulaire [$envoyer_formulaire_clef]
-                @if [$succes_clef]
-                    succes-formulaire
-                        "$succes_clef"
                 @if [$erreur_clef]
                     erreur-formulaire
                         "$erreur_clef"

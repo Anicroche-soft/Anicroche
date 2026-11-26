@@ -72,8 +72,9 @@
     {
         const erreur = lire_erreur_clef(await envoyer_clef($mot_de_passe_suppression))
 
-        $succes_clef_suppression = erreur ? false : "Une nouvelle clef a été envoyée"
         $erreur_clef_suppression = erreur
+        if (!erreur)
+            $notifier("Nouvelle clef envoyée")
     }
 
     $envoyer_formulaire_clef_suppression = async () =>
@@ -86,7 +87,6 @@
 
         if (reponse.error)
         {
-            $succes_clef_suppression = false
             $erreur_clef_suppression = reponse.code === 403
                 ? "La clef de validation est invalide"
                 : reponse.error ?? "Erreur serveur"
@@ -103,7 +103,6 @@
     {
         $erreur_mot_de_passe_suppression = false
         $erreur_clef_suppression         = false
-        $succes_clef_suppression         = false
         $basculer_vers_onglet_precedant()
     }
 ]
@@ -164,9 +163,6 @@
             "Saisissez la clef de validation"
         carte
             formulaire [$envoyer_formulaire_clef_suppression]
-                @if [$succes_clef_suppression]
-                    succes-formulaire
-                        "$succes_clef_suppression"
                 @if [$erreur_clef_suppression]
                     erreur-formulaire
                         "$erreur_clef_suppression"
