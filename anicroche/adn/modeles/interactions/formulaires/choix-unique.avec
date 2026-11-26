@@ -23,8 +23,12 @@
             if (!selectionne)
                 return
 
+            // Mesures ramenées à l échelle de la mise en page : un ancêtre transformé (boîte de
+            // dialogue qui s agrandit à l ouverture) fausserait sinon la position du fond, sans
+            // que le ResizeObserver ne la corrige à la fin de sa transition
             const rect_conteneur = conteneur.getBoundingClientRect()
-            const rect_label = selectionne.getBoundingClientRect()
+            const rect_label     = selectionne.getBoundingClientRect()
+            const echelle        = conteneur.offsetWidth ? rect_conteneur.width / conteneur.offsetWidth : 1
 
             // ← bloc ajouté
             if (sans_transition)
@@ -34,8 +38,8 @@
                 timer_redimensionnement = setTimeout(() => conteneur.style.removeProperty('--d-animation'), 150)
             }
 
-            conteneur.style.setProperty('--choix-x', `${rect_label.left - rect_conteneur.left}px`)
-            conteneur.style.setProperty('--choix-largeur', `${rect_label.width}px`)
+            conteneur.style.setProperty('--choix-x',       `${(rect_label.left - rect_conteneur.left) / echelle}px`)
+            conteneur.style.setProperty('--choix-largeur', `${rect_label.width / echelle}px`)
         }
 
         const sur_changement = () => actualiser()
