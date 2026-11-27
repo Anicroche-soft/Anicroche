@@ -112,7 +112,7 @@
         const profils = await $search_all('profils',
             `#gerants.id = $id_compte`,
             { $id_compte: id_compte },
-            { select: 'id ; identifiant ; pseudonyme ; role ; date_creation ; sort ; gerants.id', order: [[ 'date_creation', 'increasing' ]] }
+            { select: 'id ; identifiant ; pseudonyme ; role ; date_creation ; sort ; date_fermeture ; desactive ; gerants.id', order: [[ 'date_creation', 'increasing' ]] }
         )
 
         const resultat = []
@@ -124,7 +124,9 @@
                 role                  : profil.role,
                 date_creation         : profil.date_creation,
                 est_partage           : profil.gerants.length > 1,
-                sort_a_l_effacement   : profil.sort ?? null,
+                est_desactive         : !!profil.desactive,
+                sort                  : profil.sort ?? null,
+                date_fermeture        : profil.date_fermeture ?? null,
                 identifiants_reserves : (await $lire_reservations_profil(profil.id))
                     .map(reservation => ({ identifiant: reservation.identifiant, date_fin: reservation.date_fin })),
                 anicroches            : await lire_anicroches(profil.id)

@@ -49,11 +49,11 @@ En tant qu'éditeur non professionnel, la loi pour la confiance dans l'économie
 
 | | |
 |---|---|
-| Finalité | Permettre à l'utilisateur de créer et gérer des profils publics |
+| Finalité | Permettre à l'utilisateur de créer, gérer, désactiver et fermer des profils publics |
 | Base légale | Exécution du contrat — art. 6.1.b |
-| Données | Identifiant ; pseudonyme ; date de création ; comptes gérants ; anicroches dont le profil est l'auteur ; choix fait pour le profil lors d'une demande d'effacement ; anciens identifiants réservés (table `identifiants_reserves` : identifiant, date de fin, profil) |
-| Visibilité | Identifiant et pseudonyme : publics. Le lien entre un profil et le compte qui le gère n'est pas public. Les identifiants réservés ne sont pas publiés : un identifiant réservé est seulement refusé comme déjà utilisé |
-| Durée de conservation | Jusqu'à la suppression du profil. À l'effacement de son dernier gérant, le profil est supprimé, ou anonymisé si l'utilisateur ne l'a pas demandé ou si le compte est supprimé pour inactivité (voir § 4.1). Un ancien identifiant reste réservé 30 jours (voir § 4) |
+| Données | Identifiant ; pseudonyme ; date de création ; comptes gérants ; anicroches dont le profil est l'auteur ; désactivation ; fermeture demandée (choix entre anonymisation et suppression, échéance, nombre de rappels envoyés), ou choix fait pour le profil lors d'une demande d'effacement du compte ; anciens identifiants réservés (table `identifiants_reserves` : identifiant, date de fin, profil) |
+| Visibilité | Identifiant et pseudonyme : publics. Le lien entre un profil et le compte qui le gère n'est pas public. Les identifiants réservés ne sont pas publiés : un identifiant réservé est seulement refusé comme déjà utilisé. La désactivation et la fermeture demandée ne sont visibles que des gérants. La désactivation ne supprime aucune donnée et n'a pas encore d'effet visible : le masquage du profil et de ses publications aux autres utilisateurs viendra avec la publication des contenus des utilisateurs |
+| Durée de conservation | Jusqu'à la fermeture du profil : anonymisation ou suppression 30 jours après la demande de son seul gérant (voir § 4.2). À l'effacement de son dernier gérant, le profil est supprimé, ou anonymisé si l'utilisateur ne l'a pas demandé ou si le compte est supprimé pour inactivité (voir § 4.1). Un ancien identifiant reste réservé 30 jours (voir § 4) |
 
 **Réservation des identifiants** (intérêt légitime — art. 6.1.f : empêcher l'usurpation d'un profil, et permettre de défaire un renommage non voulu). Quand un profil change d'identifiant, l'ancien (et ceux de ses dérivés renommés avec lui) lui reste réservé 30 jours : lui seul peut le reprendre, ce qui supprime la réservation. Un profil a au plus 3 réservations actives : au-delà, il doit attendre la fin de la plus ancienne pour changer d'identifiant, pour qu'on ne puisse ni accaparer des noms ni faire expirer le vrai nom d'un profil à force de le renommer. Le courriel envoyé aux gérants indique la date de fin.
 
@@ -143,6 +143,7 @@ Avant d'ajouter un nouveau prestataire qui reçoit des données personnelles : v
 | Compte dont l'effacement est demandé | Suspendu dès la demande, effacé 30 jours après (rappels 14, 7, 3 et 1 jours avant) ; disparition des sauvegardes 7 jours plus tard au plus | `$traiter_fins_de_comptes` (`effacement.sans`), voir § 4.1 |
 | Versions publiées des pages légales | Sans limite : elles prouvent ce que chaque utilisateur a accepté | Voir § 11 |
 | Annonces des nouvelles versions | Jusqu'à l'effacement du compte | Table `annonces`, effacée avec le compte (`effacement.sans`), voir § 11 |
+| Profil dont la fermeture est demandée | Anonymisé ou supprimé 30 jours après la demande (rappels 14, 7, 3 et 1 jours avant), restaurable d'ici là ; disparition des sauvegardes 7 jours plus tard au plus | `$traiter_fermetures_profils` (`profils/fermetures_profils.sans`), voir § 4.2 |
 | Identifiant réservé (ancien identifiant d'un profil renommé, ou d'un profil anonymisé ou supprimé) | 30 jours, suppression quotidienne après expiration | `$nettoyer_identifiants_reserves` (`profils/reservations.sans`), voir § 2.3 et § 4.1 |
 | Sauvegardes | Une par jour, 7 jours (la sauvegarde du jour et celles des 6 jours précédents) : une donnée supprimée y subsiste 7 jours au plus | Sauvegardes automatiques d'Infomaniak, voir § 7 |
 | Journaux du serveur | 30 jours au plus (rotation chaque nuit, 29 archives et le fichier du jour) ; 7 jours de plus au plus dans les sauvegardes | `pm2-logrotate` sur le serveur, voir § 2.6 |
@@ -162,7 +163,7 @@ Avant d'ajouter un nouveau prestataire qui reçoit des données personnelles : v
 - les comptes gérants d'un profil `maitre` (liste `ROLES_PROTEGES` d'`effacement.sans`) : comptes d'administration du service ;
 - les comptes dont `date_conservation` est dans le futur : champ renseigné à la main en cas de litige, de réquisition judiciaire, de somme due ou de solde restant (relation contractuelle en cours, art. 17.3.b et e). Le motif est noté dans le registre des demandes (§ 9).
 
-**Ce qui est effacé** : le compte, ses coordonnées, ses sessions, ses codes et ses annonces. Pour un profil que le compte gérait avec d'autres, seul le lien de gérance disparaît. Pour un profil dont il était le seul gérant :
+**Ce qui est effacé** : le compte, ses coordonnées, ses sessions, ses codes et ses annonces. Pour un profil que le compte gérait avec d'autres, seul le lien de gérance disparaît. Pour un profil dont il était le seul gérant (un profil dont la fermeture était déjà demandée garde son propre choix, § 4.2) :
 
 | Choix | Effet |
 |---|---|
@@ -176,6 +177,18 @@ Les profils dérivés d'un profil racine anonymisé ou supprimé, gérés par d'
 L'identifiant d'un profil anonymisé ou supprimé reste réservé 30 jours, à aucun profil, comme ses propres réservations en cours (§ 2.3) : personne ne peut le prendre aussitôt pour se faire passer pour lui. Seule la chaîne de caractères est gardée, sans lien avec le profil ni avec le compte ; elle est supprimée à la fin de la réservation.
 
 **Confirmation** : un dernier courriel confirme l'effacement. Le journal n'enregistre que le motif (`COMPTE effacé (demande)` ou `(inactivité)`), sans identifiant.
+
+### 4.2. Fermeture et désactivation des profils
+
+**Fermeture** (page `/profil/suppression`, route `PATCH /profil/<id> { sort, mot_de_passe }`) : le gérant d'un profil peut demander son anonymisation (choix par défaut) ou sa suppression, avec les mêmes effets qu'à l'effacement d'un compte (tableau du § 4.1, détachement des profils dérivés, identifiant réservé 30 jours à aucun profil) :
+
+- la demande exige le mot de passe ; elle est refusée pour un profil géré par plusieurs comptes, pour un profil `maitre` (liste `ROLES_PROTEGES` de `fermetures_profils.sans`) et pour le dernier profil du compte qui ne ferme pas : un compte garde toujours un profil ;
+- le profil reste utilisable jusqu'à l'échéance, 30 jours après la demande. Un courriel est envoyé à la demande, puis des rappels 14, 7, 3 et 1 jours avant, à toutes les adresses de chaque gérant ;
+- d'ici là, le gérant peut le restaurer depuis la page du profil (`PATCH /profil/<id> { sort: null }`, sans mot de passe) ;
+- à l'échéance, la tâche quotidienne vérifie de nouveau ces conditions : si elles ne sont plus remplies, la demande est annulée et le gérant prévenu ; sinon, le profil est fermé et un dernier courriel le confirme. Le journal n'enregistre que le motif (`PROFIL fermé (anonymisation)` ou `(suppression)`), sans identifiant ;
+- si l'effacement du compte est demandé entre-temps, le profil garde son choix et son échéance ; l'annulation de cet effacement ne les touche pas.
+
+**Désactivation** (page du profil, route `PATCH /profil/<id> { desactive }`) : tout gérant peut désactiver ou réactiver le profil, sans mot de passe puisque c'est réversible ; chaque changement est annoncé par courriel à tous les gérants. Elle ne supprime aucune donnée.
 
 ---
 
@@ -235,23 +248,23 @@ Ne pas faire de copie de la base en dehors d'Infomaniak (sur un ordinateur perso
 
 ### 7.1. Restauration de la base
 
-Une restauration ramène les données effacées depuis la sauvegarde, dont des comptes effacés. Il n'est pas nécessaire d'en garder la liste : un compte n'est effacé qu'au moins 30 jours après une étape enregistrée dans la base (demande d'effacement, ou premier avertissement d'inactivité, § 4.1), donc présente dans toute sauvegarde de moins de 7 jours. La tâche quotidienne `$traiter_fins_de_comptes` (`effacement.sans`, à minuit) efface donc de nouveau, d'elle-même, tout compte revenu, avec le même sort pour ses profils (choisi à la demande, et restauré avec elle). Ses adresses reçoivent une seconde fois le courriel de confirmation.
+Une restauration ramène les données effacées depuis la sauvegarde, dont des comptes effacés et des profils fermés. Il n'est pas nécessaire d'en garder la liste : un compte n'est effacé qu'au moins 30 jours après une étape enregistrée dans la base (demande d'effacement, ou premier avertissement d'inactivité, § 4.1), et un profil n'est fermé que 30 jours après sa demande (§ 4.2), donc présente dans toute sauvegarde de moins de 7 jours. Les tâches quotidiennes `$traiter_fins_de_comptes` (`effacement.sans`) et `$traiter_fermetures_profils` (`fermetures_profils.sans`), à minuit, effacent donc de nouveau, d'elles-mêmes, tout compte revenu, avec le même sort pour ses profils (choisi à la demande, et restauré avec elle), et ferment tout profil revenu. Les gérants reçoivent une seconde fois le courriel de confirmation.
 
 **Avant :**
 
 1. Arrêter l'API (`pm2 stop apicroche`) : plus aucune écriture pendant l'opération.
-2. Relever, dans la base actuelle, les comptes dont l'effacement ou la suppression pour inactivité a été **annulé** depuis la date de la sauvegarde (restauration, connexion) : la sauvegarde les montre encore en attente d'effacement, et la tâche quotidienne les effacerait à tort si leur échéance est passée. En pratique, ceux dont `date_derniere_activite` est postérieure à la sauvegarde et dont `date_demande_effacement` est vide ; garder leurs seuls `id`, sur le serveur, le temps de l'opération.
+2. Relever, dans la base actuelle, les comptes dont l'effacement ou la suppression pour inactivité a été **annulé** depuis la date de la sauvegarde (restauration, connexion) : la sauvegarde les montre encore en attente d'effacement, et la tâche quotidienne les effacerait à tort si leur échéance est passée. En pratique, ceux dont `date_derniere_activite` est postérieure à la sauvegarde et dont `date_demande_effacement` est vide. De même pour les profils : relever ceux dont `date_fermeture` est vide, car une fermeture annulée depuis la sauvegarde y figure encore. Garder leurs seuls `id`, sur le serveur, le temps de l'opération.
 
 **Restauration :** Manager → Hébergements & sites → l'hébergement → Restauration → restauration avancée → la base seule, à la date choisie.
 
 **Après :**
 
-3. Pour chaque compte relevé à l'étape 2, remettre à vide `date_demande_effacement`, `sort` de ses profils, `nombre_avertissements` et `date_premier_avertissement`, puis supprimer la liste.
+3. Pour chaque compte relevé à l'étape 2, remettre à vide `date_demande_effacement`, `sort` de ses profils (sauf ceux dont la fermeture est demandée), `nombre_avertissements` et `date_premier_avertissement`. Pour chaque profil relevé dont `date_fermeture` est revenue, remettre à vide `sort` et `date_fermeture`, et `nombre_avertissements` à 0. Supprimer ensuite les listes.
 4. Révoquer toutes les sessions (`date_revocation`) : celles fermées depuis la sauvegarde sont revenues, y compris une session volée qu'un utilisateur aurait fermée.
-5. Relancer l'API (`pm2 start apicroche`). Les comptes revenus sont effacés à la prochaine exécution de la tâche quotidienne, à minuit.
-6. Inscrire la restauration au registre des demandes (§ 9) : date, sauvegarde utilisée, comptes rétablis à l'étape 3.
+5. Relancer l'API (`pm2 start apicroche`). Les comptes et profils revenus sont effacés ou fermés à la prochaine exécution des tâches quotidiennes, à minuit.
+6. Inscrire la restauration au registre des demandes (§ 9) : date, sauvegarde utilisée, comptes et profils rétablis à l'étape 3.
 
-Les autres suppressions faites depuis la sauvegarde (adresse retirée, profil supprimé…) reviennent aussi : sur 7 jours au plus, elles se traitent à la main, à la demande des utilisateurs concernés. Une restauration des **fichiers** (par FTP ou restauration simple) n'est pas concernée, sauf `apicroche/depot/`, où un fichier supprimé depuis la sauvegarde revient : le supprimer de nouveau.
+Les autres suppressions faites depuis la sauvegarde (adresse retirée, désactivation d'un profil…) reviennent aussi : sur 7 jours au plus, elles se traitent à la main, à la demande des utilisateurs concernés. Une restauration des **fichiers** (par FTP ou restauration simple) n'est pas concernée, sauf `apicroche/depot/`, où un fichier supprimé depuis la sauvegarde revient : le supprimer de nouveau.
 
 ---
 
@@ -283,9 +296,9 @@ Les demandes arrivent à l'adresse de contact RGPD (§ 1). **Délai de réponse 
 
    | Droit | Traitement |
    |---|---|
-   | Accès / portabilité (art. 15 et 20) | L'utilisateur télécharge lui-même ses données en JSON depuis son compte (bouton « Exporter les données » de la page du compte, page `/compte/export`, route `POST /export` d'`export.sans`), y compris pendant l'effacement demandé : compte (dates, dont naissance, inscription, acceptation des conditions, dernière activité, avertissements, demande d'effacement, et coordonnées), sessions (révoquées comprises, tant qu'elles ne sont pas nettoyées), profils gérés, leurs identifiants réservés et leurs anicroches (versions, brouillons et sources). Pour un profil partagé, l'export contient toutes ses anicroches, y compris celles qu'un autre gérant a rédigées : l'auteur est le profil, pas le compte. Le mot de passe est demandé, chaque export est annoncé à toutes les adresses du compte, et la route est limitée à 5 requêtes par 10 min. Sont exclus les empreintes, les clefs, les identifiants internes et les autres gérants des profils partagés (seul le partage est indiqué). Une demande reçue par courriel : l'inviter à le faire en ligne ; si ce n'est pas possible, même extraction à la main |
+   | Accès / portabilité (art. 15 et 20) | L'utilisateur télécharge lui-même ses données en JSON depuis son compte (bouton « Exporter les données » de la page du compte, page `/compte/export`, route `POST /export` d'`export.sans`), y compris pendant l'effacement demandé : compte (dates, dont naissance, inscription, acceptation des conditions, dernière activité, avertissements, demande d'effacement, et coordonnées), sessions (révoquées comprises, tant qu'elles ne sont pas nettoyées), profils gérés (dont leur désactivation et leur fermeture demandée), leurs identifiants réservés et leurs anicroches (versions, brouillons et sources). Pour un profil partagé, l'export contient toutes ses anicroches, y compris celles qu'un autre gérant a rédigées : l'auteur est le profil, pas le compte. Le mot de passe est demandé, chaque export est annoncé à toutes les adresses du compte, et la route est limitée à 5 requêtes par 10 min. Sont exclus les empreintes, les clefs, les identifiants internes et les autres gérants des profils partagés (seul le partage est indiqué). Une demande reçue par courriel : l'inviter à le faire en ligne ; si ce n'est pas possible, même extraction à la main |
    | Rectification (art. 16) | L'utilisateur corrige lui-même ses données depuis son compte (page « Modifier le compte », `/compte/edition`, et sessions ouvertes sur `/profil`), voir le tableau ci-dessous. Profils : identifiant et pseudonyme. Une demande reçue par courriel : l'inviter à le faire en ligne ; si ce n'est pas possible, modification manuelle par l'API (les champs `crypt` et `hash` doivent passer par sans.js, pas par du SQL direct) |
-   | Effacement (art. 17) | L'utilisateur le demande lui-même depuis son compte (§ 4.1). Une demande reçue par courriel depuis l'adresse du compte : l'inviter à le faire en ligne, ou, si ce n'est pas possible, renseigner `date_demande_effacement` du compte (effacement au bout du délai). Retrait d'une publication anonymisée qui identifie son auteur : vider ses sources |
+   | Effacement (art. 17) | L'utilisateur le demande lui-même depuis son compte (§ 4.1), ou, pour un seul profil qu'il gère seul, depuis la page du profil (§ 4.2). Une demande reçue par courriel depuis l'adresse du compte : l'inviter à le faire en ligne, ou, si ce n'est pas possible, renseigner `date_demande_effacement` du compte (effacement au bout du délai). Retrait d'une publication anonymisée qui identifie son auteur : vider ses sources |
    | Opposition (art. 21) et retrait du consentement | Arrêter le traitement concerné (ex. décocher les fonctionnalités liées à l'âge) |
    | Limitation (art. 18) | Marquer le compte et suspendre le traitement contesté le temps de la vérification |
 
@@ -300,8 +313,10 @@ Les demandes arrivent à l'adresse de contact RGPD (§ 1). **Délai de réponse 
    | Mot de passe | `PATCH /compte/<id>` | session, code `modification-mot-de-passe` envoyé à l'adresse principale (sans l'ancien mot de passe, pour couvrir l'oubli) | Les autres sessions sont fermées |
 
    | Identifiant d'un profil | `PATCH /profil/<id>` | session d'un gérant, mot de passe | Un profil racine renommé renomme ses profils dérivés ; le nom d'affichage seul ne demande que la session |
+   | Fermeture d'un profil | `PATCH /profil/<id> { sort }` | session du seul gérant, mot de passe (pas pour l'annulation) | Profil ni `maitre`, ni dernier du compte ; fermeture 30 jours plus tard (§ 4.2) |
+   | Désactivation d'un profil | `PATCH /profil/<id> { desactive }` | session d'un gérant | Réversible |
 
-   Chaque changement d'adresse ou de mot de passe est annoncé par courriel à toutes les adresses du compte, y compris celle qui vient d'être retirée. Chaque changement d'identifiant est annoncé à toutes les adresses de chaque gérant d'un profil renommé (dérivés compris), avec l'ancien et le nouvel identifiant. Une personne qui a perdu l'accès à son adresse principale ne peut pas encore la remplacer seule.
+   Chaque changement d'adresse ou de mot de passe est annoncé par courriel à toutes les adresses du compte, y compris celle qui vient d'être retirée. Chaque changement d'identifiant est annoncé à toutes les adresses de chaque gérant d'un profil renommé (dérivés compris), avec l'ancien et le nouvel identifiant ; de même chaque demande, rappel, annulation et fin de fermeture d'un profil, et chaque désactivation ou réactivation. Une personne qui a perdu l'accès à son adresse principale ne peut pas encore la remplacer seule.
 
 3. **Répondre** à la personne, en indiquant ce qui a été fait, ou pourquoi la demande est refusée et qu'elle peut saisir la CNIL.
 4. **Consigner** la demande ci-dessous (sans y recopier de données personnelles au-delà du nécessaire).

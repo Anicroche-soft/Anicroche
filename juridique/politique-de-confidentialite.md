@@ -15,9 +15,9 @@ Pour toute question ou demande sur vos données : royaume@anicroche.com. Les cou
 | Créer votre compte et vous connecter | Adresses électroniques (cinq au plus), mot de passe, codes de connexion et de confirmation, date d'inscription, date d'acceptation des conditions d'utilisation, annonces des nouvelles versions des conditions et de cette politique (date et moyen : courriel, inscription ou restauration du compte) | Exécution du contrat (les conditions d'utilisation) |
 | Sécuriser votre compte et limiter les abus | Adresse IP, navigateur et appareil utilisés, dates de vos sessions | Intérêt légitime : la sécurité du service |
 | Vérifier votre âge | Date de naissance | Obligation légale (âge minimum de 15 ans) et protection des mineurs |
-| Faire vivre vos profils | Identifiant, pseudonyme, date de création, contenus publiés | Exécution du contrat |
+| Faire vivre vos profils | Identifiant, pseudonyme, date de création, contenus publiés, désactivation | Exécution du contrat |
 | Empêcher qu'on se fasse passer pour vos profils | Anciens identifiants de vos profils, réservés après un changement ou une suppression | Intérêt légitime : la protection de votre identité sur le service |
-| Gérer la fin de votre compte | Date de dernière activité, avertissements envoyés, date de la demande de suppression, choix fait pour vos profils | Exécution du contrat, et limitation de la durée de conservation |
+| Gérer la fin de votre compte et de vos profils | Date de dernière activité, avertissements et rappels envoyés, date de la demande de suppression du compte, choix fait pour vos profils et date de leur fermeture | Exécution du contrat, et limitation de la durée de conservation |
 
 L'identifiant et le pseudonyme de vos profils, ainsi que ce qu'ils publient, sont publics. Vos adresses électroniques, votre date de naissance et le lien entre votre compte et vos profils ne le sont pas.
 
@@ -38,10 +38,11 @@ Les courriels que vous écrivez à royaume@anicroche.com, y compris vos réponse
 | Compte | Jusqu'à sa suppression : 30 jours après votre demande, ou après 3 ans sans activité, avec des avertissements par courriel au moins 30 jours avant |
 | Sessions | 30 jours au plus, puis supprimées le lendemain de leur fin |
 | Codes de connexion et de confirmation | Valables 15 minutes, supprimés le lendemain au plus tard |
+| Profil dont vous demandez la fermeture | Anonymisé ou supprimé, selon votre choix, 30 jours après votre demande, avec des rappels par courriel ; vous pouvez le restaurer d'ici là |
 | Ancien identifiant d'un profil | Réservé 30 jours après un changement d'identifiant ou la disparition du profil : seul ce profil peut le reprendre pendant ce temps (personne, s'il a disparu) |
 | Sauvegardes | Une sauvegarde est faite chaque jour et gardée 7 jours : une donnée supprimée peut y subsister 7 jours au plus |
 
-À la suppression du compte, chaque profil que vous gériez seul est anonymisé (il perd son identifiant et son pseudonyme, et ses contenus restent visibles sans nom), ou supprimé si vous l'avez choisi. Un contenu anonymisé qui permettrait malgré tout de vous identifier peut être retiré sur simple demande.
+À la suppression du compte, chaque profil que vous gériez seul est anonymisé (il perd son identifiant et son pseudonyme, et ses contenus restent visibles sans nom), ou supprimé si vous l'avez choisi ; il en va de même pour un profil dont vous demandez la fermeture. Un contenu anonymisé qui permettrait malgré tout de vous identifier peut être retiré sur simple demande.
 
 ## 5. Ce qui est enregistré sur votre appareil
 
@@ -61,6 +62,7 @@ Vous pouvez à tout moment :
 - **obtenir une copie de vos données**, dans un fichier réutilisable : bouton « Exporter les données » de la page de votre compte ;
 - **les corriger** : page « Modifier le compte » (adresses, date de naissance, mot de passe) et page de vos profils ;
 - **supprimer votre compte** : bouton « Supprimer le compte » de la page de votre compte (effacement 30 jours après la demande, voir l'article 4) ;
+- **supprimer ou anonymiser un profil** que vous gérez seul : bouton « Supprimer le profil » de la page du profil (fermeture 30 jours après la demande, voir l'article 4) ;
 - **vous opposer** à un traitement fondé sur l'intérêt légitime, ou **demander sa limitation**, en écrivant à l'adresse de contact.
 
 Une demande par courriel doit être envoyée depuis une adresse de votre compte. Elle reçoit une réponse dans un délai d'un mois.

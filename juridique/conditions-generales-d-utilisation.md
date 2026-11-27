@@ -28,6 +28,15 @@ Un profil peut être géré par plusieurs comptes. Chacun de ses gérants agit a
 
 Un identifiant ou un pseudonyme ne doit pas faire croire à une autre identité, porter atteinte aux droits d'autrui (nom, marque…) ni être injurieux.
 
+**Désactivation.** Tout gérant peut désactiver un profil, puis le réactiver, depuis la page du profil. Ses gérants en sont prévenus par courriel.
+
+**Fermeture.** Le seul gérant d'un profil peut demander, avec son mot de passe, que le profil soit :
+
+- anonymisé, par défaut : il perd son identifiant et son pseudonyme, et ses contenus restent visibles sans nom ;
+- ou supprimé : ses contenus qui n'ont pas d'autre auteur ne sont plus visibles.
+
+La fermeture a lieu 30 jours après la demande ; d'ici là, le profil reste utilisable et peut être restauré depuis sa page. Un profil géré par plusieurs comptes ne peut pas être fermé, et un compte garde toujours au moins un profil.
+
 ## 5. Contenus publiés
 
 L'utilisateur est responsable des contenus qu'il publie. Il s'interdit notamment de publier des contenus :
@@ -42,7 +51,7 @@ Tout contenu illicite peut être signalé selon les modalités indiquées dans l
 
 L'utilisateur reste propriétaire de ses contenus. En les publiant, il accorde à l'éditeur, gratuitement et pour le monde entier, une licence non exclusive pour les héberger, les reproduire, les adapter au format du site et les afficher, dans le seul but de faire fonctionner le service.
 
-Cette licence dure aussi longtemps que les droits d'auteur. **Elle est maintenue après la suppression du compte** : les contenus des profils anonymisés restent visibles, sans le nom de leur auteur (voir l'article 8). Une personne qui le demande peut toutefois obtenir le retrait d'un contenu qui permet de l'identifier.
+Cette licence dure aussi longtemps que les droits d'auteur. **Elle est maintenue après la suppression du compte ou la fermeture d'un profil** : les contenus des profils anonymisés restent visibles, sans le nom de leur auteur (voir les articles 4 et 8). Une personne qui le demande peut toutefois obtenir le retrait d'un contenu qui permet de l'identifier.
 
 ## 7. Disponibilité du service
 
@@ -59,7 +68,7 @@ Le service est fourni gratuitement et en l'état. L'éditeur s'efforce de le mai
 - anonymisé, par défaut : il perd son identifiant et son pseudonyme, et ses contenus restent visibles sans nom ;
 - ou supprimé, si l'utilisateur l'a choisi lors de sa demande : ses contenus ne sont plus visibles.
 
-Après une inactivité, les profils sont toujours anonymisés. Un profil géré avec d'autres comptes continue d'exister avec ses autres gérants.
+Après une inactivité, les profils sont toujours anonymisés. Un profil géré avec d'autres comptes continue d'exister avec ses autres gérants. Un profil dont la fermeture était déjà demandée garde le choix fait pour lui (article 4).
 
 **Manquements.** En cas de manquement grave ou répété à ces conditions, l'éditeur peut suspendre ou supprimer un compte, après avoir informé l'utilisateur, sauf urgence ou obstacle légal. **À compléter** quand la modération existera.
 

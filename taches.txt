@@ -4,7 +4,6 @@ Tâches :
 - permettre de remplacer une adresse principale perdue (changement différé, avec opposition possible depuis l'adresse actuelle)
 - mettre en place la configuration de compte et de profils (dont la case à cocher des fonctionnalités liées à l'âge, voir juridique/RGPD.md § 2.4, la teinte, le fuseau horaire, les langues)
 - ajout des comptes sous contrôle parental
-- reporter la fermeture des profils (anonymisation ou suppression après 30 jours, restauration) et leur désactivation dans juridique/RGPD.md (§ 2 et § 4.1), juridique/conditions-generales-d-utilisation.md et juridique/politique-de-confidentialite.md
 - voir si /profil/<id>/derives peut être modifiée
 
 Tâches dépendantes :
