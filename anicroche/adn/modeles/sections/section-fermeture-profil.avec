@@ -1,0 +1,93 @@
+@script [
+    $erreur_fermeture_profil = false
+
+    // Profil dont la fermeture est demandée : « suppression » ou « anonymisation », et sa date
+    $sort_fermeture_profil = $profil?.date_fermeture ? $profil.sort : null
+    $date_fermeture_profil = $formater_date($profil?.date_fermeture)
+
+    // Booléen : l API renvoie 0 ou 1, et 0 est vrai dans une condition
+    $profil_desactive = !!$profil?.desactive
+
+    // Un profil protégé ne peut être ni supprimé ni anonymisé par son gérant
+    $profil_supprimable = $profil?.role !== 'maitre'
+
+    // Recharge le compte, puis le profil affiché, pour que la section reflète le changement
+    const recharger_profil = async (id) =>
+    {
+        const reponse = await $search('moi')
+        if (reponse.error)
+            return
+
+        $compte = reponse.data
+        $selectionner_profil(id)
+        $sort_fermeture_profil = $profil?.date_fermeture ? $profil.sort : null
+        $date_fermeture_profil = $formater_date($profil?.date_fermeture)
+        $profil_desactive      = !!$profil?.desactive
+    }
+
+    const modifier_profil = async (corps, notification) =>
+    {
+        const id      = $profil.id
+        const reponse = await $update(`profil/${encodeURIComponent(id)}`, corps)
+
+        if (reponse.error)
+        {
+            $erreur_fermeture_profil = reponse.error ?? "La modification du profil a échoué"
+            return
+        }
+
+        $erreur_fermeture_profil = false
+        $notifier(notification)
+        await recharger_profil(id)
+    }
+
+    $restaurer_profil = () => modifier_profil({ sort: null }, "Profil restauré")
+
+    $basculer_desactivation_profil = () => $profil_desactive
+        ? modifier_profil({ desactive: false }, "Profil réactivé")
+        : modifier_profil({ desactive: true }, "Profil désactivé")
+]
+
+@if [$sort_fermeture_profil]
+    section [fermeture-profil]
+        titre
+            @if [$sort_fermeture_profil = suppression]
+                "Votre profil va être supprimé"
+            @else
+                "Votre profil va être anonymisé"
+        carte
+            @if [$erreur_fermeture_profil]
+                erreur-formulaire
+                    "$erreur_fermeture_profil"
+            @if [$sort_fermeture_profil = suppression]
+                <p>
+                    "La suppression de ce profil a été demandée. Il sera supprimé définitivement le $date_fermeture_profil."
+            @else
+                <p>
+                    "L'anonymisation de ce profil a été demandée. Il perdra son identifiant et son nom d'affichage le $date_fermeture_profil."
+            <p>
+                "Si vous avez changé d'avis, ou si vous n'êtes pas à l'origine de cette demande, vous pouvez encore restaurer votre profil. Pensez alors à changer votre mot de passe."
+            ligne
+                bouton-action [$restaurer_profil]
+                    "Restauration"
+
+@else
+    section [fermeture-profil]
+        titre
+            "Disponibilité du profil"
+        carte
+            @if [$erreur_fermeture_profil]
+                erreur-formulaire
+                    "$erreur_fermeture_profil"
+            @if [$profil_desactive]
+                information-formulaire
+                    "Ce profil est désactivé : il est masqué aux autres utilisateurs jusqu'à ce que vous le réactiviez."
+            ligne
+                bouton-action [$basculer_desactivation_profil]
+                    @if [$profil_desactive]
+                        "Réactiver le profil"
+                    @else
+                        "Désactiver le profil"
+                @if [$profil_supprimable]
+                    bouton-ancre [/profil/suppression]
+                        "Supprimer le profil"

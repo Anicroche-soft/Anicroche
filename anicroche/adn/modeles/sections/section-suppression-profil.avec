@@ -1,0 +1,132 @@
+@script [
+    const id_profil_supprime = $profil.id
+
+    // Raison pour laquelle le profil ne peut pas être fermé, comme l API la vérifie : un profil
+    // protégé, déjà en cours de fermeture, ou le dernier profil du compte qui ne ferme pas
+    const autres_profils = $compte.is_gerant_of_profils
+        .filter(profil => profil.id !== id_profil_supprime && !profil.date_fermeture)
+
+    $empechement_suppression_profil =
+        $profil.role === 'maitre'
+            ? "Ce profil est protégé : il ne peut être ni supprimé ni anonymisé."
+        : $profil.date_fermeture
+            ? "La fermeture de ce profil est déjà demandée. Vous pouvez la suivre, ou l'annuler, depuis la page du profil."
+        : !autres_profils.length
+            ? "Ce profil est le seul de votre compte : il ne peut être ni supprimé ni anonymisé. Créez d'abord un autre profil."
+        : null
+
+    $exemple_derive_suppression = `@${$profil.identifiant}.exemple devient @${$profil.identifiant}-exemple`
+
+    $mettre_a_jour_sort_suppression = () =>
+    {
+        $sort_suppression_profil = $node.value
+    }
+
+    $envoyer_formulaire_sort_profil = () =>
+    {
+        $sort_suppression_profil = new FormData($node).get('sort') ?? 'anonymisation'
+        $basculer_vers_onglet_suivant()
+    }
+
+    $envoyer_formulaire_mot_de_passe_sort_profil = async () =>
+    {
+        const reponse = await $update(`profil/${encodeURIComponent(id_profil_supprime)}`, {
+            sort         : $sort_suppression_profil,
+            mot_de_passe : new FormData($node).get('mot_de_passe')
+        })
+
+        if (reponse.error)
+        {
+            $erreur_mot_de_passe_sort_profil = reponse.code === 429
+                ? "Trop de tentatives, veuillez réessayer plus tard"
+                : reponse.error ?? "La demande a échoué"
+            return
+        }
+
+        $erreur_mot_de_passe_sort_profil = false
+        $notifier($sort_suppression_profil === 'suppression'
+            ? "Suppression du profil demandée"
+            : "Anonymisation du profil demandée")
+
+        const reponse_compte = await $search('moi')
+        if (!reponse_compte.error)
+        {
+            $compte = reponse_compte.data
+            $selectionner_profil(id_profil_supprime)
+        }
+        $navigate_to('/profil')
+    }
+
+    $revenir_sort_profil = () =>
+    {
+        $erreur_mot_de_passe_sort_profil = false
+        $basculer_vers_onglet_precedant()
+    }
+]
+
+# $etape : sort (anonymisation ou suppression), ou mot_de_passe (confirmation de la demande)
+@args [$etape]
+
+@if [$etape = sort]
+    section [suppression-profil, centree]
+        titre [centre]
+            "Supprimer votre profil"
+        carte
+            @if [$empechement_suppression_profil]
+                information-formulaire
+                    "$empechement_suppression_profil"
+                ligne
+                    bouton-ancre [/profil]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+            @else
+                formulaire [$envoyer_formulaire_sort_profil]
+                    information-formulaire
+                        "Votre profil sera fermé trente jours après votre demande. D'ici là, vous aurez encore la possibilité de le restaurer."
+                    choix-unique [
+                        "Type de fermeture", sort
+                        $choix : [
+                            {etiquette : "Anonymisation", nom : anonymisation}
+                            {etiquette : "Suppression", nom : suppression}
+                        ]
+                        $valeur : $sort_suppression_profil
+                        $action : $mettre_a_jour_sort_suppression()
+                    ]
+                    @if [$sort_suppression_profil = suppression]
+                        <p>
+                            "Le profil disparaîtra, et ne sera plus l'auteur de ses anicroches : celles qui n'auront pas d'autre auteur ne seront plus visibles."
+                    @else
+                        <p>
+                            "Le profil perdra son identifiant et son nom d'affichage : ses contenus resteront visibles, sans son nom."
+                    @if [$nombre_derives_suppression > 0]
+                        alerte-formulaire
+                            @if [$nombre_derives_suppression > 1]
+                                "Ses $nombre_derives_suppression profils dérivés en seront détachés et renommés ($exemple_derive_suppression)."
+                            @else
+                                "Son profil dérivé en sera détaché et renommé ($exemple_derive_suppression)."
+                    bouton-soumission
+                        <span>
+                            "Continuer"
+                        icone-fleche-droite
+
+@else-if [$etape = mot_de_passe]
+    section [suppression-profil, centree]
+        titre [centre]
+            "Saisissez votre mot de passe"
+        carte
+            formulaire [$envoyer_formulaire_mot_de_passe_sort_profil]
+                @if [$erreur_mot_de_passe_sort_profil]
+                    erreur-formulaire
+                        "$erreur_mot_de_passe_sort_profil"
+                champ-mot-de-passe ["Mot de passe", mot_de_passe]
+                ligne
+                    bouton-action [$revenir_sort_profil]
+                        icone-fleche-gauche
+                        alt
+                            "Retour"
+                    bouton-soumission
+                        @if [$sort_suppression_profil = suppression]
+                            "Supprimer le profil"
+                        @else
+                            "Anonymiser le profil"

@@ -1,0 +1,35 @@
+@script [
+    // Nombre de profils dérivés du profil, s il est racine : ils en seront détachés. Chargé avant
+    // l affichage de la page, le routeur montre d ici là son modèle d attente
+    $nombre_derives_suppression = 0
+    if ($profil && !$profil.identifiant.includes('.'))
+    {
+        const reponse = await $search(`profil/${encodeURIComponent($profil.id)}/derives`)
+        $nombre_derives_suppression = reponse.error ? 0 : reponse.data?.nombre ?? 0
+    }
+
+    // Choix du premier onglet, envoyé avec le mot de passe du second
+    $sort_suppression_profil         = 'anonymisation'
+    $erreur_mot_de_passe_sort_profil = false
+]
+
+$titre = "Suppression de profil"
+$puce  = profil
+
+page [:(, $authentification : requise]
+    navigation
+        <div .gauche>
+            fleche-retour [/profil]
+
+        <div .centre>
+            <span>
+                "Suppression de profil"
+
+        <div .droite>
+            icone-horloge
+
+    onglet
+        section-suppression-profil [sort]
+
+    onglet
+        section-suppression-profil [mot_de_passe]

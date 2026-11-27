@@ -67,6 +67,10 @@
         display: grid;
         place-items: center;
 
+        /* Pendant son animation, l œuf transformé passe au-dessus de l ancre étendue : le disque
+           laisse le survol et les clics à l ancre */
+        pointer-events: none;
+
         --c-flux: var(--c-vif);
     }
 

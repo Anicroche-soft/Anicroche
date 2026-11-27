@@ -144,7 +144,7 @@
             #id = $id_compte
             `,
             { $id_compte: $context.compte.id },
-            { select: 'id ; date_inscription ; date_naissance ; date_demande_effacement ; date_changement_courriel_principal ; coordonnees.id,type,coordonnee,est_principale,date_ajout ; sessions.id,date_emission,date_validite,date_revocation,adresse_ip,agent_utilisateur,nom_appareil ; is_gerant_of_profils.id,identifiant,pseudonyme,role,date_creation' }
+            { select: 'id ; date_inscription ; date_naissance ; date_demande_effacement ; date_changement_courriel_principal ; coordonnees.id,type,coordonnee,est_principale,date_ajout ; sessions.id,date_emission,date_validite,date_revocation,adresse_ip,agent_utilisateur,nom_appareil ; is_gerant_of_profils.id,identifiant,pseudonyme,role,date_creation,sort,date_fermeture,desactive' }
         )
 
         const maintenant = new Date()

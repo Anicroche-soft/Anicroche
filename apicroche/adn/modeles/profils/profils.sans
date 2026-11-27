@@ -56,11 +56,42 @@
         default : now
     }
 
-    # Choix fait à la demande d effacement du compte de son seul gérant (anonymisation par défaut)
+    # Fermeture du profil (voir fermetures_profils.sans) : choix fait à la demande de fermeture
+    # du profil (PATCH { sort, mot_de_passe }, annulée par PATCH { sort: null }), ou à la demande
+    # d effacement du compte de son seul gérant (anonymisation par défaut)
     {
         name  : sort
         type  : anonymisation/suppression
         count : 0-1
+
+        can_update   : "$context.compte"
+        prior_update : "$valider_fermeture_profil($values, $request)"
+        post_update  : "$appliquer_fermeture_profil($values, $request)"
+    }
+
+    # Échéance de la fermeture demandée pour le profil lui-même
+    {
+        name  : date_fermeture
+        type  : datetime
+        count : 0-1
+    }
+
+    # Nombre de rappels de la fermeture déjà envoyés
+    {
+        name    : nombre_avertissements
+        type    : tinyint
+        default : 0
+    }
+
+    # Un profil désactivé reste à ses gérants, qui peuvent le réactiver
+    {
+        name    : desactive
+        type    : boolean
+        default : 0
+
+        can_update   : "$context.compte"
+        prior_update : "$valider_desactivation_profil($values, $request)"
+        post_update  : "$annoncer_desactivation_profil($values, $request)"
     }
 
     {
@@ -277,6 +308,104 @@
               + `<p>Si ni vous ni un autre gérant de ce profil n'êtes à l'origine de ce changement, changez votre mot de passe, fermez les sessions que vous ne reconnaissez pas, puis rétablissez l'identifiant depuis la page d'édition du profil.</p>`
             )
         }
+    }
+
+    // ─── Fermeture et désactivation ──────────────────────────────────────────
+
+    // Demander la fermeture exige le mot de passe et un profil qui peut fermer ; l annuler, une
+    // fermeture en cours. Le mot de passe est vérifié en dernier : une demande impossible ne
+    // consomme pas d essai
+    $valider_fermeture_profil = async ($values, $request) =>
+    {
+        await $exiger_compte()
+
+        const profil = await $search_one('profil', `#id = $id`, { $id: $request.params.id })
+
+        if ($values.sort === null)
+        {
+            if (!profil.date_fermeture)
+                return $indicate(409, "Aucune fermeture en cours")
+
+            $context.fermeture_profil = { profil, annulation: true }
+            return
+        }
+
+        if (![ 'anonymisation', 'suppression' ].includes($values.sort))
+            return $indicate(422, "Valeur invalide : sort")
+
+        if (profil.date_fermeture)
+            return $indicate(409, "Fermeture déjà demandée")
+
+        const raison = await $empecher_fermeture_profil(profil.id)
+        if (raison)
+            return $indicate(403, raison)
+
+        if (!await $verifier_mot_de_passe())
+            return $indicate(403, "Mot de passe invalide")
+
+        $context.fermeture_profil = { profil, annulation: false }
+    }
+
+    $appliquer_fermeture_profil = async ($values, $request) =>
+    {
+        const { profil, annulation } = $context.fermeture_profil
+
+        if (annulation)
+        {
+            await $update_one('profil',
+                `#id = $id`,
+                { date_fermeture: null, nombre_avertissements: 0 },
+                { $id: profil.id }
+            )
+            await $annoncer_annulation_fermeture(profil, profil.sort)
+            return
+        }
+
+        const date_fermeture = $calculer_date_fermeture()
+
+        await $update_one('profil',
+            `#id = $id`,
+            { date_fermeture, nombre_avertissements: 0 },
+            { $id: profil.id }
+        )
+        await $annoncer_demande_fermeture(profil, $values.sort, date_fermeture)
+
+        $add_to_data('date_fermeture', date_fermeture)
+    }
+
+    $valider_desactivation_profil = async ($values, $request) =>
+    {
+        await $exiger_compte()
+
+        if (typeof $values.desactive !== 'boolean')
+            return $indicate(422, "Valeur invalide : desactive")
+
+        const profil = await $search_one('profil', `#id = $id`, { $id: $request.params.id })
+
+        $context.desactivation_profil = { profil, change: !!profil.desactive !== $values.desactive }
+    }
+
+    // Tous les gérants sont prévenus, celui qui a fait le changement compris
+    $annoncer_desactivation_profil = async ($values, $request) =>
+    {
+        const { profil, change } = $context.desactivation_profil
+        if (!change)
+            return
+
+        const liens = await $search_all('gerants_profils', `#id_profil = $id`, { $id: profil.id })
+
+        for (const lien of liens)
+            await $ecrire_courriels(await $lire_courriels(lien.id_compte),
+                $values.desactive
+                    ? `Votre profil @${profil.identifiant} a été désactivé`
+                    : `Votre profil @${profil.identifiant} a été réactivé`,
+                (
+                    $values.desactive
+                        ? `<p>Votre profil @${profil.identifiant} a été désactivé par l'un de ses gérants. Il peut être réactivé à tout moment depuis la page d'édition du profil.</p>`
+                        : `<p>Votre profil @${profil.identifiant} a été réactivé par l'un de ses gérants.</p>`
+                )
+              + `<p>Si ni vous ni un autre gérant de ce profil n'êtes à l'origine de ce changement, changez votre mot de passe et fermez les sessions que vous ne reconnaissez pas.</p>`
+            )
     }
 
     $compter_profils_derives = async ($request) =>

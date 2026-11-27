@@ -18,6 +18,7 @@ page [$authentification : requise, $page_compte : :)]
 
     onglet
         section-profil
+        section-fermeture-profil
 
     onglet
         section-profils

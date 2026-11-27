@@ -1,0 +1,335 @@
+# Fermeture des profils : anonymisation ou suppression d un profil, demandée par son gérant
+# (PATCH /profil/<id> { sort, mot_de_passe }, voir profils.sans) et appliquée DELAI_FERMETURE
+# jours plus tard, ou à l effacement du compte de son seul gérant (voir effacement.sans).
+# Un profil anonymisé n a plus de gérant, d identifiant ni de pseudonyme, et reste l auteur
+# de ses anicroches. Un profil supprimé n en est plus l auteur : une anicroche qui n a plus
+# d auteur est vidée de ses sources, et considérée comme supprimée.
+
+@actions [
+    {
+        periodically : $traiter_fermetures_profils()
+        period       : 1d
+    }
+]
+
+@script [
+    // Délai entre la demande de fermeture d un profil et sa fermeture, en jours
+    const DELAI_FERMETURE = 30
+
+    // Rappels de la fermeture, en jours avant l échéance, après le courriel de la demande
+    const RAPPELS_FERMETURE = [ 14, 7, 3, 1 ]
+
+    // Les profils de l un de ces rôles ne peuvent être ni anonymisés ni supprimés par leur gérant
+    const ROLES_PROTEGES = [ 'maitre' ]
+
+    const JOUR = 24 * 60 * 60 * 1000
+
+    // MySQL ne garde pas les millisecondes : une date écrite puis relue reste ainsi identique
+    const maintenant = () => new Date(Math.floor(Date.now() / 1000) * 1000)
+
+    const ajouter_jours = (date, jours) => new Date(new Date(date).getTime() + jours * JOUR)
+
+    const formater_date = (date) => new Date(date).toLocaleDateString('fr-FR', {
+        day      : 'numeric',
+        month    : 'long',
+        year     : 'numeric',
+        timeZone : 'Europe/Paris'
+    })
+
+    const nommer = (profil) => profil.identifiant ? `@${profil.identifiant}` : 'anonyme'
+
+    const decrire_sort = (sort) => sort === 'suppression' ? 'suppression' : 'anonymisation'
+
+    const nommer_sort = (sort) => sort === 'suppression' ? 'La suppression' : "L'anonymisation"
+
+    // ─── Courriels ───────────────────────────────────────────────────────────
+
+    const lire_gerants = async (id_profil) =>
+        (await $search_all('gerants_profils', `#id_profil = $id`, { $id: id_profil }))
+            .map(lien => lien.id_compte)
+
+    // Chaque gérant est prévenu à toutes ses adresses
+    const lire_adresses_gerants = async (id_profil) =>
+    {
+        const adresses = []
+        for (const id_compte of await lire_gerants(id_profil))
+            adresses.push(...await $lire_courriels(id_compte))
+        return adresses
+    }
+
+    const lien_profil = () => `${process.env.app_url ?? ''}/profil`
+
+    // Effet de la fermeture, à venir ou, une fois le profil fermé, accompli
+    const expliquer_sort = (sort, accompli = false) =>
+        sort === 'suppression'
+            ? accompli
+                ? `<p>Le profil a disparu, et n'est plus l'auteur de ses anicroches : celles qui n'avaient pas d'autre auteur ne sont plus visibles.</p>`
+                : `<p>Le profil disparaîtra, et ne sera plus l'auteur de ses anicroches : celles qui n'auront pas d'autre auteur ne seront plus visibles.</p>`
+            : accompli
+                ? `<p>Le profil a perdu son identifiant et son pseudonyme : ce qu'il a publié reste visible, sans son nom.</p>`
+                : `<p>Le profil perdra son identifiant et son pseudonyme : ce qu'il a publié restera visible, sans son nom.</p>`
+
+    $annoncer_demande_fermeture = async (profil, sort, date_fermeture) =>
+        await $ecrire_courriels(await lire_adresses_gerants(profil.id),
+            `Demande de ${decrire_sort(sort)} de votre profil ${nommer(profil)}`,
+            `<p>${nommer_sort(sort)} de votre profil ${nommer(profil)} a été demandée le ${formater_date(maintenant())}. Elle aura lieu le <strong>${formater_date(date_fermeture)}</strong>.</p>`
+          + expliquer_sort(sort)
+          + `<p>D'ici là, vous pouvez restaurer le profil depuis <a href="${lien_profil()}">sa page</a>. Si vous n'êtes pas à l'origine de cette demande, restaurez-le puis changez votre mot de passe.</p>`
+        )
+
+    $annoncer_annulation_fermeture = async (profil, sort) =>
+        await $ecrire_courriels(await lire_adresses_gerants(profil.id),
+            `${nommer_sort(sort)} de votre profil ${nommer(profil)} est annulée`,
+            `<p>${nommer_sort(sort)} de votre profil ${nommer(profil)} a été annulée : le profil est restauré.</p>`
+          + `<p>Si vous n'êtes pas à l'origine de cette annulation, changez votre mot de passe.</p>`
+        )
+
+    // ─── Conditions ──────────────────────────────────────────────────────────
+
+    // Raison pour laquelle le profil ne peut pas être fermé, ou null s il peut l être. Un compte
+    // doit garder au moins un profil qui ne ferme pas, sauf si son effacement est en cours
+    $empecher_fermeture_profil = async (id_profil) =>
+    {
+        const profil = await $search_one('profil', `#id = $id`, { $id: id_profil })
+
+        if (ROLES_PROTEGES.includes(profil.role))
+            return "Profil protégé"
+
+        const gerants = await lire_gerants(id_profil)
+        if (gerants.length !== 1)
+            return "Profil géré par plusieurs comptes"
+
+        const compte = await $search_one('compte', `#id = $id`, { $id: gerants[0] })
+        if (compte.date_demande_effacement)
+            return null
+
+        const autres = await $search_all('profils',
+            `
+            #gerants.id     = $id_compte
+          & #id            != $id_profil
+          & #date_fermeture = null
+            `,
+            { $id_compte: compte.id, $id_profil: id_profil },
+            { select: 'id' }
+        )
+
+        return autres.length ? null : "Dernier profil du compte"
+    }
+
+    $calculer_date_fermeture = () => ajouter_jours(maintenant(), DELAI_FERMETURE)
+
+    // ─── Profils et anicroches ───────────────────────────────────────────────
+
+    $est_anicroche_supprimee = async (anicroche) =>
+    {
+        if (!$a_des_auteurs(anicroche.type))
+            return false
+
+        return !await $search_one('auteur_anicroche', `#id_anicroche = $id`, { $id: anicroche.id })
+    }
+
+    // Les versions restent : une conversation garde la place d un message supprimé
+    const vider_anicroche = async (id_anicroche) =>
+    {
+        await $delete_all('sources', `#id_anicroche = $id`, { $id: id_anicroche })
+    }
+
+    // Le nom d un profil qui disparaît reste réservé, à aucun profil, le temps d une réservation
+    // (voir reservations.sans) : personne ne peut le prendre aussitôt pour se faire passer pour lui
+    const reserver_nom_du_partant = async (profil) =>
+    {
+        await $detacher_reservations_profil(profil.id)
+        if (profil.identifiant)
+            await $reserver_identifiant(profil.identifiant, null)
+    }
+
+    $anonymiser_profil = async (profil) =>
+    {
+        const id_profil = profil.id
+        await reserver_nom_du_partant(profil)
+        await $delete_all('gerants_profils', `#id_profil = $id`, { $id: id_profil })
+        await $update_one('profil',
+            `#id = $id`,
+            {
+                identifiant           : null,
+                pseudonyme            : null,
+                sort                  : null,
+                date_fermeture        : null,
+                nombre_avertissements : 0
+            },
+            { $id: id_profil }
+        )
+    }
+
+    $supprimer_profil = async (profil) =>
+    {
+        const id_profil = profil.id
+        await reserver_nom_du_partant(profil)
+
+        const liens = await $search_all('auteurs_anicroches', `#id_profil = $id`, { $id: id_profil })
+        await $delete_all('auteurs_anicroches', `#id_profil = $id`, { $id: id_profil })
+
+        for (const lien of liens)
+        {
+            const anicroche = await $search_one('anicroche', `#id = $id`, { $id: lien.id_anicroche })
+            if (anicroche && await $est_anicroche_supprimee(anicroche))
+                await vider_anicroche(anicroche.id)
+        }
+
+        await $delete_one('profil', `#id = $id`, { $id: id_profil })
+    }
+
+    // ─── Profils dérivés ─────────────────────────────────────────────────────
+
+    const lire_derives = (racine) =>
+        $search_all('profils',
+            `#identifiant ~= $motif`,
+            { $motif: new RegExp(`^${racine}\\.`) },
+            { select: 'id ; identifiant ; gerants.id' }
+        )
+
+    // Identifiant racine libre et proche de celui d un profil dérivé qui perd sa racine :
+    // le point devient un tiret (base.x → base-x), puis base-x-1, base-x-2… Un candidat trop
+    // long perd ses premiers caractères, puis son tiret initial
+    const LONGUEUR_RACINE = 32
+    const MOTIF_RACINE    = /^(?=[a-z0-9-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+    const ajuster_identifiant = (identifiant) =>
+        identifiant.slice(Math.max(0, identifiant.length - LONGUEUR_RACINE)).replace(/^-/, '')
+
+    const est_identifiant_libre = async (identifiant) =>
+        !await $search_one('profil', `#identifiant = $identifiant`, { $identifiant: identifiant })
+     && !(await lire_derives(identifiant)).length
+     && !await $lire_reservation(identifiant)
+
+    const trouver_identifiant_libre = async (identifiant) =>
+    {
+        const base = identifiant.replace('.', '-')
+
+        for (let x = 0; x <= 1000; x++)
+        {
+            const candidat = ajuster_identifiant(x ? `${base}-${x}` : base)
+
+            // Une coupe peut retirer toutes les lettres : le candidat est alors passé
+            if (MOTIF_RACINE.test(candidat) && await est_identifiant_libre(candidat))
+                return candidat
+        }
+
+        for (;;)
+        {
+            const candidat = `profil-${Math.random().toString(36).slice(2, 10)}`
+            if (await est_identifiant_libre(candidat))
+                return candidat
+        }
+    }
+
+    // Les profils dérivés d une racine qui disparaît en sont détachés : ils deviennent des
+    // profils racines sous un nom proche et libre (base.x → base-x), et leurs gérants sont
+    // prévenus. Ils peuvent dépasser la limite de profils racines de leur compte
+    $detacher_derives = async (racine) =>
+    {
+        for (const derive of await lire_derives(racine))
+        {
+            const nouveau = await trouver_identifiant_libre(derive.identifiant)
+            await $update_one('profil', `#id = $id`, { identifiant: nouveau }, { $id: derive.id })
+
+            for (const gerant of derive.gerants)
+                await $ecrire_courriels(await $lire_courriels(gerant.id),
+                    `Votre profil @${derive.identifiant} s'appelle désormais @${nouveau}`,
+                    `<p>Le profil @${racine}, dont dérivait votre profil @${derive.identifiant}, n'existe plus. Votre profil devient donc un profil racine, sous le nom <strong>@${nouveau}</strong>.</p>`
+                  + `<p>Vous pouvez changer ce nom depuis votre profil.</p>`
+                )
+        }
+    }
+
+    // Racine dont les dérivés sont à détacher une fois le profil fermé, ou null
+    $lire_racine_fermee = (profil) =>
+        profil.identifiant && !profil.identifiant.includes('.') ? profil.identifiant : null
+
+    // ─── Tâche quotidienne ───────────────────────────────────────────────────
+
+    const annuler_fermeture = async (profil, raison) =>
+    {
+        await $update_one('profil',
+            `#id = $id`,
+            { sort: null, date_fermeture: null, nombre_avertissements: 0 },
+            { $id: profil.id }
+        )
+
+        await $ecrire_courriels(await lire_adresses_gerants(profil.id),
+            `${nommer_sort(profil.sort)} de votre profil ${nommer(profil)} n'a pas eu lieu`,
+            `<p>${nommer_sort(profil.sort)} de votre profil ${nommer(profil)}, prévue aujourd'hui, n'a pas pu avoir lieu (${raison.toLowerCase()}) : le profil reste actif.</p>`
+        )
+    }
+
+    const fermer_profil = async (profil) =>
+    {
+        const raison = await $empecher_fermeture_profil(profil.id)
+        if (raison)
+            return annuler_fermeture(profil, raison)
+
+        const adresses = await lire_adresses_gerants(profil.id)
+        const racine   = $lire_racine_fermee(profil)
+
+        if (profil.sort === 'suppression')
+            await $supprimer_profil(profil)
+        else
+            await $anonymiser_profil(profil)
+
+        if (racine)
+            await $detacher_derives(racine)
+
+        console.log(`  PROFIL fermé (${decrire_sort(profil.sort)})`)
+
+        await $ecrire_courriels(adresses,
+            profil.sort === 'suppression'
+                ? `Votre profil ${nommer(profil)} a été supprimé`
+                : `Votre profil ${nommer(profil)} a été anonymisé`,
+            `<p>Comme vous l'avez demandé, votre profil ${nommer(profil)} a été ${profil.sort === 'suppression' ? 'supprimé' : 'anonymisé'}.</p>`
+          + expliquer_sort(profil.sort, true)
+        )
+    }
+
+    const envoyer_rappel = async (profil, jours) =>
+    {
+        // Un jour de traitement manqué regroupe les rappels en retard en un seul
+        const etape = RAPPELS_FERMETURE.filter(seuil => jours <= seuil).length
+        if (etape <= profil.nombre_avertissements)
+            return
+
+        await $ecrire_courriels(await lire_adresses_gerants(profil.id),
+            `Votre profil ${nommer(profil)} sera ${profil.sort === 'suppression' ? 'supprimé' : 'anonymisé'} le ${formater_date(profil.date_fermeture)}`,
+            `<p>Comme demandé, votre profil ${nommer(profil)} sera ${profil.sort === 'suppression' ? 'supprimé' : 'anonymisé'} le <strong>${formater_date(profil.date_fermeture)}</strong>.</p>`
+          + expliquer_sort(profil.sort)
+          + `<p>Si vous avez changé d'avis, ou si vous n'êtes pas à l'origine de cette demande, restaurez le profil depuis <a href="${lien_profil()}">sa page</a>.</p>`
+        )
+
+        await $update_one('profil', `#id = $id`, { nombre_avertissements: etape }, { $id: profil.id })
+    }
+
+    $traiter_fermetures_profils = async () =>
+    {
+        console.log('====================\nFERMETURES DE PROFILS\n====================')
+
+        const profils = await $search_all('profils',
+            `#date_fermeture < now+${Math.max(...RAPPELS_FERMETURE) + 1}d`
+        )
+
+        for (const profil of profils)
+        {
+            try
+            {
+                const jours = (new Date(profil.date_fermeture) - new Date()) / JOUR
+
+                if (jours <= 0)
+                    await fermer_profil(profil)
+                else
+                    await envoyer_rappel(profil, jours)
+            }
+            catch (erreur)
+            {
+                console.log(`/!\\ fermeture d'un profil : ${erreur.message}`)
+            }
+        }
+    }
+]

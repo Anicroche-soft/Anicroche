@@ -22,6 +22,7 @@ routes : {
     creation_profil     : { path : /profil/creation,      model : page-creation-profil }
     selection_profil    : { path : /profil/selection,     model : page-selection-profil }
     edition_profil      : { path : /profil/edition,       model : page-edition-profil }
+    suppression_profil  : { path : /profil/suppression,   model : page-suppression-profil }
     edition_compte      : { path : /compte/edition,       model : page-edition-compte }
     suppression_compte  : { path : /compte/suppression,   model : page-suppression-compte }
     export_donnees      : { path : /compte/export,        model : page-export-donnees }

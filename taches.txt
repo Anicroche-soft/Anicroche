@@ -4,11 +4,12 @@ Tâches :
 - permettre de remplacer une adresse principale perdue (changement différé, avec opposition possible depuis l'adresse actuelle)
 - mettre en place la configuration de compte et de profils (dont la case à cocher des fonctionnalités liées à l'âge, voir juridique/RGPD.md § 2.4, la teinte, le fuseau horaire, les langues)
 - ajout des comptes sous contrôle parental
-- permettre la suppression, l'anonymisation et la désactivation d'un profil
+- reporter la fermeture des profils (anonymisation ou suppression après 30 jours, restauration) et leur désactivation dans juridique/RGPD.md (§ 2 et § 4.1), juridique/conditions-generales-d-utilisation.md et juridique/politique-de-confidentialite.md
+- voir si /profil/<id>/derives peut être modifiée
 
 Tâches dépendantes :
 - quand des anicroches d'utilisateurs seront publiées (types avec auteurs) :
-    - masquer les profils des comptes dont l'effacement est en cours et afficher les profils anonymisés sans nom
+    - masquer les profils des comptes dont l'effacement est en cours et les profils désactivés (champ desactive de profils.sans, modifiable mais encore sans effet), avec leurs publications, aux autres que leurs gérants, et afficher les profils anonymisés sans nom
     - ajouter un moyen de signaler un contenu (lien dans page-anicroche.avec ou dans le pied de page), et compléter en conséquence le § « Signaler un contenu » de juridique/mentions-legales.md et l'article des contenus illicites de juridique/conditions-generales-d-utilisation.md
     - ouvrir la relation auteurs des anicroches à la projection (can_search, avec un restrict_search sur les profils), et en tenir compte dans $charger_anicroche (base.avec), qui ne considère pour l'instant comme gérants que les profils qui administrent le type (l'API, elle, compte déjà les auteurs), puis passer les auteurs à la barre d'informations de page-anicroche.avec ($auteurs_anicroche, aujourd'hui toujours vide) et aux boutons Gestion et Édition
 - quand la création d'anicroches existera : choisir la langue et la région d'origine de l'anicroche (champs langue et region d'anicroches.sans, fr et FR par défaut pour l'instant), et peut-être permettre de les modifier ; les sources ajoutées dans l'édition prennent déjà cette langue
