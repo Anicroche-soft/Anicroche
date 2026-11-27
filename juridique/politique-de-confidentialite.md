@@ -29,7 +29,7 @@ Il n'y a ni publicité, ni mesure d'audience, ni profilage. Vos données ne sont
 
 Seul l'éditeur accède à vos données. Elles sont hébergées par Infomaniak (Suisse), qui assure aussi l'envoi des courriels et les sauvegardes, dans le cadre d'un contrat de sous-traitance. La Suisse bénéficie d'une décision d'adéquation de la Commission européenne : vos données y sont protégées comme dans l'Union européenne.
 
-Les courriels que vous écrivez à royaume@anicroche.com, y compris vos réponses aux courriels du service, sont consultés par l'éditeur avec la messagerie Outlook de Microsoft. Ces messages (votre adresse, votre nom s'il apparaît, leur contenu et leurs pièces jointes) sont donc aussi conservés par Microsoft, dans l'Union européenne ou aux États-Unis. Un transfert vers les États-Unis est encadré par le *Data Privacy Framework*, auquel Microsoft adhère. Les données de votre compte, elles, ne quittent jamais Infomaniak.
+Les courriels que vous écrivez à royaume@anicroche.com, y compris vos réponses aux courriels du service, sont eux aussi conservés et consultés chez Infomaniak : comme les données de votre compte, ils ne quittent jamais Infomaniak.
 
 ## 4. Combien de temps elles sont gardées
 
@@ -39,7 +39,7 @@ Les courriels que vous écrivez à royaume@anicroche.com, y compris vos réponse
 | Sessions | 30 jours au plus, puis supprimées le lendemain de leur fin |
 | Codes de connexion et de confirmation | Valables 15 minutes, supprimés le lendemain au plus tard |
 | Ancien identifiant d'un profil | Réservé 30 jours après un changement d'identifiant ou la disparition du profil : seul ce profil peut le reprendre pendant ce temps (personne, s'il a disparu) |
-| Sauvegardes | Une donnée supprimée peut subsister dans les sauvegardes pendant **À compléter** (durée de rotation des sauvegardes) |
+| Sauvegardes | Une sauvegarde est faite chaque jour et gardée 7 jours : une donnée supprimée peut y subsister 7 jours au plus |
 
 À la suppression du compte, chaque profil que vous gériez seul est anonymisé (il perd son identifiant et son pseudonyme, et ses contenus restent visibles sans nom), ou supprimé si vous l'avez choisi. Un contenu anonymisé qui permettrait malgré tout de vous identifier peut être retiré sur simple demande.
 

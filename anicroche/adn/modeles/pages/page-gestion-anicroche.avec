@@ -15,9 +15,9 @@
 
     // Accès de l anicroche entière
     $choix_acces_gestion = [
-        { nom: 'prive',   etiquette: "Privé : seulement ses gérants" },
-        { nom: 'partage', etiquette: "Partagé : par son lien, sans être listé" },
-        { nom: 'public',  etiquette: "Public : visible et listé partout" }
+        { nom: 'prive',   etiquette: "Privé" },
+        { nom: 'partage', etiquette: "Partagé" },
+        { nom: 'public',  etiquette: "Public" }
     ]
 
     // Accès d une version ; une version programmée peut aussi être privée jusqu à sa parution,

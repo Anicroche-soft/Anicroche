@@ -83,7 +83,10 @@ La date de naissance sert à deux traitements distincts.
 **Âge minimum d'inscription : 15 ans.** Anicroche s'apparente à un réseau social :
 
 - en France, un mineur ne peut consentir seul au traitement de ses données qu'à partir de 15 ans (RGPD art. 8, loi Informatique et Libertés art. 45) ;
-- la loi du 7 juillet 2023 sur la « majorité numérique » impose aux réseaux sociaux une autorisation parentale en dessous de 15 ans. Son entrée en vigueur dépend de textes d'application : **vérifier où elle en est avant le lancement**.
+- la loi n° 2023-566 du 7 juillet 2023 sur la « majorité numérique » (article 6-7 de la LCEN : autorisation parentale pour s'inscrire sur un réseau social en dessous de 15 ans) **n'est pas en vigueur** : elle entre en vigueur à une date fixée par décret, au plus tard trois mois après une réponse de la Commission européenne la jugeant conforme au droit de l'Union, réponse qui n'est jamais venue ; aucun décret n'a été publié, et Légifrance affiche toujours l'article 6-7 en vigueur différée ;
+- la loi « visant à protéger les mineurs des risques auxquels les expose l'utilisation des réseaux sociaux » (proposition de loi Miller, adoptée le 21 juillet 2026) devait interdire les réseaux sociaux aux moins de 15 ans (article 6-9 de la LCEN) : cet article 1er a été **censuré** par le Conseil constitutionnel (décision n° 2026-911 DC du 14 août 2026 : interdiction générale, sans appréciation du risque ni possibilité pour les parents de la lever, atteinte disproportionnée à la liberté d'expression, et preuve de l'âge imposée à tous sans garanties suffisantes) ; le reste de la loi a été promulgué sans lui.
+
+Aucune loi n'impose donc aujourd'hui en France d'âge minimum ou d'autorisation parentale pour un réseau social (situation vérifiée le 27 novembre 2026) : le seuil de 15 ans vient du consentement au traitement des données. Si un nouveau texte est adopté, il pourrait imposer une vérification de l'âge plus poussée que la simple déclaration (voir plus bas).
 
 L'inscription est donc refusée en dessous de 15 ans, en attendant les comptes sous contrôle parental (voir `taches.txt`).
 
@@ -109,8 +112,8 @@ Il n'y a ni outil de mesure d'audience, ni publicité, ni ressource tierce en pr
 
 | | |
 |---|---|
-| Contenu | Journaux PM2 : démarrage, erreurs. En `mode=prod`, les requêtes SQL ne sont pas journalisées. Les messages d'erreur MySQL peuvent toutefois contenir une valeur (ex. identifiant en double) |
-| Durée de conservation | **À compléter** (conseillé : rotation avec `pm2-logrotate`, 30 jours au plus) |
+| Contenu | Journaux PM2 (`~/.pm2/logs/`) : démarrage, erreurs. Ni adresse IP ni journal des requêtes. Les erreurs de l'API sont notées avec leur méthode et leur adresse, et les échecs du rendu côté serveur avec l'adresse de la page : une adresse peut contenir un identifiant (ex. `/compte/<id>`). En `mode=prod`, les requêtes SQL ne sont pas journalisées. Les messages d'erreur MySQL peuvent toutefois contenir une valeur (ex. identifiant en double). L'effacement d'un compte n'est noté que par son motif, sans identifiant (§ 4.1) |
+| Durée de conservation | 30 jours au plus : rotation chaque nuit par `pm2-logrotate` (`rotateInterval '0 0 * * *'`, `retain 29`, `compress true`, `max_size` de 10 Mo par défaut, une rotation de plus pour cause de taille ne faisant que raccourcir la durée), puis 7 jours de plus au plus dans les sauvegardes, qui couvrent `~/.pm2/logs/` (§ 7) |
 
 ---
 
@@ -118,14 +121,13 @@ Il n'y a ni outil de mesure d'audience, ni publicité, ni ressource tierce en pr
 
 | Sous-traitant | Rôle | Données concernées | Localisation | Contrat (art. 28) |
 |---|---|---|---|---|
-| Infomaniak | Hébergement (Serveur Cloud, HAProxy), base de données, envoi des courriels (SMTP), sauvegardes | Toutes | Suisse (décision d'adéquation de la Commission européenne) | **À vérifier** (voir ci-dessous) |
-| Microsoft (Outlook) | Consultation de la boîte `royaume@anicroche.com` par l'éditeur : Outlook la synchronise en IMAP en passant par les serveurs de Microsoft | Messages écrits à l'éditeur (ou en réponse aux courriels du service) et ses réponses : adresse et nom de l'expéditeur, contenu, pièces jointes. Ni la base de données ni les courriels envoyés par l'API | Union européenne ou États-Unis selon le compte (transfert encadré par le *Data Privacy Framework*, auquel Microsoft adhère) | **À vérifier** (voir ci-dessous) |
+| Infomaniak | Hébergement (Serveur Cloud, HAProxy), base de données, envoi des courriels (SMTP), boîte `royaume@anicroche.com` et sa consultation (webmail, application Infomaniak Mail), sauvegardes | Toutes | Suisse (décision d'adéquation de la Commission européenne) | Accord sur le traitement des données personnelles, intégré aux CGU (voir ci-dessous) |
 
 L'article 28 du RGPD impose un contrat écrit avec chaque prestataire qui traite des données pour le compte d'Anicroche. Ce contrat engage le prestataire à n'utiliser les données que sur instruction, à les protéger, à aider en cas de violation, puis à les supprimer à la fin du contrat. Il n'y a pas à le négocier : les hébergeurs fournissent un modèle standard, souvent appelé « DPA » (*Data Processing Agreement*) ou « contrat de sous-traitance ».
 
-Chez Infomaniak, ce contrat est intégré à leurs conditions générales ou proposé dans le Manager, selon l'offre. À faire une fois : retrouver ce document, vérifier qu'il couvre bien le Serveur Cloud, la base de données et le service de courriel, puis noter ici sa référence et la date. **À compléter.**
+Chez Infomaniak, ce contrat est l'« Accord sur le traitement des données personnelles » (DPA), « partie intégrante des Conditions Générales d'Utilisation » : il est conclu avec elles, sans signature, et vaut pour tous les services utilisés, donc le Serveur Cloud, la base de données et le Service Mail. Il vise l'art. 28 du RGPD (et l'art. 9 de la LPD suisse) ; son texte est publié par Infomaniak (`infomaniak.com/documents/privacy/DPA/`). Le certificat RGPD au nom de l'éditeur, qui atteste de ce contrat, a été généré dans le Manager (Paramètres de l'organisation → Certificat RGPD) le 27 novembre 2026 et est conservé dans les documents personnels de l'éditeur, hors du dépôt. Le contrat prévoit : aucun transfert hors de l'UE ou de l'EEE sans accord écrit (art. 13) ; des sous-sous-traitants listés dans les conditions particulières de chaque service, dont tout changement est annoncé à l'avance, avec 30 jours pour s'y opposer (art. 5) : lire ces avis, envoyés à l'adresse du compte Infomaniak ; le droit suisse et les tribunaux de Genève (art. 14).
 
-Chez Microsoft, le contrat de sous-traitance (*Data Protection Addendum*) n'accompagne que les offres professionnelles (Microsoft 365) : avec un compte Outlook personnel, Microsoft applique son contrat de services et sa déclaration de confidentialité grand public. À faire une fois : vérifier le type de compte utilisé et la localisation de ses données, puis noter ici le document qui s'applique. **À compléter.** Pour éviter ce sous-traitant, la boîte peut être consultée dans le webmail d'Infomaniak ou avec un client qui se connecte directement au serveur (Thunderbird, Outlook de bureau classique) : il faut alors retirer Microsoft de ce tableau et de la politique de confidentialité.
+La boîte `royaume@anicroche.com` se consulte uniquement chez Infomaniak : webmail ou application Infomaniak Mail. Elle reçoit les demandes des utilisateurs, y compris leurs demandes RGPD : ne pas l'ajouter à un client qui la synchronise par ses propres serveurs (Outlook mobile, nouvel Outlook pour Windows, Gmail…), ce qui ferait de son éditeur un sous-traitant de plus. Microsoft (Outlook mobile), qui la synchronisait ainsi, a été retiré le 27 novembre 2026, et le mot de passe d'application qu'il utilisait supprimé : il n'a plus accès à la boîte.
 
 Avant d'ajouter un nouveau prestataire qui reçoit des données personnelles : vérifier sa localisation (UE ou pays adéquat), accepter son contrat de sous-traitance, puis l'ajouter à ce tableau et à la politique de confidentialité.
 
@@ -138,12 +140,12 @@ Avant d'ajouter un nouveau prestataire qui reçoit des données personnelles : v
 | Code de connexion | 15 min de validité, suppression quotidienne | `$nettoyer_clefs` (`comptes/authentification.sans`) |
 | Session | 30 jours au plus, suppression quotidienne après expiration ou révocation | `$nettoyer_sessions` (`comptes/authentification.sans`) |
 | Compte inactif | 3 ans après la dernière activité (requête authentifiée, notée au plus une fois par jour), avec au moins 30 jours de préavis : courriels 1 an, 6 mois, 3 mois, 1 mois, 2 semaines, 1 semaine et 1 jour avant | `$traiter_fins_de_comptes` (`effacement.sans`), voir § 4.1 |
-| Compte dont l'effacement est demandé | Suspendu dès la demande, effacé 30 jours après (rappels 14, 7, 3 et 1 jours avant) ; disparition des sauvegardes au bout de leur durée de rotation | `$traiter_fins_de_comptes` (`effacement.sans`), voir § 4.1 |
+| Compte dont l'effacement est demandé | Suspendu dès la demande, effacé 30 jours après (rappels 14, 7, 3 et 1 jours avant) ; disparition des sauvegardes 7 jours plus tard au plus | `$traiter_fins_de_comptes` (`effacement.sans`), voir § 4.1 |
 | Versions publiées des pages légales | Sans limite : elles prouvent ce que chaque utilisateur a accepté | Voir § 11 |
 | Annonces des nouvelles versions | Jusqu'à l'effacement du compte | Table `annonces`, effacée avec le compte (`effacement.sans`), voir § 11 |
 | Identifiant réservé (ancien identifiant d'un profil renommé, ou d'un profil anonymisé ou supprimé) | 30 jours, suppression quotidienne après expiration | `$nettoyer_identifiants_reserves` (`profils/reservations.sans`), voir § 2.3 et § 4.1 |
-| Sauvegardes | Celle d'Infomaniak (**À noter** : durée indiquée dans le Manager) | Voir § 7 |
-| Journaux du serveur | **À compléter** | Voir § 2.6 |
+| Sauvegardes | Une par jour, 7 jours (la sauvegarde du jour et celles des 6 jours précédents) : une donnée supprimée y subsiste 7 jours au plus | Sauvegardes automatiques d'Infomaniak, voir § 7 |
+| Journaux du serveur | 30 jours au plus (rotation chaque nuit, 29 archives et le fichier du jour) ; 7 jours de plus au plus dans les sauvegardes | `pm2-logrotate` sur le serveur, voir § 2.6 |
 
 ### 4.1. Fin des comptes
 
@@ -217,11 +219,39 @@ Script de rechiffrement en cas de changement de clef : **à écrire**.
 
 ## 7. Sauvegardes et restauration
 
-Les sauvegardes du serveur et de la base sont assurées par Infomaniak. Il reste seulement :
+Les sauvegardes du serveur et de la base sont assurées par Infomaniak, automatiquement et sans option à activer (relevé dans le Manager le 27 novembre 2026) :
 
-- à noter ici la fréquence et la durée de conservation affichées dans le Manager (**À compléter**), car la politique de confidentialité doit indiquer combien de temps une donnée supprimée peut survivre dans les sauvegardes ;
-- à ne pas faire de copie de la base en dehors d'Infomaniak (sur un ordinateur personnel, par exemple) sans la chiffrer ;
-- après une restauration, à refaire les suppressions demandées depuis la date de la sauvegarde. Pour cela, garder la liste des comptes supprimés, par leur `id` uniquement.
+| | |
+|---|---|
+| Fréquence | Une par jour ; les fichiers et la base ne sont pas sauvegardés au même moment |
+| Durée de conservation | 7 sauvegardes, celles des 7 derniers jours (jour en cours compris) : une donnée supprimée y subsiste **7 jours au plus**, durée annoncée dans la politique de confidentialité |
+| Contenu | Tous les fichiers du serveur : tout le dépôt (dont `.env`, donc `secret_aes` et `secret_hmac`, et `apicroche/depot/`) et les journaux PM2 (`~/.pm2/logs/`) ; et la base MySQL |
+| Lieu | Serveurs d'Infomaniak (Suisse), sous-traitant du § 3 |
+| Restauration | Manager → Hébergements & sites → l'hébergement → **Restauration** : restauration simple (tous les sites et bases) ou avancée (sites et bases au choix), par date ; fichiers isolés par FTP, dans `/backups`. Les sites sont mis en maintenance pendant la restauration |
+
+Ces sauvegardes ne remplacent pas une copie des secrets hors d'Infomaniak (§ 6) : elles disparaissent avec l'hébergement et ne remontent qu'à 7 jours.
+
+Ne pas faire de copie de la base en dehors d'Infomaniak (sur un ordinateur personnel, par exemple) sans la chiffrer.
+
+### 7.1. Restauration de la base
+
+Une restauration ramène les données effacées depuis la sauvegarde, dont des comptes effacés. Il n'est pas nécessaire d'en garder la liste : un compte n'est effacé qu'au moins 30 jours après une étape enregistrée dans la base (demande d'effacement, ou premier avertissement d'inactivité, § 4.1), donc présente dans toute sauvegarde de moins de 7 jours. La tâche quotidienne `$traiter_fins_de_comptes` (`effacement.sans`, à minuit) efface donc de nouveau, d'elle-même, tout compte revenu, avec le même sort pour ses profils (choisi à la demande, et restauré avec elle). Ses adresses reçoivent une seconde fois le courriel de confirmation.
+
+**Avant :**
+
+1. Arrêter l'API (`pm2 stop apicroche`) : plus aucune écriture pendant l'opération.
+2. Relever, dans la base actuelle, les comptes dont l'effacement ou la suppression pour inactivité a été **annulé** depuis la date de la sauvegarde (restauration, connexion) : la sauvegarde les montre encore en attente d'effacement, et la tâche quotidienne les effacerait à tort si leur échéance est passée. En pratique, ceux dont `date_derniere_activite` est postérieure à la sauvegarde et dont `date_demande_effacement` est vide ; garder leurs seuls `id`, sur le serveur, le temps de l'opération.
+
+**Restauration :** Manager → Hébergements & sites → l'hébergement → Restauration → restauration avancée → la base seule, à la date choisie.
+
+**Après :**
+
+3. Pour chaque compte relevé à l'étape 2, remettre à vide `date_demande_effacement`, `sort` de ses profils, `nombre_avertissements` et `date_premier_avertissement`, puis supprimer la liste.
+4. Révoquer toutes les sessions (`date_revocation`) : celles fermées depuis la sauvegarde sont revenues, y compris une session volée qu'un utilisateur aurait fermée.
+5. Relancer l'API (`pm2 start apicroche`). Les comptes revenus sont effacés à la prochaine exécution de la tâche quotidienne, à minuit.
+6. Inscrire la restauration au registre des demandes (§ 9) : date, sauvegarde utilisée, comptes rétablis à l'étape 3.
+
+Les autres suppressions faites depuis la sauvegarde (adresse retirée, profil supprimé…) reviennent aussi : sur 7 jours au plus, elles se traitent à la main, à la demande des utilisateurs concernés. Une restauration des **fichiers** (par FTP ou restauration simple) n'est pas concernée, sauf `apicroche/depot/`, où un fichier supprimé depuis la sauvegarde revient : le supprimer de nouveau.
 
 ---
 
